@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 import uuid
 
 from app.db import db
@@ -167,8 +168,11 @@ async def my_sites(user: dict = Depends(get_current_user)):
         )
         roster_count = len(roster.get("workers", [])) if roster else 0
 
+        from app.services.offline_sync_handlers import photo_allowed
         result.append({
             "project_id": pid,
+            # FG-639 (additive): the same guard the photo upload applies
+            "can_upload_photo": await photo_allowed(user, pid),
             "name": p.get("name", ""),
             "code": p.get("code", ""),
             "address_text": p.get("address_text", ""),
@@ -476,24 +480,31 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         existing_att = await tenant.attendance_entries.find_one(
             {"org_id": org_id, "date": d, "user_id": wid}
         )
+        day_key = "%s|%s|%s" % (org_id, wid, d)   # FG-635: the same unique day key (PWA-02)
+        site_update = {"$inc": {"version": 1}, "$set": {
+            "status": status, "project_id": project_id, "updated_at": now, "note": ""}}
         if existing_att:
-            await tenant.attendance_entries.update_one(
-                {"id": existing_att["id"]},
-                {"$inc": {"version": 1}, "$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
-            )
+            await tenant.attendance_entries.update_one({"id": existing_att["id"]}, site_update)
         else:
-            await tenant.attendance_entries.insert_one({
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "date": d,
-                "project_id": project_id,
-                "user_id": wid,
-                "status": status,
-                "note": "",
-                "marked_at": now,
-                "marked_by_user_id": user["id"],
-                "source": "TechPortal",
-            })
+            try:
+                await tenant.attendance_entries.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "date": d,
+                    "project_id": project_id,
+                    "user_id": wid,
+                    "status": status,
+                    "note": "",
+                    "marked_at": now,
+                    "marked_by_user_id": user["id"],
+                    "source": "TechPortal",
+                    "attendance_day_key": day_key,
+                })
+            except DuplicateKeyError:
+                # a concurrent save marked the same worker and day first: already marked —
+                # this save updates it, exactly as when the entry was found above
+                await tenant.attendance_entries.update_one(
+                    {"org_id": org_id, "attendance_day_key": day_key}, site_update)
 
     # Remove attendance_entries for workers who were in previous roster but not in the new list
     prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
@@ -836,6 +847,16 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
 
 # ── Daily Report (DRAFT — NO work_sessions) ───────────────────────
 
+async def _insert_auto_attendance(tenant, kw, entry):
+    """FG-635: duplicate day key = already marked. Inside the offline transaction the error
+    must abort it (the batch item is then retried and finds the entry), so it is re-raised."""
+    try:
+        await tenant.attendance_entries.insert_one(entry, **kw)
+    except DuplicateKeyError:
+        if kw.get("session") is not None:
+            raise
+
+
 @router.post("/technician/daily-report")
 async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_current_user)):
     """
@@ -980,12 +1001,14 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
             await tenant.employee_daily_reports.insert_one(draft, **kw)
             draft_ids.append(draft["id"])
 
-            # Auto-create attendance_entry if not exists (report = present)
+            # Auto-create attendance_entry if not exists (report = present).
+            # FG-635: one entry per worker and day (the unique day key) — an entry on another
+            # project the same day counts as already marked (HANDOFF D19 / FG-628 for Krum).
             existing_att = await tenant.attendance_entries.find_one(
-                {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}, **kw
+                {"org_id": org_id, "date": today, "user_id": wid}, **kw
             )
             if not existing_att:
-                await tenant.attendance_entries.insert_one({
+                await _insert_auto_attendance(tenant, kw, {
                     "id": str(uuid.uuid4()),
                     "org_id": org_id,
                     "date": today,
@@ -996,7 +1019,8 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
                     "marked_at": now,
                     "marked_by_user_id": user["id"],
                     "source": "DailyReport",
-                }, **kw)
+                    "attendance_day_key": "%s|%s|%s" % (org_id, wid, today),
+                })
 
             # Check if SMR type is unknown → create missing_smr
             if smr_source == "manual":

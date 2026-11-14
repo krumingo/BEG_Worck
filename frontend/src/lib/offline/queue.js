@@ -11,6 +11,9 @@ import { ownerOf, ownerKey, seal, open } from "./crypto";
 import { createStore as createObservable } from "../pwa/store";
 
 // FLOW-037 §9 L268–277 — the exact words.
+export const SEND_STATES = ["saved", "pending", "syncing", "error"];
+export const DECISION_STATES = ["conflict", "needs_review"];
+
 export const STATUS = {
   saved: "Записано на телефона",
   pending: "Чака синхронизация",
@@ -61,7 +64,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
   const nextSeq = () => now() * 1000 + ((seqCounter += 1) % 1000);
   const orderOf = (r) => (typeof r.seq === "number" ? r.seq : Date.parse(r.created_at || 0) * 1000);
   const later = (fn, ms) => (typeof setTimeout === "function" ? setTimeout(fn, ms) : null);
-  const state = createObservable({ enabled: false, unsent: 0, revoked: false, lastSyncAt: null, items: [] });
+  const state = createObservable({ enabled: false, unsent: 0, toSend: 0, awaitingDecision: 0, waitingFile: 0, revoked: false, lastSyncAt: null, items: [] });
 
   const owner = () => (session ? ownerOf(session.tenantId, session.userId) : null);
 
@@ -84,8 +87,14 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
 
   async function refresh() {
     const mine = await rows();
+    // ``unsent`` (everything not synced) still guards logout — originals live only here;
+    // FG-638: the badge shows what is really waiting to SEND apart from what waits for a
+    // decision in the console (conflict / late / needs review) or for the file registry
     const unsent = mine.filter((r) => r.status !== "synced").length;
-    state.set((s) => ({ ...s, enabled, unsent, items: mine
+    const toSend = mine.filter((r) => SEND_STATES.includes(r.status)).length;
+    const awaitingDecision = mine.filter((r) => DECISION_STATES.includes(r.status)).length;
+    const waitingFile = mine.filter((r) => r.status === "waiting_file").length;
+    state.set((s) => ({ ...s, enabled, unsent, toSend, awaitingDecision, waitingFile, items: mine
       .map(({ sealed, ...plain }) => plain) // never expose ciphertext to the UI
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)) }));
     return unsent;
@@ -93,14 +102,14 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
 
   async function wipe() {
     await store.destroy();
-    state.set({ enabled: false, unsent: 0, revoked: true, lastSyncAt: null, items: [] });
+    state.set({ enabled: false, unsent: 0, toSend: 0, awaitingDecision: 0, waitingFile: 0, revoked: true, lastSyncAt: null, items: [] });
     onRevoked();
   }
 
   async function start(nextSession) {
     session = nextSession;
     if (!session) {
-      state.set({ enabled: false, unsent: 0, revoked: false, lastSyncAt: null, items: [] });
+      state.set({ enabled: false, unsent: 0, toSend: 0, awaitingDecision: 0, waitingFile: 0, revoked: false, lastSyncAt: null, items: [] });
       return false;
     }
     try {

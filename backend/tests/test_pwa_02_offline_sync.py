@@ -604,6 +604,21 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         foreign = photo("technician", tech["id"], context_id=B["project_id"])
         fg["photo_foreign_context"] = {"status": foreign["status"], "http": foreign["result"].get("http_status")}
         fg["photo_ok"] = photo("technician", tech["id"])["status"]
+        # FG-635: three concurrent site attendance saves for one worker and day → one entry
+        w635 = str(uuid.uuid4())
+        save = {"date": today, "workers": [{"worker_id": w635, "status": "Present"}]}
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            outs635 = list(pool.map(lambda _: call("POST", site, role="owner", json=save), range(3)))
+        fg["site3_http"] = sorted({o["status"] for o in outs635})
+        fg["site3_rows"] = len(att_rows(w635, today))
+        fg["site3_key"] = bool(att_rows(w635, today)[0].get("attendance_day_key"))
+        # FG-639: the site list says where the server would refuse a photo
+        def can(role):
+            body = call("GET", "/api/technician/my-sites", role=role)["body"]
+            return {x["project_id"]: x.get("can_upload_photo") for x in body.get("sites", [])}
+        fg["can_photo_technician"] = can("technician").get(P)
+        fg["can_photo_viewer"] = can("viewer").get(P)
+        fg["can_photo_owner"] = can("owner").get(P)
         obs["flowguard"] = fg
 
         # ─────────────────────────────────────────────── console permissions
@@ -993,6 +1008,21 @@ def test_the_offline_photo_has_the_same_guard_as_the_upload(obs):
 
 
 @real
+def test_three_concurrent_site_saves_make_one_entry(obs):
+    """FG-635: the site attendance writer stamps the day key; duplicate = already marked."""
+    f = obs["flowguard"]
+    assert f["site3_http"] == [200] and f["site3_rows"] == 1 and f["site3_key"] is True
+
+
+@real
+def test_the_site_list_hides_the_photo_where_the_server_refuses_it(obs):
+    """FG-639: keep today's guard; the phone only hides the button."""
+    f = obs["flowguard"]
+    assert f["can_photo_technician"] is True and f["can_photo_owner"] is True
+    assert f["can_photo_viewer"] is False
+
+
+@real
 def test_one_broken_item_is_retryable_and_never_fails_the_batch(obs):
     """AUDIT-2 PWA92-N1."""
     a = obs["audit2"]
@@ -1047,6 +1077,44 @@ def test_the_unique_indexes_tolerate_old_keyless_rows_and_still_refuse_a_duplica
             await d.sync_devices.insert_one({"org_id": "o", "id": "dev-1"})
             with pytest.raises(DuplicateKeyError):
                 await d.sync_devices.insert_one({"org_id": "o", "id": "dev-1"})
+        finally:
+            await c.drop_database(name)
+            c.close()
+    asyncio.run(body())
+
+
+@real
+def test_existing_duplicates_never_crash_the_startup_and_the_dry_run_finds_them():
+    """FG-636: an ALARM + that one index skipped; the dry run (read-only) lists the rows."""
+    import asyncio
+    import uuid as _uuid
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from app.services.offline_sync import ensure_sync_indexes
+    sys.path.insert(0, str(BACKEND / "scripts"))
+    import pwa02_unique_index_dryrun as dry
+
+    async def body():
+        name = DB_PREFIX_OP + "dup_" + _uuid.uuid4().hex[:8]
+        url = os.environ["W0_03_REAL_MONGO_URL"]
+        c = AsyncIOMotorClient(url)
+        d = c[name]
+        try:
+            for i in range(2):
+                await d.attendance_entries.insert_one({"id": "a%d" % i, "org_id": "o", "user_id": "u",
+                                                       "date": "2026-11-13", "attendance_day_key": "o|u|2026-11-13"})
+            await d.attendance_entries.insert_one({"id": "old1", "org_id": "o", "user_id": "v", "date": "2026-11-12"})
+            await d.attendance_entries.insert_one({"id": "old2", "org_id": "o", "user_id": "v", "date": "2026-11-12"})
+            before = await d.attendance_entries.count_documents({})
+            skipped = await ensure_sync_indexes(d)
+            assert skipped == ["pwa02_attendance_day_unique"]
+            names = [ix["name"] for ix in await d.attendance_entries.list_indexes().to_list(None)]
+            assert "pwa02_attendance_day_unique" not in names
+            assert "pwa02_receipt_key_unique" in [ix["name"] for ix in await d.sync_receipts.list_indexes().to_list(None)]
+            rep = (await dry.run(url, name, None))["databases"][name]
+            assert rep["pwa02_attendance_day_unique"][0]["rows"] == 2
+            groups = rep["attendance_day_key_backfill"]["worker_day_groups_with_more_than_one_entry"]
+            assert {g["key"]["user_id"] for g in groups} == {"u", "v"}
+            assert await d.attendance_entries.count_documents({}) == before      # read-only
         finally:
             await c.drop_database(name)
             c.close()

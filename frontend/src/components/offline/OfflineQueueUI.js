@@ -23,14 +23,18 @@ const TONE = {
 };
 
 export function UnsentBadge({ className = "" }) {
-  const { enabled, unsent } = useOfflineQueue();
-  if (!enabled || !unsent) return null;
+  const { enabled, toSend = 0, awaitingDecision = 0, waitingFile = 0 } = useOfflineQueue();
+  if (!enabled || !(toSend || awaitingDecision || waitingFile)) return null;
   return (
     <Link to="/my-unsent" className={`relative inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-400 ${className}`}
       data-testid="offline-unsent-badge" title="Моите неизпратени">
-      {/* FG-633: the app shows no toasts (HANDOFF D12) — this stays on screen until sent */}
-      <CloudOff className="h-3.5 w-3.5" /><span data-testid="offline-unsent-label">Записано на телефона</span>
-      <span data-testid="offline-unsent-count">· {unsent}</span>
+      {/* FG-633: the app shows no toasts (HANDOFF D12) — this stays on screen until sent.
+          FG-638: only what is really waiting to be SENT is counted here */}
+      <CloudOff className="h-3.5 w-3.5" />
+      {toSend > 0 && <><span data-testid="offline-unsent-label">Записано на телефона</span>
+        <span data-testid="offline-unsent-count">· {toSend}</span></>}
+      {awaitingDecision > 0 && <span className="text-red-400" data-testid="offline-awaiting-decision">чака решение · {awaitingDecision}</span>}
+      {waitingFile > 0 && <span className="text-muted-foreground" data-testid="offline-waiting-file">чака файл · {waitingFile}</span>}
     </Link>
   );
 }

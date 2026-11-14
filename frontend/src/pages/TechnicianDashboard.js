@@ -653,7 +653,7 @@ export default function TechnicianDashboard() {
           <Button onClick={startReport} className="h-16 rounded-2xl flex-col text-xs font-semibold"><FileText className="w-5 h-5 mb-1" />Отчет за деня</Button>
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
-          <SitePhotoButton projectId={selectedSite?.project_id} />
+          <SitePhotoButton projectId={selectedSite?.project_id} allowed={selectedSite?.can_upload_photo !== false} />
         </div>
 
         {/* Чернови за днес — with edit + delete */}

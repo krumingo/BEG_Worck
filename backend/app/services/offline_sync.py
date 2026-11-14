@@ -99,35 +99,50 @@ def _tenant(user: Dict[str, Any]) -> TenantData:
 
 
 # ───────────────────────────────────────────────────────────────────── indexes
-async def ensure_sync_indexes(database) -> None:
+#: the unique indexes; a database that already holds duplicates of one of them gets an ALARM
+#: and that index is skipped (FG-636) — never a crashed startup. Dry-run report:
+#: ``scripts/pwa02_unique_index_dryrun.py`` (read-only; the fix needs a decision + Approval).
+UNIQUE_INDEXES = (
+    ("sync_devices", [("org_id", 1), ("id", 1)], "pwa02_device_unique", "id"),
+    ("sync_receipts", [("org_id", 1), ("user_id", 1), ("idempotency_key", 1)],
+     "pwa02_receipt_key_unique", "idempotency_key"),
+    # AUDIT-2 PWA92-M1 backstop: one draft per offline record entry, ever. Partial — only
+    # rows written by the offline path carry sync_local_id; online drafts are untouched.
+    ("employee_daily_reports", [("org_id", 1), ("sync_local_id", 1), ("sync_entry_index", 1)],
+     "pwa02_daily_report_sync_unique", "sync_local_id"),
+    # FG-627/635: one attendance entry per worker and day (the writers stamp the key; older
+    # rows without it are untouched by the partial index).
+    ("attendance_entries", [("attendance_day_key", 1)], "pwa02_attendance_day_unique",
+     "attendance_day_key"),
+)
+
+
+async def ensure_sync_indexes(database) -> List[str]:
     """Idempotent; at startup and for every tenant database (no request creates a
-    collection). There is no migration runner in main — same pattern as OH-01."""
+    collection). There is no migration runner in main — same pattern as OH-01.
+    Returns the names of unique indexes that could NOT be created (duplicates)."""
+    from pymongo.errors import OperationFailure
+    skipped: List[str] = []
     # Unique only over rows that carry the key (partial index): a database that already
     # holds rows without these fields (an old backup) must not stop the index from being
     # created, and two real rows with the same key are still refused.
-    await database["sync_devices"].create_index(
-        [("org_id", 1), ("id", 1)], unique=True, name="pwa02_device_unique",
-        partialFilterExpression={"id": {"$type": "string"}})
-    await database["sync_receipts"].create_index(
-        [("org_id", 1), ("user_id", 1), ("idempotency_key", 1)], unique=True,
-        name="pwa02_receipt_key_unique",
-        partialFilterExpression={"idempotency_key": {"$type": "string"}})
-    # AUDIT-2 PWA92-M1 backstop: one draft per offline record entry, ever. Partial — only rows
-    # written by the offline path carry sync_local_id; online drafts are untouched.
-    await database["employee_daily_reports"].create_index(
-        [("org_id", 1), ("sync_local_id", 1), ("sync_entry_index", 1)], unique=True,
-        name="pwa02_daily_report_sync_unique",
-        partialFilterExpression={"sync_local_id": {"$type": "string"}})
-    # FG-627: one attendance entry per worker and day (create_attendance_entry stamps the key;
-    # older rows without it are untouched by the partial index).
-    await database["attendance_entries"].create_index(
-        [("attendance_day_key", 1)], unique=True, name="pwa02_attendance_day_unique",
-        partialFilterExpression={"attendance_day_key": {"$type": "string"}})
+    for coll, keys, name, field in UNIQUE_INDEXES:
+        try:
+            await database[coll].create_index(keys, unique=True, name=name,
+                                              partialFilterExpression={field: {"$type": "string"}})
+        except (DuplicateKeyError, OperationFailure) as exc:
+            if getattr(exc, "code", None) not in (11000, 11001) and "duplicate key" not in str(exc).lower():
+                raise
+            skipped.append(name)
+            logger.critical("ALARM PWA-02: unique index %s on %s.%s NOT created — duplicate rows "
+                            "exist; run scripts/pwa02_unique_index_dryrun.py (read-only) and decide",
+                            name, getattr(database, "name", "?"), coll)
     await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
                                                  name="pwa02_receipt_device")
     for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
         await database[name].create_index([("org_id", 1), ("status", 1), ("created_at", -1)],
                                           name="pwa02_%s_status" % name)
+    return skipped
 
 
 async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:

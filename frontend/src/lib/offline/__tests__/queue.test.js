@@ -178,6 +178,23 @@ test("a temporary server error on one record keeps it on the phone and retries i
   expect((await store.get("queue", a)).status).toBe("synced");
 });
 
+test("the counts split what waits to send from what waits for a decision or a file (FG-638)", async () => {
+  const { q, api } = await setup();
+  const a = await q.enqueue("attendance.mark", {});
+  const b = await q.enqueue("attendance.mark", {});
+  const c = await q.enqueue("attendance.mark", {});
+  await q.enqueue("attendance.mark", {});
+  api.batchAnswer = (body) => ({ results: body.items.map((i) => ({ local_id: i.local_id,
+    status: i.local_id === a ? "conflict" : i.local_id === b ? "late" : i.local_id === c ? "waiting_file" : "retry",
+    result: {} })) });
+  await q.flush();
+  const st = q.state.get();
+  expect(st.awaitingDecision).toBe(2);
+  expect(st.waitingFile).toBe(1);
+  expect(st.toSend).toBe(1);
+  expect(st.unsent).toBe(4);           // logout still warns about all of them
+});
+
 test("conflict and late answers are shown, not retried", async () => {
   const { q, store, api } = await setup();
   const a = await q.enqueue("attendance.mark", {});

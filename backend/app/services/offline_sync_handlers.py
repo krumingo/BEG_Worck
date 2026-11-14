@@ -233,6 +233,18 @@ async def daily_report_confirm(author, env, ctx):
 
 
 # ─────────────────────────────────────────────────────────────────── photo
+async def photo_allowed(user: Dict[str, Any], project_id: str) -> bool:
+    """FG-639: would the upload guard (/media/upload and the offline photo) let this user
+    attach a photo to this project? The phone hides the button when it would not."""
+    if user.get("role") == "Viewer":
+        return False
+    if user.get("role") in ("Admin", "Owner"):
+        return True
+    from app.deps.media_acl import check_context_access
+    allowed, _ = await check_context_access(user, "project", str(project_id))
+    return bool(allowed)
+
+
 async def media_upload(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
     """FG-632 / R83: the same upload guard as ``POST /media/upload`` — the role, the context
     (type + access) and the same image types and size; never SVG, never video here."""
