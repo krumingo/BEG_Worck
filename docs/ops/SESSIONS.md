@@ -23,7 +23,7 @@
 | session_01UghxKaY4VudhTzwXsS1tog | Програмист | #91 MEDIA | 14.11 09:55 | чака тест на живо + „да“ |
 | session_01UghxKaBxGgLMujCt6AuTp7 | Програмист | #82 WH-REV-01 | 14.11 08:25 | чака #84 |
 
-## CLOSED / за архивиране (без разход; ще се архивират от новия оркестратор)
+## CLOSED (архивирани на 14.11.2026 ~18:10, обратимо с unarchive)
 - Scheduler session_01UghxKcbyhKYFbcvD7dSpr1: периодичното будене е **СПРЯНО**, ролята е закрита.
 - Claude Audit (старият), Bot, SEC-SCAN.
 - Всички пакети от 06–09.11 със слети PR-и: PRJ-01, WH-FIX-01, ACT-01, SUB-ADV-01, OH-01, W0-04-C01, ST-02*, PAY-01*, SEC-01*, SEC-02, 5C-C18…C25, PM-01, RC-01, ST-01, AUTH-02.

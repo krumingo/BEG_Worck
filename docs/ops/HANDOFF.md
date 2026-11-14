@@ -45,3 +45,31 @@
 - Архивирай сесиите от раздел CLOSED.
 - Таблото е https://claude.ai/artifact/48CRGHZBv2faczpy53AdwQ, само изглед на STATUS/TASKS.
 - Drive (папки в `drive_sync_marker` на старата сесия): копие при handoff.
+
+## Връзки и ресурси за новия оркестратор
+- Табло: https://claude.ai/artifact/48CRGHZBv2faczpy53AdwQ. Колекции: status/main, tasks, feed (полето `at` е задължително), codex. Само изглед на STATUS и TASKS.
+- Drive „BEG_Work — Claude (копия)“ 1IVyFT3QSKXRLzAuHbKV9HluX0fop6hwU:
+  - 01 Решения: 1RPOOC7QZEBT0o3_wyttZGvUXjsYTKjRb
+  - 02 Програмиране: 1YTG-cVkIZFyK0Fb-JDWxCPqU7YRy06-1
+  - 03 Одити: 10y4eiTFtc-rnBRbauBEzNDLLCm76zlEI
+  - 04 FLOW Guard: 1gTxpV3zT6QDOGuXOd0g8RnPWkc3P_nOZ
+  - 05 Codex: 17-LKfbMNj8N8nQHQL_BqeYQDGUHJsAG8
+  - 06 Разговори: 1KVlhwKjlNIP7_MwwkEkaf0924CcakCyh
+  - 07 Табло: 1vX-GfCh8cVrTG3NZ4pWAx7uL8qy7vWZ9
+  - Качване като текст с disableConversionToGoogleType=true, само при handoff или веднъж на ден, никога secrets. Последно копие: до 14.11 18:10 UTC.
+- Сесии, на които се пращат задачи (по номер) — виж SESSIONS.md. **Във всяко съобщение до WAITING сесия пиши „отговаряй на session_<новия оркестратор>“.** Те помнят само стария адрес.
+- FLOW Guard: отговаря с цитати в docs/flow-guard/oracle/Q0NN_*.md на claude/flow-guard. Последни: Q013 (AI, D-18), Q014 (отчет), Q015 (#84 дата).
+- AUDIT-2 води дневник в claude/audit-log.
+- Codex: текстът се пише в табло → codex (state send), а Крум го копира ръчно.
+
+## Първи задачи за новия оркестратор (по ред)
+1. Изчакай отчета на LAB-01 (#73/#75). Пакетът с находки за общ преглед е: AUDIT-2 делта + Codex на същия commit.
+2. Задай поотделно, по PROTOCOL §6:
+   - Q015 (#84);
+   - CI-01 (предварително покажи: workflow файловете, командите и пакетите, кога се пускат, време и GitHub минути — първо провери дали репото е частно, настройката на MongoDB, нужните secrets, concurrency cancel-in-progress);
+   - CLAUDE.md v16 (точен diff + всички противоречия със стария процес);
+   - §3.2 (2 програмисти + 1 общ слот);
+   - О5–О8;
+   - въпрос 6;
+   - после останалите от BLOCKERS.md.
+3. Merge само след „да“: #89, #92, #83, после #91 (след тест на живо). Един по един, по HANDOFF „Merge процедура“.
