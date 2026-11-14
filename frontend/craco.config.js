@@ -9,6 +9,33 @@ const buildInfo = resolveBuildInfo(__dirname);
 process.env.REACT_APP_BUILD_SHA = buildInfo.build_sha;
 process.env.REACT_APP_BUILD_TIME = buildInfo.build_time;
 
+// SEC-03 (M-4): the Content-Security-Policy allows scripts from 'self' only, so
+// CRA must not inline its webpack runtime into index.html.
+process.env.INLINE_RUNTIME_CHUNK = "false";
+// The CSP <meta> in public/index.html names the API origin and — only when an
+// analytics key is configured — the analytics ORIGIN. A CSP source with a path
+// matches only that exact path (SEC90-N5): a proxied host such as
+// https://example.com/ingest would block every event, so the CSP gets
+// `new URL(x).origin`, while REACT_APP_POSTHOG_HOST / REACT_APP_BACKEND_URL keep
+// their full value for the app. CRA leaves an undefined %REACT_APP_*%
+// placeholder literally in the HTML, so the CSP values are always defined.
+const DEFAULT_ANALYTICS_HOST = "https://us.i.posthog.com";
+
+function cspOrigin(url) {
+  if (!url) return "";
+  try {
+    return new URL(url).origin;
+  } catch (e) {
+    throw new Error(`SEC-03: not a valid URL for the CSP: ${JSON.stringify(url)}`);
+  }
+}
+
+process.env.REACT_APP_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+process.env.REACT_APP_CSP_API_ORIGIN = cspOrigin(process.env.REACT_APP_BACKEND_URL);
+process.env.REACT_APP_CSP_ANALYTICS_ORIGIN = process.env.REACT_APP_POSTHOG_KEY
+  ? cspOrigin(process.env.REACT_APP_POSTHOG_HOST || DEFAULT_ANALYTICS_HOST)
+  : "";
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build,
 // and jest sets NODE_ENV=test. The visual-edit instrumentation wraps rendered

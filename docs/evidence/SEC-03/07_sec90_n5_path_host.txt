@@ -1,0 +1,9 @@
+# SEC90-N5 — build with REACT_APP_POSTHOG_KEY + REACT_APP_POSTHOG_HOST=https://analytics.example.test/ingest (a proxied host with a path)
+## FIXED (this branch): built CSP = connect-src 'self' http://127.0.0.1:8081 https://analytics.example.test
+e2e (real nginx.conf): BOT PASSED; 30/30; events sent to https://analytics.example.test/ingest/e/; 0 CSP violations on every page (e2e_analytics_proxy/)
+
+## CONTROL (the previous behaviour: host put into connect-src verbatim): connect-src 'self' http://127.0.0.1:8081 https://analytics.example.test/ingest
+FAIL NO CSP violation at all (FG-539: analytics allowed by the templated CSP when configured): [{"directive":"connect-src","blocked":"https://analytics.example.test/ingest/e/?ip=1&_=…&ver=1.200.0&compression=gzip-js","sample":""}]
+FAIL no CSP violation reported on ANY page (console): ["Connecting to 'https://analytics.example.test/ingest/e/?ip=1&_=…&ver=1.200.0&compression=gzip-js' violates the following Content Security Policy directive: \"connect-src 'self' http://127.0.0.1:8081 https://analytics.example.test/ingest\". The action has been blocked.","C
+# => a CSP source with a path matches only that exact path: every event to /ingest/e/ is blocked. Fixed by new URL(host).origin (craco.config.js).
+# Note: with the PostHog cloud host itself (https://us.i.posthog.com/ingest) posthog-js ignores the path and sends to /e/, so a non-PostHog proxy host is the real test.

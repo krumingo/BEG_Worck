@@ -61,6 +61,12 @@ class IdempotencyConflict(RuntimeError):
                          "with a different request payload" % (self.code, self.ref, action))
 
 
+class IdempotencyAttemptLost(RuntimeError):
+    """SEC-03 FG-603: the reservation is no longer held by this attempt (another
+    attempt took over a stale key and may have completed it). Raised INSIDE the
+    business transaction, so this attempt's writes roll back."""
+
+
 class IdempotencyUnprotected(RuntimeError):
     """audit_idempotency has no unique ``id`` index and it cannot be created.
 
@@ -85,6 +91,17 @@ async def ensure_idempotency_index(db) -> None:
                                IdempotencyUnprotected)
 
 
+#: SEC-03 FG-563: records that carry ``expires_at`` are removed by this TTL index;
+#: records without the field (every caller that does not pass ``expires_at``)
+#: never expire — the money-write registries keep their semantics unchanged.
+IDEMPOTENCY_TTL_FIELD = "expires_at"
+
+
+async def ensure_idempotency_ttl_index(db) -> None:
+    await db[IDEMPOTENCY_COLLECTION].create_index(
+        IDEMPOTENCY_TTL_FIELD, expireAfterSeconds=0, name="expires_at_ttl")
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -107,6 +124,7 @@ async def begin_idempotent(
     key: str,
     action: str,
     request_fingerprint: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Reserve an idempotency key, or report the existing reservation.
@@ -138,7 +156,12 @@ async def begin_idempotent(
         "error_code": None,
         "reserved_at": _now_iso(),
         "completed_at": None,
+        # SEC-03 FG-603: which attempt holds the reservation (a retake writes a new
+        # one); complete_idempotent(attempt_token=...) completes only for its holder.
+        "attempt_token": uuid.uuid4().hex,
     }
+    if expires_at is not None:          # SEC-03 FG-563: opt-in TTL (BSON date for the TTL index)
+        record[IDEMPOTENCY_TTL_FIELD] = expires_at
 
     existing = await db[IDEMPOTENCY_COLLECTION].find_one({"id": record["id"]}, {"_id": 0})
     if existing is None:
@@ -221,21 +244,34 @@ async def mark_idempotent_step(
 
 
 async def complete_idempotent(
-    db, *, tenant_id: str, key: str, action: str, result_reference: str
+    db, *, tenant_id: str, key: str, action: str, result_reference: str, session=None,
+    attempt_token: Optional[str] = None,
 ) -> None:
     """Mark a reserved key as successfully completed.
 
     Note: this updates the idempotency REGISTRY, which is bookkeeping —
     the append-only rule protects audit_events, not this collection.
+    SEC-03 FG-563: pass ``session`` to complete the key INSIDE the business
+    transaction, so a crash after the commit can never leave it STARTED.
     """
-    await db[IDEMPOTENCY_COLLECTION].update_one(
-        {"id": _record_id(tenant_id, action, key), "status": IDEMPOTENCY_STARTED},
+    flt = {"id": _record_id(tenant_id, action, key), "status": IDEMPOTENCY_STARTED}
+    if attempt_token is not None:
+        flt["attempt_token"] = attempt_token
+    result = await db[IDEMPOTENCY_COLLECTION].update_one(
+        flt,
         {"$set": {
             "status": IDEMPOTENCY_COMPLETED,
             "result_reference": result_reference,
             "completed_at": _now_iso(),
         }},
+        # only when given: every existing caller (and its test doubles) sees the
+        # exact call it always made
+        **({"session": session} if session is not None else {}),
     )
+    # SEC-03 FG-603: with a token the completion is a compare-and-set — a lost
+    # reservation aborts the caller's transaction instead of committing a 2nd write.
+    if attempt_token is not None and getattr(result, "matched_count", 0) != 1:
+        raise IdempotencyAttemptLost(action)
 
 
 async def fail_idempotent(

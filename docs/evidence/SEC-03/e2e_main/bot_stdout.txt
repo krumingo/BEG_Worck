@@ -1,0 +1,24 @@
+FAIL document CSP: script-src 'self' only: ""
+FAIL document CSP: frame-ancestors 'none': ""
+FAIL X-Frame-Options DENY: undefined
+FAIL X-Content-Type-Options nosniff: undefined
+FAIL Referrer-Policy: undefined
+FAIL title is BEG_Work: "Emergent | Fullstack App"
+FAIL no Emergent badge in the DOM: null
+PASS login works under the CSP: "http://127.0.0.1:8081/"
+PASS screen /projects renders: 1
+PASS screen /employees renders: 1
+PASS screen /pay-runs renders: 1
+PASS screen /offers renders: 1
+PASS screen /assets/items renders: 1
+PASS screen /finance renders: 1
+PASS screen /settings renders: 1
+PASS AI not configured -> 503 'AI не е настроен': [503,"AI не е настроен"]
+PASS reminder trigger without credentials -> 401: 401
+PASS reminder trigger as tenant Owner -> 403: 403
+FAIL the app cannot be framed by another origin: {"child_url":"http://127.0.0.1:8081/"}
+FAIL no request to any third-party host (except Google Fonts): {"hosts":{"127.0.0.1:8081":147,"fonts.googleapis.com":18,"assets.emergent.sh":10,"us-assets.i.posthog.com":9,"fonts.gstatic.com":18,"localhost:35791":1,"cdn.tailwindcss.com":1}}
+FAIL no request to emergent.sh: null
+FAIL no request to cdn.tailwindcss.com or posthog: null
+FAIL every script came from the app origin: ["https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://us-assets.i.posthog.com/static/array.js","https://assets.emergent.sh/scripts/emergent-main.js","http://127.0.0.1:8081/static/js/main.2eb50a93.js","https://assets.emergent.sh/scripts/debug-monitor.js","https://cdn.tailwindcss.com/","https://us-assets.i.posthog.com/static/array.js"]
+BOT FAILED

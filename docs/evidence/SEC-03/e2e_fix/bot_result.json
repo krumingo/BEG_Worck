@@ -1,0 +1,868 @@
+{
+ "started_at": "2026-11-09T17:32:00.545Z",
+ "app": "http://127.0.0.1:8080",
+ "steps": [
+  {
+   "step": "document CSP: script-src 'self' only",
+   "pass": true,
+   "detail": "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  },
+  {
+   "step": "document CSP: frame-ancestors 'none'",
+   "pass": true,
+   "detail": "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  },
+  {
+   "step": "X-Frame-Options DENY",
+   "pass": true,
+   "detail": "DENY"
+  },
+  {
+   "step": "X-Content-Type-Options nosniff",
+   "pass": true,
+   "detail": "nosniff"
+  },
+  {
+   "step": "Referrer-Policy",
+   "pass": true,
+   "detail": "strict-origin-when-cross-origin"
+  },
+  {
+   "step": "title is BEG_Work",
+   "pass": true,
+   "detail": "BEG_Work"
+  },
+  {
+   "step": "no Emergent badge in the DOM",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "login works under the CSP",
+   "pass": true,
+   "detail": "http://127.0.0.1:8080/"
+  },
+  {
+   "step": "screen /projects renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /employees renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /pay-runs renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /offers renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /assets/items renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /finance renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "screen /settings renders",
+   "pass": true,
+   "detail": 2
+  },
+  {
+   "step": "photo AI -> 503 'изисква файлов регистър' (FG-522)",
+   "pass": true,
+   "detail": [
+    503,
+    "AI по снимка изисква файлов регистър (W0-06): оригиналът трябва да се запази преди обработка"
+   ]
+  },
+  {
+   "step": "AI is off for the tenant by default",
+   "pass": true,
+   "detail": {
+    "enabled": false,
+    "configured": false
+   }
+  },
+  {
+   "step": "the Owner switches AI on and off (FG-519)",
+   "pass": true,
+   "detail": [
+    200,
+    200
+   ]
+  },
+  {
+   "step": "the switch needs an Idempotency-Key (428) and a reason (422) (FG-538)",
+   "pass": true,
+   "detail": [
+    428,
+    422
+   ]
+  },
+  {
+   "step": "reminder trigger without credentials -> 401",
+   "pass": true,
+   "detail": 401
+  },
+  {
+   "step": "reminder trigger as tenant Owner -> 403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "step": "the app cannot be framed by another origin",
+   "pass": true,
+   "detail": {
+    "child_url": "chrome-error://chromewebdata/"
+   }
+  },
+  {
+   "step": "no request to any third-party host (except Google Fonts)",
+   "pass": true,
+   "detail": {
+    "hosts": {
+     "127.0.0.1:8080": 145,
+     "fonts.googleapis.com": 8,
+     "fonts.gstatic.com": 8,
+     "localhost:45151": 1
+    }
+   }
+  },
+  {
+   "step": "no request to emergent.sh",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "no request to cdn.tailwindcss.com",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "no request to any PostHog ASSET host (no remote script, #88 no-external build)",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "no analytics key -> no request to PostHog",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "NO CSP violation at all (FG-539: analytics allowed by the templated CSP when configured)",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "step": "no CSP violation reported on ANY page (console)",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "step": "every script came from the app origin",
+   "pass": true,
+   "detail": [
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/service-worker.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js"
+   ]
+  }
+ ],
+ "requests": [
+  {
+   "url": "http://127.0.0.1:8080/login",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/service-worker.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8080/index.html",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/62.4726be9e.chunk.js",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/manifest.webmanifest",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon.svg",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-192.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-512.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-maskable-192.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-maskable-512.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/apple-touch-icon.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/favicon-32.png",
+   "type": "fetch"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/login",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/dashboard/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/dashboard/activity?limit=3&page=1",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/reminders/missing-attendance",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/reminders/missing-work-reports",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/pulse/today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/overhead/realtime",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/finance/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/finance/aging-report",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/org/pnl-attribution",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/morning-briefing",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/cashflow/forecast/compact",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/cashflow/forecast",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/attendance/unclear-status",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/dashboard/personnel-today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/dashboard/pending-payments",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/reports/company-finance-series?months=3",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/projects",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/projects",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/projects?",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/users",
+   "type": "xhr"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/employees",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/employees",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/employees",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/pay-runs",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/pay-runs",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/pay-runs/generate?period_start=2026-11-07&period_end=2026-11-13&review_mode=true",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/settings/payroll-week",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/offers",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/offers",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/offers",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/projects",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/assets/items",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/assets/items",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/assets/items?page=1&page_size=20&sort_dir=asc",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/finance",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/finance",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/finance/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/finance/accounts",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/settings",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/subscription",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/finance/invoice-settings",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai-config/hourly-rates",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/settings/asset-intake-roles",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/settings/workers-see-pay",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/assets/ai-intake",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/internal/run-reminder-jobs?all_tenants=true",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/internal/run-reminder-jobs?all_tenants=true",
+   "type": "fetch"
+  },
+  {
+   "url": "http://localhost:45151/",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/login",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8080/login",
+   "type": "fetch"
+  }
+ ],
+ "csp_violations": [],
+ "console_errors": [
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to fetch finance series: H",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "Failed to load resource: the server responded with a status of 428 (Precondition Required)",
+  "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+  "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+ ],
+ "hosts": {
+  "127.0.0.1:8080": 145,
+  "fonts.googleapis.com": 8,
+  "fonts.gstatic.com": 8,
+  "localhost:45151": 1
+ },
+ "finished_at": "2026-11-09T17:32:11.592Z",
+ "request_count": 162
+}

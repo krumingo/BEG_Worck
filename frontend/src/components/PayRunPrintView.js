@@ -3,6 +3,8 @@
  * Opens in a new window with print-optimized CSS.
  */
 
+import { escapeHtml as esc } from "@/lib/escapeHtml";
+
 export function openGroupPrint(run, employees, allocData) {
   const w = window.open("", "_blank", "width=900,height=700");
   if (!w) return;
@@ -13,7 +15,7 @@ export function openGroupPrint(run, employees, allocData) {
   const totalEarned = rows.reduce((s, r) => s + (r.earned_amount || 0), 0);
   const totalRemain = rows.reduce((s, r) => s + (r.remaining_after_payment || 0), 0);
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Групов лист ${run?.number || ""}</title>
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Групов лист ${esc(run?.number)}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #222; padding: 15mm; }
@@ -33,8 +35,8 @@ export function openGroupPrint(run, employees, allocData) {
   .footer { margin-top: 15px; font-size: 9px; color: #999; }
   @media print { body { padding: 10mm; } }
 </style></head><body>
-<h1>ГРУПОВ ЛИСТ ЗА ПЛАЩАНЕ — ${run?.number || ""}</h1>
-<div class="meta">Седмица №${weekNum} | Период: ${period} | Дата: ${new Date().toISOString().slice(0, 10)}</div>
+<h1>ГРУПОВ ЛИСТ ЗА ПЛАЩАНЕ — ${esc(run?.number)}</h1>
+<div class="meta">Седмица №${esc(weekNum)} | Период: ${esc(period)} | Дата: ${new Date().toISOString().slice(0, 10)}</div>
 <table>
 <thead><tr>
   <th class="c">№</th>
@@ -53,8 +55,8 @@ ${rows.map((r, i) => {
   const net = r.earned_amount + adj;
   return `<tr>
     <td class="c">${i + 1}</td>
-    <td class="b">${r.first_name || ""} ${r.last_name || ""}</td>
-    <td>${r.position || "—"}</td>
+    <td class="b">${esc(r.first_name)} ${esc(r.last_name)}</td>
+    <td>${esc(r.position || "—")}</td>
     <td class="r">${(r.earned_amount || 0).toFixed(2)}</td>
     <td class="r ${adj >= 0 ? "green" : "red"}">${adj !== 0 ? adj.toFixed(2) : "—"}</td>
     <td class="r">${net.toFixed(2)}</td>
@@ -91,7 +93,7 @@ export function openIndividualPrint(run, empRow, allocEmp) {
   const adjs = empRow?.adjustments || [];
   const BG_D = ["Нд", "Пон", "Вт", "Ср", "Чет", "Пет", "Съб"];
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Фиш ${empRow?.first_name} ${empRow?.last_name}</title>
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Фиш ${esc(empRow?.first_name)} ${esc(empRow?.last_name)}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #222; padding: 15mm; }
@@ -114,9 +116,9 @@ export function openIndividualPrint(run, empRow, allocEmp) {
   .sig-line { width: 120px; border-top: 1px solid #333; margin-top: 30px; display: inline-block; }
   @media print { body { padding: 10mm; } }
 </style></head><body>
-<h1>СЕДМИЧЕН ФИШ — ${empRow?.first_name || ""} ${empRow?.last_name || ""}</h1>
-<h2>${empRow?.position || "—"} | ${empRow?.pay_type || ""}</h2>
-<div class="meta">${run?.number || ""} | Седмица №${weekNum} | ${period}</div>
+<h1>СЕДМИЧЕН ФИШ — ${esc(empRow?.first_name)} ${esc(empRow?.last_name)}</h1>
+<h2>${esc(empRow?.position || "—")} | ${esc(empRow?.pay_type)}</h2>
+<div class="meta">${esc(run?.number)} | Седмица №${esc(weekNum)} | ${esc(period)}</div>
 
 <table>
 <thead><tr>
@@ -127,10 +129,10 @@ ${days.map(d => {
   const dt = new Date(d.date + "T12:00:00");
   const siteName = d.sites ? (d.sites.map ? d.sites.map(s => typeof s === "string" ? s : s.site_name).join(", ") : "") : "";
   return `<tr>
-    <td>${BG_D[dt.getDay()]}</td>
-    <td>${d.date}</td>
-    <td class="r">${d.hours || 0}</td>
-    <td>${siteName}</td>
+    <td>${esc(BG_D[dt.getDay()])}</td>
+    <td>${esc(d.date)}</td>
+    <td class="r">${esc(d.hours || 0)}</td>
+    <td>${esc(siteName)}</td>
     <td class="r">${(d.source_value || d.value || 0).toFixed(2)}</td>
   </tr>`;
 }).join("")}
@@ -145,8 +147,8 @@ ${days.map(d => {
 ${adjs.length > 0 ? `<table>
 <thead><tr><th>Корекция</th><th>Заглавие</th><th class="r">Сума</th></tr></thead>
 <tbody>${adjs.map(a => `<tr>
-  <td>${a.type === "bonus" ? "Бонус" : a.type === "advance" ? "Аванс" : a.type === "loan_repayment" ? "Заем" : a.type === "deduction" ? "Удръжка" : a.type}</td>
-  <td>${a.title || ""} ${a.note ? `(${a.note})` : ""}</td>
+  <td>${a.type === "bonus" ? "Бонус" : a.type === "advance" ? "Аванс" : a.type === "loan_repayment" ? "Заем" : a.type === "deduction" ? "Удръжка" : esc(a.type)}</td>
+  <td>${esc(a.title)} ${a.note ? `(${esc(a.note)})` : ""}</td>
   <td class="r ${a.type === "bonus" ? "green" : "red"}">${a.type === "bonus" ? "+" : "-"}${a.amount.toFixed(2)}</td>
 </tr>`).join("")}</tbody></table>` : ""}
 
@@ -205,13 +207,13 @@ export function openSelectedPrint(run, selectedRows, allocData) {
     const adjs = empRow?.adjustments || [];
 
     html += `<div class="page">
-<h1>${empRow.first_name} ${empRow.last_name} — ${empRow.position || ""}</h1>
-<div class="meta">${run?.number || ""} | Сед. №${weekNum} | ${period}</div>
+<h1>${esc(empRow.first_name)} ${esc(empRow.last_name)} — ${esc(empRow.position)}</h1>
+<div class="meta">${esc(run?.number)} | Сед. №${esc(weekNum)} | ${esc(period)}</div>
 <table><thead><tr><th>Ден</th><th>Дата</th><th class="r">Часове</th><th>Обект</th><th class="r">Сума</th></tr></thead><tbody>
 ${days.map(d => {
   const dt = new Date(d.date + "T12:00:00");
   const sn = d.sites ? (Array.isArray(d.sites) ? d.sites.map(s => typeof s === "string" ? s : s.site_name).join(", ") : "") : "";
-  return `<tr><td>${BG_D[dt.getDay()]}</td><td>${d.date}</td><td class="r">${d.hours || 0}</td><td>${sn}</td><td class="r">${(d.source_value || d.value || 0).toFixed(2)}</td></tr>`;
+  return `<tr><td>${esc(BG_D[dt.getDay()])}</td><td>${esc(d.date)}</td><td class="r">${esc(d.hours || 0)}</td><td>${esc(sn)}</td><td class="r">${(d.source_value || d.value || 0).toFixed(2)}</td></tr>`;
 }).join("")}
 <tr class="totals"><td colspan="2" class="b">ОБЩО</td><td class="r b">${days.reduce((s,d)=>s+(d.hours||0),0).toFixed(1)}</td><td></td><td class="r b">${(empRow.earned_amount||0).toFixed(2)}</td></tr>
 </tbody></table>

@@ -4,21 +4,18 @@ Password and JWT utilities (pure functions, no FastAPI dependencies).
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timezone, timedelta
-import os
-import sys
 
 # JWT Config
-JWT_SECRET = os.environ.get('JWT_SECRET', '')
+# SEC-03 (M-1): this module no longer has its own key or fallback. The one key
+# is ``app.deps.auth.JWT_SECRET`` (fail-closed: no known default, ≥ 32 bytes
+# outside an explicit test run). It is read at call time so importing
+# ``app.utils`` stays free of the database import that ``app.deps.auth`` does.
 
-# In production, JWT_SECRET must be set via environment variable
-if not JWT_SECRET:
-    if os.environ.get('ENV', 'development') == 'production':
-        print("FATAL: JWT_SECRET environment variable is required in production!", file=sys.stderr)
-        sys.exit(1)
-    else:
-        JWT_SECRET = 'dev-secret-key-NOT-FOR-PRODUCTION'
-        import logging
-        logging.getLogger(__name__).warning("Using development JWT secret. Set JWT_SECRET env var for production.")
+
+def _jwt_secret() -> str:
+    from app.deps.auth import JWT_SECRET
+    return JWT_SECRET
+
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
@@ -40,9 +37,9 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_token(data: dict) -> str:
     """Create a JWT token with expiration."""
     expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
-    return jwt.encode({**data, "exp": expire}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode({**data, "exp": expire}, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
     """Decode a JWT token. Raises JWTError if invalid."""
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])

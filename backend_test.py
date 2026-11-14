@@ -1,10 +1,12 @@
+import os
 import requests
 import sys
 import json
 from datetime import datetime
 
 class BEGWorkAPITester:
-    def __init__(self, base_url="https://client-registry-17.preview.emergentagent.com"):
+    # SEC-03 FG-520: no hard-coded Emergent preview host; the target comes from the environment.
+    def __init__(self, base_url=os.environ.get("REACT_APP_BACKEND_URL", "http://127.0.0.1:8001")):
         self.base_url = f"{base_url}/api"
         self.token = None
         self.tests_run = 0

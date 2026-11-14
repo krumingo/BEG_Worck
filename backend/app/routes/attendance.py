@@ -2,12 +2,15 @@
 Attendance, Work Reports, Reminders & Notifications routes.
 /api/attendance/*, /api/work-reports/*, /api/reminders/*, /api/notifications/*
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 import uuid
+import hmac
+import os
 
 from app.db import db
 from app.tenancy import project_team
@@ -316,79 +319,87 @@ async def run_reminder_jobs():
     reminder run can never read or notify another tenant's people.
     """
     for org_id in await all_tenant_ids(db, limit=100):
-        tenant = TenantData.for_resolved_org(db, org_id)
-        policy = await get_org_reminder_policy(org_id)
-        local_now = get_local_now(policy["timezone"])
-        date = local_now.strftime("%Y-%m-%d")
-        current_time = local_now.strftime("%H:%M")
-        current_hour = int(current_time.split(":")[0])
+        await run_reminder_jobs_for_org(org_id)
 
-        if current_time >= policy["attendance_deadline"]:
-            missing_att = await compute_missing_attendance(org_id, date)
-            for m in missing_att:
-                await send_reminder_for_user(org_id, "MissingAttendance", date, m["user_id"], None, policy)
-        if current_time >= policy["work_report_deadline"]:
-            missing_rep = await compute_missing_work_reports(org_id, date)
-            for m in missing_rep:
-                await send_reminder_for_user(org_id, "MissingWorkReport", date, m["user_id"], m["project_id"], policy)
 
-        # Unclear status reminders at 09:00, 12:00, 17:00
-        if current_hour in (9, 12, 17):
-            reminder_type = f"UnclearStatus_{current_hour:02d}"
-            existing = await tenant.reminder_logs.find_one(
-                {"org_id": org_id, "type": reminder_type, "date": date}
-            )
-            if not existing:
-                # Count unclear workers
-                profiles = await tenant.employee_profiles.find(
-                    {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
+async def run_reminder_jobs_for_org(org_id: str):
+    """SEC-03 (M-3): one tenant's reminder run — every read and write through that
+    tenant's own ``TenantData`` view. The scheduler above calls it per tenant; the
+    internal HTTP trigger calls it for exactly the tenant(s) it was allowed to."""
+    tenant = TenantData.for_resolved_org(db, org_id)
+    policy = await get_org_reminder_policy(org_id)
+    local_now = get_local_now(policy["timezone"])
+    date = local_now.strftime("%Y-%m-%d")
+    current_time = local_now.strftime("%H:%M")
+    current_hour = int(current_time.split(":")[0])
+
+    if current_time >= policy["attendance_deadline"]:
+        missing_att = await compute_missing_attendance(org_id, date)
+        for m in missing_att:
+            await send_reminder_for_user(org_id, "MissingAttendance", date, m["user_id"], None, policy)
+    if current_time >= policy["work_report_deadline"]:
+        missing_rep = await compute_missing_work_reports(org_id, date)
+        for m in missing_rep:
+            await send_reminder_for_user(org_id, "MissingWorkReport", date, m["user_id"], m["project_id"], policy)
+
+    # Unclear status reminders at 09:00, 12:00, 17:00
+    if current_hour in (9, 12, 17):
+        reminder_type = f"UnclearStatus_{current_hour:02d}"
+        existing = await tenant.reminder_logs.find_one(
+            {"org_id": org_id, "type": reminder_type, "date": date}
+        )
+        if not existing:
+            # Count unclear workers
+            profiles = await tenant.employee_profiles.find(
+                {"org_id": org_id, "active": True}, {"_id": 0, "user_id": 1}
+            ).to_list(500)
+            active_ids = [p["user_id"] for p in profiles]
+            if active_ids:
+                att = await tenant.attendance_entries.find(
+                    {"org_id": org_id, "date": date, "user_id": {"$in": active_ids}},
+                    {"_id": 0, "user_id": 1}
                 ).to_list(500)
-                active_ids = [p["user_id"] for p in profiles]
-                if active_ids:
-                    att = await tenant.attendance_entries.find(
-                        {"org_id": org_id, "date": date, "user_id": {"$in": active_ids}},
-                        {"_id": 0, "user_id": 1}
-                    ).to_list(500)
-                    marked_ids = set(e["user_id"] for e in att)
-                    unclear_count = len([uid for uid in active_ids if uid not in marked_ids])
-                    if unclear_count > 0:
-                        level = "info" if current_hour == 9 else "warning" if current_hour == 12 else "critical"
-                        msg = {9: "Присъствието не е попълнено", 12: f"{unclear_count} неясни по статут", 17: f"ФИНАЛНО: {unclear_count} без статус за деня"}[current_hour]
-                        # Create notification for admins
-                        admins = await tenant.users.find(
-                            {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}},
-                            {"_id": 0, "id": 1}
-                        ).to_list(20)
-                        for admin in admins:
-                            await tenant.notifications.insert_one({
-                                "id": str(uuid.uuid4()), "org_id": org_id, "user_id": admin["id"],
-                                "type": "UnclearStatus", "level": level,
-                                "title": f"Неясни по статут ({current_hour}:00)",
-                                "message": msg, "is_read": False,
-                                "created_at": datetime.now(timezone.utc).isoformat(),
-                            })
-                        await tenant.reminder_logs.insert_one({
-                            "id": str(uuid.uuid4()), "org_id": org_id,
-                            "type": reminder_type, "date": date,
-                            "unclear_count": unclear_count, "level": level,
+                marked_ids = set(e["user_id"] for e in att)
+                unclear_count = len([uid for uid in active_ids if uid not in marked_ids])
+                if unclear_count > 0:
+                    level = "info" if current_hour == 9 else "warning" if current_hour == 12 else "critical"
+                    msg = {9: "Присъствието не е попълнено", 12: f"{unclear_count} неясни по статут", 17: f"ФИНАЛНО: {unclear_count} без статус за деня"}[current_hour]
+                    # Create notification for admins
+                    admins = await tenant.users.find(
+                        {"org_id": org_id, "role": {"$in": ["Admin", "Owner"]}},
+                        {"_id": 0, "id": 1}
+                    ).to_list(20)
+                    for admin in admins:
+                        await tenant.notifications.insert_one({
+                            "id": str(uuid.uuid4()), "org_id": org_id, "user_id": admin["id"],
+                            "type": "UnclearStatus", "level": level,
+                            "title": f"Неясни по статут ({current_hour}:00)",
+                            "message": msg, "is_read": False,
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         })
+                    await tenant.reminder_logs.insert_one({
+                        "id": str(uuid.uuid4()), "org_id": org_id,
+                        "type": reminder_type, "date": date,
+                        "unclear_count": unclear_count, "level": level,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
 
-        open_reminders = await tenant.reminder_logs.find(
-            {"org_id": org_id, "date": date, "status": {"$in": ["Open", "Reminded"]}}, {"_id": 0}
-        ).to_list(1000)
-        for rl in open_reminders:
-            if rl["type"] == "MissingAttendance":
-                att = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": rl["user_id"]})
-                if att:
-                    await auto_resolve_reminders(org_id, "MissingAttendance", date, rl["user_id"])
-            elif rl["type"] == "MissingWorkReport":
-                rep = await tenant.work_reports.find_one({
-                    "org_id": org_id, "date": date, "user_id": rl["user_id"],
-                    "project_id": rl.get("project_id"), "status": {"$in": ["Submitted", "Approved"]}
-                })
-                if rep:
-                    await auto_resolve_reminders(org_id, "MissingWorkReport", date, rl["user_id"])
+    open_reminders = await tenant.reminder_logs.find(
+        {"org_id": org_id, "date": date, "status": {"$in": ["Open", "Reminded"]}}, {"_id": 0}
+    ).to_list(1000)
+    for rl in open_reminders:
+        if rl["type"] == "MissingAttendance":
+            att = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": rl["user_id"]})
+            if att:
+                await auto_resolve_reminders(org_id, "MissingAttendance", date, rl["user_id"])
+        elif rl["type"] == "MissingWorkReport":
+            rep = await tenant.work_reports.find_one({
+                "org_id": org_id, "date": date, "user_id": rl["user_id"],
+                "project_id": rl.get("project_id"), "status": {"$in": ["Submitted", "Approved"]}
+            })
+            if rep:
+                await auto_resolve_reminders(org_id, "MissingWorkReport", date, rl["user_id"])
+
 
 # ══════════════════════════════════════════════════════════════════
 # ATTENDANCE ROUTES
@@ -894,10 +905,91 @@ async def excuse_reminder(data: ExcuseRequest, user: dict = Depends(get_current_
     await log_audit(user["org_id"], user["id"], user["email"], "reminder_excused", "reminder", "", {"type": data.type, "user_id": data.user_id, "reason": data.reason})
     return {"ok": True}
 
+# SEC-03 (M-3, FG-521): the internal trigger is no longer public.
+# * A service holding the internal job key (env ``INTERNAL_JOB_KEY`` ≥ 32 bytes,
+#   header ``X-Internal-Job-Key``, constant-time comparison; no key configured →
+#   that path is closed) may run ONE named tenant or, explicitly, ``all_tenants``.
+# * A human Platform Admin may run only the tenant of their own session: running
+#   another tenant (or all of them) is cross-tenant access, which needs a Support
+#   Access Grant (CLAUDE.md §3) — those do not exist yet, so it is refused.
+# * Each tenant run is bracketed by canonical AuditEvents in that tenant:
+#   ``reminder_jobs.started`` BEFORE the run, then ``reminder_jobs.completed`` or
+#   ``reminder_jobs.failed`` (same correlation id). The in-process scheduler
+#   (server.py ``reminder_loop``) does not use this route.
+INTERNAL_JOB_KEY_ENV = "INTERNAL_JOB_KEY"
+INTERNAL_JOB_KEY_HEADER = "X-Internal-Job-Key"
+INTERNAL_JOB_KEY_MIN_BYTES = 32
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
+async def _internal_job_caller(request: Request,
+                               credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer)):
+    provided = request.headers.get(INTERNAL_JOB_KEY_HEADER)
+    if provided is not None:
+        expected = os.environ.get(INTERNAL_JOB_KEY_ENV) or ""
+        if (len(expected.encode("utf-8")) < INTERNAL_JOB_KEY_MIN_BYTES
+                or not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))):
+            raise HTTPException(status_code=401, detail="Invalid internal job key")
+        return {"actor_type": "system", "actor_id": "internal-job-key", "channel": "internal_job_key",
+                "own_tenant": None}
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = await get_current_user(credentials)
+    if not user.get("is_platform_admin", False):
+        raise HTTPException(status_code=403, detail={"error_code": "PLATFORM_ADMIN_REQUIRED",
+                                                     "message": "Platform administrator access required"})
+    return {"actor_type": "human", "actor_id": user["id"], "channel": "platform_admin",
+            "own_tenant": user.get("org_id")}
+
+
+async def _reminder_event(tenant_id: str, caller: dict, scope: str, phase: str,
+                          correlation_id: str, error_code: Optional[str] = None) -> None:
+    from app.audit.envelope import RESULT_FAILURE, RESULT_SUCCESS, RETENTION_R3_SECURITY_ACCESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=tenant_id, actor_type=caller["actor_type"], actor_id=caller["actor_id"],
+        action="reminder_jobs.%s" % phase, source_flow="FLOW-013",
+        retention_class=RETENTION_R3_SECURITY_ACCESS,
+        result=RESULT_FAILURE if phase == "failed" else RESULT_SUCCESS,
+        entity_type="reminder_jobs", entity_id=tenant_id,
+        structured_diff={"scope": scope, "phase": phase}, source_channel=caller["channel"],
+        tool_or_endpoint="POST /api/internal/run-reminder-jobs",
+        correlation_id=correlation_id, error_code=error_code,
+    )
+    await record_event(db, event)
+
+
+_SUPPORT_GRANT_REQUIRED = {"error_code": "SUPPORT_ACCESS_GRANT_REQUIRED",
+                           "message": "Running another tenant needs a Support Access Grant (not available yet)"}
+
+
 @router.post("/internal/run-reminder-jobs")
-async def trigger_reminder_jobs():
-    await run_reminder_jobs()
-    return {"ok": True, "ran_at": datetime.now(timezone.utc).isoformat()}
+async def trigger_reminder_jobs(tenant_id: Optional[str] = None, all_tenants: bool = False,
+                                caller: dict = Depends(_internal_job_caller)):
+    if tenant_id and all_tenants:
+        raise HTTPException(status_code=400, detail="Give tenant_id or all_tenants=true, not both")
+    if not tenant_id and not all_tenants:
+        raise HTTPException(status_code=400, detail="tenant_id or all_tenants=true is required")
+    human = caller["actor_type"] == "human"
+    if human and (all_tenants or tenant_id != caller["own_tenant"]):
+        raise HTTPException(status_code=403, detail=_SUPPORT_GRANT_REQUIRED)
+    known = await all_tenant_ids(db)
+    if tenant_id:
+        if tenant_id not in known:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        targets, scope = [tenant_id], "tenant"
+    else:
+        targets, scope = known, "all_tenants"
+    for org_id in targets:
+        correlation_id = "rj_%s" % uuid.uuid4()
+        await _reminder_event(org_id, caller, scope, "started", correlation_id)
+        try:
+            await run_reminder_jobs_for_org(org_id)
+        except Exception as exc:
+            await _reminder_event(org_id, caller, scope, "failed", correlation_id, type(exc).__name__)
+            raise
+        await _reminder_event(org_id, caller, scope, "completed", correlation_id)
+    return {"ok": True, "tenants": len(targets), "ran_at": datetime.now(timezone.utc).isoformat()}
 
 # ══════════════════════════════════════════════════════════════════
 # NOTIFICATION ROUTES

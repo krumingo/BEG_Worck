@@ -114,30 +114,28 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
     if any(len(i) > MAX_IMG for i in imgs):
         raise HTTPException(status_code=400, detail="Image too large")
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY not configured")
-
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-
-    session_id = f"batch-intake-{uuid.uuid4().hex[:8]}"
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=session_id,
-        system_message=SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-4.1")
-
+    from app.services import ai_provider
     try:
-        resp = await chat.send_message(UserMessage(
+        # SEC-03 FG-522 (§4): no photo goes to AI before the File Registry can keep the original.
+        ai_provider.require_photo_ai()
+    except ai_provider.AIPhotoNeedsFileRegistry:
+        raise HTTPException(status_code=503, detail=ai_provider.AI_PHOTO_NEEDS_FILE_REGISTRY_MESSAGE)
+    session_id = f"batch-intake-{uuid.uuid4().hex[:8]}"
+    try:
+        text = await ai_provider.complete(
+            user.get("org_id"), user_id=user.get("id"), feature="assets_batch_intake", system=SYSTEM_PROMPT,
             text=("Разпознай вещта от снимките. Ако последната снимка е едър кадър на табелка/етикет, "
                   "извлечи от нея серийния номер, модела и артикулния номер. Върни JSON."),
-            file_contents=[ImageContent(image_base64=b) for b in imgs],
-        ))
-        parsed = json.loads(_strip(str(resp)))
+            images=imgs)
+        parsed = json.loads(_strip(text))
+    except ai_provider.AINotConfigured:
+        raise HTTPException(status_code=503, detail=ai_provider.AI_NOT_CONFIGURED_MESSAGE)
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="AI отговори в невалиден формат, опитай пак")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+    except ai_provider.AIProviderError:
+        raise HTTPException(status_code=502, detail="AI е недостъпен, опитай пак или попълни ръчно")
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="AI отговори в невалиден формат, опитай пак")
 
     org = user["org_id"]
     name = str(parsed.get("name") or "").strip()
@@ -178,7 +176,7 @@ async def recognize(data: RecognizeRequest, user: dict = Depends(get_current_use
     # or merges anything in Master Data.
     from app.master_data.intake_hooks import observe_ai_asset
     await observe_ai_asset(user, suggestion, source_ref="assets-batch-intake:%s" % session_id,
-                           model_and_version="openai/gpt-4.1")
+                           model_and_version=ai_provider.model_and_version())
 
     matched_item = ({"id": matched["id"], "name": matched["name"],
                      "brand": matched.get("brand"), "model": matched.get("model")} if matched else None)

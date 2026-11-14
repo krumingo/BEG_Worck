@@ -660,7 +660,7 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
     qty = item.get("qty", 1)
 
     # Get AI proposal
-    proposal = await hybrid_ai_proposal(title, unit, qty, None, user["org_id"])
+    proposal = await hybrid_ai_proposal(title, unit, qty, None, user["org_id"], user.get("id"))
 
     # Get live prices for materials
     mat_names = [m["name"] for m in proposal.get("materials", []) if m.get("name")]

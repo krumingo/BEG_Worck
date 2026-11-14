@@ -5,12 +5,12 @@ Routes - Assets AI Intake (Пакет E1a: снимка -> разпознава�
 съществуващата форма за нов артикул. Реалният запис минава по стария път
 (POST /assets/items + бройки + QR).
 
-Ползва същата AI връзка като СМР предложенията (emergentintegrations, EMERGENT_LLM_KEY).
+SEC-03 / Р76: AI през единния адаптер app/services/ai_provider.py (Anthropic директно;
+ключ и модел от настройките, флаг ai_enabled за фирмата). Без тях -> 503 „AI не е настроен“.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from pydantic import BaseModel
-import os
 import json
 import uuid
 
@@ -20,10 +20,6 @@ router = APIRouter(tags=["AssetsAIIntake"])
 
 ADMIN_ROLES = ["Admin", "Owner", "SiteManager", "Accountant"]
 MAX_IMAGE_CHARS = 8_000_000  # ~6MB снимка в base64
-#: Named once: the recognition uses it and the AuditEvent has to report it
-#: (FLOW-040 §4.4 refuses an AI event without a model).
-AI_MODEL = "gpt-4.1-mini"
-
 SYSTEM_PROMPT = """Ти си експерт по строителна техника и инструменти в България.
 Получаваш снимка на машина или инструмент (понякога и втора снимка на типовата табелка).
 Върни САМО валиден JSON без markdown огради и без коментари, с точно тези ключове:
@@ -66,33 +62,28 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
     if len(data.image_base64) > MAX_IMAGE_CHARS or len(data.plate_image_base64 or "") > MAX_IMAGE_CHARS:
         raise HTTPException(status_code=400, detail="Image too large")
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY not configured")
-
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-
-    images = [ImageContent(image_base64=data.image_base64)]
-    if data.plate_image_base64:
-        images.append(ImageContent(image_base64=data.plate_image_base64))
-
-    session_id = f"asset-intake-{uuid.uuid4().hex[:8]}"
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=session_id,
-        system_message=SYSTEM_PROMPT,
-    ).with_model("openai", AI_MODEL)
-
+    from app.services import ai_provider
     try:
-        response = await chat.send_message(UserMessage(
+        # SEC-03 FG-522 (§4): no photo goes to AI before the File Registry can keep the original.
+        ai_provider.require_photo_ai()
+    except ai_provider.AIPhotoNeedsFileRegistry:
+        raise HTTPException(status_code=503, detail=ai_provider.AI_PHOTO_NEEDS_FILE_REGISTRY_MESSAGE)
+    images = [data.image_base64] + ([data.plate_image_base64] if data.plate_image_base64 else [])
+    session_id = f"asset-intake-{uuid.uuid4().hex[:8]}"
+    try:
+        text = await ai_provider.complete(
+            user.get("org_id"), user_id=user.get("id"), feature="assets_ai_intake", system=SYSTEM_PROMPT,
             text="Разпознай машината/инструмента от снимката и върни JSON.",
-            file_contents=images,
-        ))
-        parsed = json.loads(_strip_fences(str(response)))
+            images=images)
+        parsed = json.loads(ai_provider.strip_code_fences(text))
+    except ai_provider.AINotConfigured:
+        raise HTTPException(status_code=503, detail=ai_provider.AI_NOT_CONFIGURED_MESSAGE)
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="AI отговори в невалиден формат, опитай пак")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI error: {e}")
+    except ai_provider.AIProviderError:
+        raise HTTPException(status_code=502, detail="AI е недостъпен, опитай пак или попълни ръчно")
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="AI отговори в невалиден формат, опитай пак")
 
     def _num(v):
         try:
@@ -120,5 +111,5 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
     # writes nothing itself.
     from app.master_data.intake_hooks import observe_ai_asset
     await observe_ai_asset(user, suggestion, source_ref="assets-ai-intake:%s" % session_id,
-                           model_and_version="openai/%s" % AI_MODEL)
+                           model_and_version=ai_provider.model_and_version())
     return suggestion

@@ -397,7 +397,7 @@ async def ai_suggest(analysis_id: str, data: AISuggestRequest, user: dict = Depe
     unit = target.get("unit", "m2")
     qty = target.get("qty", 1)
 
-    proposal = await get_ai_proposal(title, unit, qty, data.city, user["org_id"])
+    proposal = await get_ai_proposal(title, unit, qty, data.city, user["org_id"], user.get("id"))
 
     # Map AI materials to analysis format
     ai_materials = []
@@ -986,11 +986,22 @@ async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user))
     if not lines:
         return {"processed": 0, "message": "No lines to process"}
 
+    # SEC-03 FG-518: AI availability is decided BEFORE the cache — with AI off for
+    # the tenant or no key/model configured, earlier AI results are not applied
+    # either; the manual split below is used.
+    from app.services import ai_provider
+    try:
+        await ai_provider.require_ai(org_id)
+        ai_unavailable = None
+    except ai_provider.AINotConfigured as exc:
+        ai_unavailable = exc
+
     # Check for cached results
     cache_key = f"ai_breakdown_{analysis_id}"
     # W0-03E-A2B: the cache is tenant-owned. An analysis id is not unique across
     # tenants, so a key-only lookup could return another tenant's AI results.
-    cached = await tenant.ai_cache.find_one({"key": cache_key, "org_id": org_id})
+    cached = (await tenant.ai_cache.find_one({"key": cache_key, "org_id": org_id})
+              if ai_unavailable is None else None)
     if cached and cached.get("results"):
         # Apply cached results
         for result in cached["results"]:
@@ -1022,9 +1033,11 @@ async def ai_breakdown(analysis_id: str, user: dict = Depends(get_current_user))
     if not lines_for_ai:
         return {"processed": 0, "message": "No lines need breakdown"}
 
-    # Call AI (Claude via emergent integrations)
+    # Call AI (SEC-03 / Р76: Anthropic directly through app/services/ai_provider.py;
+    # key and model from configuration, tenant flag ai_enabled)
     try:
-        from emergentintegrations.llm.chat import chat, UserMessage
+        if ai_unavailable is not None:
+            raise ai_unavailable
         prompt = f"""Дадени са СМР редове от строителна оферта. За всеки ред предложи разбивка на единичната цена на МАТЕРИАЛ и ТРУД.
 Базирай се на пазарни цени за България 2026.
 Върни JSON масив с полета: line_id, material_cena, trud_cena, uverenost (0-100), beleshka.
@@ -1033,16 +1046,12 @@ material_cena + trud_cena трябва да = ed_cena.
 Редове:
 {str(lines_for_ai[:30])}"""  # Limit to 30 lines per call
 
-        response = await chat(
-            api_key=os.environ.get("EMERGENT_API_KEY", ""),
-            model="claude-sonnet-4-20250514",
-            messages=[UserMessage(content=prompt)],
-            max_tokens=2000,
-        )
+        text = await ai_provider.complete(
+            org_id, user_id=user.get("id"), feature="smr_ai_breakdown", system="Ти си експерт по ценообразуване на СМР в България. Отговаряй само с JSON.",
+            text=prompt, max_tokens=2000)
 
         # Parse AI response
         import json as json_mod
-        text = response.content if hasattr(response, 'content') else str(response)
         # Extract JSON from response
         start = text.find("[")
         end = text.rfind("]") + 1
@@ -1076,6 +1085,10 @@ material_cena + trud_cena трябва да = ed_cena.
 
         return {"processed": processed, "total_lines": len(lines_for_ai), "source": "ai"}
     except Exception as e:
+        # SEC-03: AI not configured / not enabled / failed → the manual fallback
+        # below; the reason is a fixed text or the error TYPE, never SDK text.
+        reason = (ai_provider.AI_NOT_CONFIGURED_MESSAGE if isinstance(e, ai_provider.AINotConfigured)
+                  else type(e).__name__)
         # Fallback: simple 60/40 split
         now = datetime.now(timezone.utc).isoformat()
         processed = 0
@@ -1092,5 +1105,5 @@ material_cena + trud_cena трябва да = ed_cena.
                 processed += 1
 
         await tenant.smr_analyses.update_one({"id": analysis_id}, {"$set": {"lines": lines, "ai_breakdown_at": now}})
-        return {"processed": processed, "source": "fallback", "error": str(e)}
+        return {"processed": processed, "source": "fallback", "error": reason}
 

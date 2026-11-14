@@ -724,7 +724,9 @@ def test_sandbox_base_script_refuses_without_flag(tmp_path):
 # stay byte-identical to main's.
 R26_RELEASE_FILES = {"ops/release/release_build.py", "ops/release/beg_release/manifest.py",
                      "ops/release/release_manifest.schema.json", "ops/release/README.md",
-                     "ops/release/tests/test_artifact.py"}
+                     "ops/release/tests/test_artifact.py",
+                     # SEC-03: fixture reads the live nginx.conf blob (b87dfcd)
+                     "ops/release/tests/harness.py", "ops/release/tests/synology/make_package.py"}
 
 
 def test_ops_release_tools_are_not_modified_by_st02():
