@@ -800,17 +800,38 @@ async def reject_media_retire(request_id: str, data: RetireRequestBody = Body(No
     return await _decide(request_id, user, False, (data.reason if data else None), idempotency_key)
 
 
+#: FG-693: the review lists page — never a silent cap that hides a row
+PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX = 50, 200
+
+
+def _page_args(skip: int, limit: int) -> tuple:
+    if skip < 0 or limit < 1 or limit > PAGE_LIMIT_MAX:
+        raise lifecycle.refuse(400, "BAD_PAGE", "skip ≥ 0, 1 ≤ limit ≤ %d" % PAGE_LIMIT_MAX)
+    return skip, limit
+
+
+def _page(items: list, total: int, skip: int, limit: int) -> dict:
+    nxt = skip + len(items)
+    return {"items": items, "total": total, "skip": skip, "limit": limit,
+            "next_skip": nxt if nxt < total else None}
+
+
 @router.get("/media-retire-requests")
 async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
+                                     skip: int = 0, limit: int = PAGE_LIMIT_DEFAULT,
                                      user: dict = Depends(get_current_user)):
+    """Owner/Admin; ``{items, total, skip, limit, next_skip}`` (FG-693), newest first."""
     if user.get("role") not in ("Owner", "Admin"):
         raise HTTPException(status_code=403, detail="Access denied")
+    skip, limit = _page_args(skip, limit)
     flt = {"org_id": user["org_id"]}
     if status:
         flt["status"] = status
-    rows = await _tenant(user).media_retire_requests.find(flt, {"_id": 0}).sort(
-        "requested_at", -1).to_list(200)
-    return [_request_view(r, user) for r in rows]
+    coll = _tenant(user).media_retire_requests
+    total = await coll.count_documents(flt)
+    rows = await coll.find(flt, {"_id": 0}).sort([("requested_at", -1), ("id", 1)]).skip(
+        skip).limit(limit).to_list(None)
+    return _page([_request_view(r, user) for r in rows], total, skip, limit)
 
 
 #: the fields a retire writes on the row — on restore they move into ``retire_history``
@@ -887,24 +908,31 @@ async def restore_media(media_id: str, body: Optional[dict] = Body(None),
 
 
 @router.get("/media-retired")
-async def list_retired_media(user: dict = Depends(get_current_user)):
-    """The retired files of the tenant (FG-558: Owner/Admin only), newest first. Each row
-    says whether THIS user may restore it (R88: the Owner) and how."""
+async def list_retired_media(skip: int = 0, limit: int = PAGE_LIMIT_DEFAULT,
+                             user: dict = Depends(get_current_user)):
+    """The retired files of the tenant (FG-558: Owner/Admin only), newest first, paged
+    (FG-693: ``{items, total, skip, limit, next_skip}`` — no retired file is unreachable).
+    Each row says whether THIS user may restore it (R88: the Owner) and how."""
     from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES, RETIRED_LIST_ROLES
     if user.get("role") not in RETIRED_LIST_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
-    rows = await _tenant(user).media_files.find(
-        {"org_id": user["org_id"], "status": MEDIA_RETIRED},
+    skip, limit = _page_args(skip, limit)
+    flt = {"org_id": user["org_id"], "status": MEDIA_RETIRED}
+    coll = _tenant(user).media_files
+    total = await coll.count_documents(flt)
+    rows = await coll.find(
+        flt,
         {"_id": 0, "id": 1, "filename": 1, "stored_filename": 1, "content_type": 1,
          "context_type": 1, "context_id": 1, "owner_user_id": 1, "created_at": 1,
-         **{f: 1 for f in _RETIRE_FIELDS}}).sort("retired_at", -1).to_list(200)
+         **{f: 1 for f in _RETIRE_FIELDS}}).sort([("retired_at", -1), ("id", 1)]).skip(
+        skip).limit(limit).to_list(None)
     may = RESTORE_ENABLED and user.get("role") in RESTORE_ROLES
     for r in rows:
         r["can_restore"] = may
         if may:
             r["restore"] = {"method": "POST", "path": "/api/media/%s/restore" % r["id"],
                             "requires": ["reason", "Idempotency-Key"]}
-    return rows
+    return _page(rows, total, skip, limit)
 
 
 @router.post("/media/{media_id}/pending-holders/{marker_id}/release")

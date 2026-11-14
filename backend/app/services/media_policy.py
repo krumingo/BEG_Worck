@@ -12,9 +12,9 @@ truth: when W0-07 lands, ``media_retire_requests`` moves into it.
 """
 from __future__ import annotations
 
-#: who sees an avatar — interim: everyone in the firm (the tenant); "self_and_admin" would
-#: limit it to the user and Owner/Admin (open question to Krum)
-AVATAR_VISIBILITY = "tenant"
+# Who sees an avatar is not a switch here: Krum R88 (14.11.2026) — everyone in the firm.
+# ``GET /api/media/avatar/{name}`` serves a logged-in user of the SAME tenant and nobody
+# else (FG-540); the old AVATAR_VISIBILITY constant was never read, so it is gone (FG-691).
 
 #: R83(2) / pass 46 interim: an Admin files the retire request of a USED file …
 RETIRE_REQUEST_ROLES = frozenset({"Admin"})

@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2fa932c420-d355-493e-b216-6cd848c": 404,
-   ".%2Fa932c420-d355-493e-b216-6cd848c96b66": 404,
-   "..%252Fa932c420-d355-493e-b216-6cd848c96": 404,
+   "%2e%2e%2f9d647b83-2c9e-4140-9481-727e555": 404,
+   ".%2F9d647b83-2c9e-4140-9481-727e555b8184": 404,
+   "..%252F9d647b83-2c9e-4140-9481-727e555b8": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2fa932c420-d355-493e-b216-6cd848c96b6": 404,
-   "..%5Ca932c420-d355-493e-b216-6cd848c96b6": 404,
+   "..%2f9d647b83-2c9e-4140-9481-727e555b818": 404,
+   "..%5C9d647b83-2c9e-4140-9481-727e555b818": 404,
    "...": 404,
-   "a932c420-d355-493e-b216-6cd848c96b66.jpg": 404,
-   "projects%2Fa932c420-d355-493e-b216-6cd84": 404,
+   "9d647b83-2c9e-4140-9481-727e555b8184.jpg": 404,
+   "projects%2F9d647b83-2c9e-4140-9481-727e5": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 528,
+    "files": 585,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 528,
+    "files": 585,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 526,
+    "files": 583,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 526,
+    "files": 583,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 527,
+    "files": 584,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 527,
+    "files": 584,
     "photos": 1
    },
    "file_accountant": 403,
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "a820e12a-7487-4f25-bc38-5d2e3cb77e1f"
+    "retired": "96663dfc-7966-4e44-bee5-a3a7cabe295f"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "a820e12a-7487-4f25-bc38-5d2e3cb77e1f.jpg"
+      "stored_filename": "96663dfc-7966-4e44-bee5-a3a7cabe295f.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "617b1adf303d4910bb9125ccdcc38b6e",
+     "idempotency_key": "6a9191e27b6c42f191efea0d48c3925d",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "a1d02374-48c8-4489-a1e0-25bd9141a09b"
+     "tenant_id": "55f5f6cf-5a1a-4142-adf5-1269606140f2"
     }
    ],
    "file_kept": true,
@@ -412,7 +412,7 @@
       "warehouse_movement"
      ]
     ],
-    "commit_key": "d94819fedc564a0c8ad47ea7b95af568",
+    "commit_key": "ec975638fb0b41c285547dbd287c9295",
     "fail": {
      "media_status": null,
      "pending_after": 0,
@@ -421,7 +421,7 @@
      "status": 400
     },
     "fail_delete_after": 200,
-    "fail_key": "7960184598c845e9a1e6650e103969ac",
+    "fail_key": "a960ffcd8baa42e8ae026841cb672fc6",
     "replay_while_pending": {
      "error_code": null,
      "pending_after": 0,
@@ -613,7 +613,7 @@
     "meta_technician": 410,
     "meta_technician_detail": {
      "error_code": "MEDIA_RETIRED",
-     "media_id": "40c0741f-389a-44a7-b879-d2e8eea2191a",
+     "media_id": "9e0f8d91-5f81-43a1-b936-c5237c95d7ee",
      "retired": true
     },
     "pending": null,
@@ -652,7 +652,7 @@
    "delete_while_pending": "MEDIA_IN_USE",
    "link_while_pending": "RETIRE_REQUEST_PENDING",
    "pending_list_owner": [
-    "81f005ca-7d4c-4687-91a3-dfb8b3d97360"
+    "edb311d4-e2ff-4637-8de4-3111b1cb4231"
    ],
    "pending_list_technician": 403,
    "req_no_key": 428,
@@ -706,11 +706,11 @@
    "avatar_events": [
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/a932c420-d355-493e-b216-6cd848c96b66.jpg"
+     "after": "/api/media/avatar/9d647b83-2c9e-4140-9481-727e555b8184.jpg"
     },
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/3608a60b-84e7-450c-ae40-ebeed89b473a.jpg"
+     "after": "/api/media/avatar/c50959ab-e65c-4e36-bb4f-d92648fdb2c4.jpg"
     }
    ],
    "basic_put": 200,
@@ -747,6 +747,17 @@
     "written": 1
    },
    "apply_wrong_sha": "PlanMismatch",
+   "approval_ref": {
+    "bad_ref": "NotApproved",
+    "event": [
+     true
+    ],
+    "optional": [
+     null,
+     null
+    ],
+    "result": true
+   },
    "b_owner_sees_only_b": true,
    "conflict": "conflict",
    "conflict_rolled_back": true,
@@ -868,7 +879,7 @@
    "restore": [
     {
      "method": "POST",
-     "path": "/api/media/7f72987a-21f6-4733-9bd9-c9ebd5650b23/restore",
+     "path": "/api/media/243aa2fa-0f90-4cd7-952d-a1ea667eebc9/restore",
      "requires": [
       "reason",
       "Idempotency-Key"
@@ -889,10 +900,40 @@
    "REASON_REQUIRED"
   ],
   "other_tenant": 404,
+  "paging": {
+   "bad": [
+    400,
+    400,
+    400,
+    400
+   ],
+   "first": {
+    "len": 2,
+    "limit": 2,
+    "next_skip": 2,
+    "skip": 0,
+    "total_ok": true
+   },
+   "requests": {
+    "len": 1,
+    "shape": [
+     "items",
+     "limit",
+     "next_skip",
+     "skip",
+     "total"
+    ],
+    "total_ge_1": true
+   },
+   "walk": {
+    "all_reached": true,
+    "extra_reached": true
+   }
+  },
   "restore": {
    "body": {
     "ok": true,
-    "restored": "7f72987a-21f6-4733-9bd9-c9ebd5650b23"
+    "restored": "243aa2fa-0f90-4cd7-952d-a1ea667eebc9"
    },
    "replay_same": true,
    "status": 200

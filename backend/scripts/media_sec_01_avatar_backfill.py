@@ -161,7 +161,8 @@ async def _event(db, session, row, action, diff):
     await record_event(db, event, session=session)
 
 
-async def _apply_flag(db, row: Dict[str, Any], approver: str) -> str:
+async def _apply_flag(db, row: Dict[str, Any], approver: str,
+                      approval_ref: Optional[str] = None) -> str:
     from app.services.auth_tx import run_in_transaction
 
     async def body(session):
@@ -186,7 +187,7 @@ async def _apply_flag(db, row: Dict[str, Any], approver: str) -> str:
             "user_id": row["user_id"],
             "before": {"avatar": None, "avatar_url": row["avatar_url"]},
             "after": {"avatar": True, "avatar_url": row["new_avatar_url"]},
-            "approved_by": approver})
+            "approved_by": approver, "approval_ref": approval_ref})
         return "written"
 
     try:
@@ -195,7 +196,8 @@ async def _apply_flag(db, row: Dict[str, Any], approver: str) -> str:
         return "conflict"
 
 
-async def _apply_revert(db, row: Dict[str, Any], approver: str) -> str:
+async def _apply_revert(db, row: Dict[str, Any], approver: str,
+                        approval_ref: Optional[str] = None) -> str:
     from app.services.auth_tx import run_in_transaction
 
     async def body(session):
@@ -217,7 +219,7 @@ async def _apply_revert(db, row: Dict[str, Any], approver: str) -> str:
         await _event(db, session, row, "media.avatar.backfill_revert", {
             "user_id": row["user_id"], "before": {"avatar": True},
             "after": {"avatar": None}, "avatar_url_restored": restored,
-            "approved_by": approver})
+            "approved_by": approver, "approval_ref": approval_ref})
         return "written"
 
     try:
@@ -226,13 +228,30 @@ async def _apply_revert(db, row: Dict[str, Any], approver: str) -> str:
         return "conflict"
 
 
+def check_approval_ref(value: Optional[str]) -> Optional[str]:
+    """FG-692 prep: where Krum's "да" was given (a conversation / message reference), stored
+    in every AuditEvent the apply writes. Optional until Krum decides how it is recorded;
+    when given: ≤ 500 characters, no control characters."""
+    if value is None:
+        return None
+    ref = value.strip()
+    if not ref:
+        return None
+    if len(ref) > 500 or any(ord(ch) < 32 or ord(ch) == 127 for ch in ref):
+        raise NotApproved("--approval-ref: at most 500 characters, no control characters")
+    return ref
+
+
 async def migrate(db, apply: bool = False, approved_by: Optional[str] = None,
-                  plan_sha: Optional[str] = None, revert: bool = False) -> Dict[str, Any]:
+                  plan_sha: Optional[str] = None, revert: bool = False,
+                  approval_ref: Optional[str] = None) -> Dict[str, Any]:
+    approval_ref = check_approval_ref(approval_ref)
     owner = await resolve_owner(db, approved_by)
     rows = await (build_revert_plan if revert else build_plan)(db, owner["org_id"])
     sha = globals()["plan_sha"](rows)
     result = {"mode": "revert" if revert else "backfill", "org_id": owner["org_id"],
-              "plan": rows, "plan_sha": sha, "counts": counts(rows), "applied": False}
+              "plan": rows, "plan_sha": sha, "counts": counts(rows), "applied": False,
+              "approval_ref": approval_ref}
     if not apply:
         return result
     if plan_sha != sha:
@@ -240,9 +259,9 @@ async def migrate(db, apply: bool = False, approved_by: Optional[str] = None,
     outcome: Dict[str, int] = {"written": 0, "conflict": 0}
     for row in rows:
         if revert:
-            res = await _apply_revert(db, row, owner["id"])
+            res = await _apply_revert(db, row, owner["id"], approval_ref)
         elif row["action"] == "flag":
-            res = await _apply_flag(db, row, owner["id"])
+            res = await _apply_flag(db, row, owner["id"], approval_ref)
         else:
             continue
         outcome[res] = outcome.get(res, 0) + 1
@@ -256,13 +275,16 @@ def main(argv=None) -> int:
     ap.add_argument("--revert", action="store_true")
     ap.add_argument("--approved-by", help="the user id of an active Owner of the tenant")
     ap.add_argument("--plan-sha")
+    ap.add_argument("--approval-ref",
+                    help="optional (FG-692 prep): where Krum's \"да\" was given; stored in the AuditEvent")
     args = ap.parse_args(argv)
     from motor.motor_asyncio import AsyncIOMotorClient
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db = client[os.environ["DB_NAME"]]
     try:
         res = asyncio.run(migrate(db, apply=args.apply, approved_by=args.approved_by,
-                                  plan_sha=args.plan_sha, revert=args.revert))
+                                  plan_sha=args.plan_sha, revert=args.revert,
+                                  approval_ref=args.approval_ref))
     except (PlanMismatch, NotApproved) as exc:
         print("REFUSED: %s" % exc, file=sys.stderr)
         return 1

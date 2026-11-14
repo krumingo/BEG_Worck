@@ -149,6 +149,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             assert r["status"] == 200, (role, tkey, context, r["status"], r["body"])
             return r["body"]
 
+        def items_of(body):
+            """FG-693: the review lists answer {items, total, …}; before, a plain list."""
+            if isinstance(body, dict) and isinstance(body.get("items"), list):
+                return body["items"]
+            return body if isinstance(body, list) else []
+
         def media_row(media_id):
             return q(lambda: op_db.media_files.find_one({"id": media_id}, {"_id": 0})) or {}
 
@@ -430,7 +436,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         a2["approve_other_tenant"] = call("POST", ap_url, tkey="B", key="auto", json={})["status"]
         a2["before_approve"] = {"status": media_row(used2["id"]).get("status"),
                                 "events": [e["action"] for e in events(used2["id"], "media.")]}
-        a2["pending_list_owner"] = [x.get("id") for x in (call("GET", "/api/media-retire-requests")["body"] or [])]
+        a2["pending_list_owner"] = [x.get("id") for x in items_of(call("GET", "/api/media-retire-requests")["body"])]
         a2["pending_list_technician"] = call("GET", "/api/media-retire-requests",
                                              role="technician")["status"]
         k = uuid.uuid4().hex
@@ -614,7 +620,25 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         a4["conflict"] = (q(lambda: bf._apply_flag(op_db, stale_row, owner_id))
                           if hasattr(bf, "_apply_flag") else "no _apply_flag (pre pass 46)")
         a4["conflict_rolled_back"] = media_row(pid("A", "legacy_av")).get("avatar") is None
-        res = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry["plan_sha"]))
+        approval_ref = "R83-4 — „да“ на Крум в разговора (тестов маркер)"
+        try:                                   # FG-692 prep: the optional --approval-ref
+            res = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id,
+                                       plan_sha=dry["plan_sha"], approval_ref=approval_ref))
+        except TypeError:                      # before the prep: no approval_ref
+            res = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id,
+                                       plan_sha=dry["plan_sha"]))
+        a4["approval_ref"] = {"result": res.get("approval_ref") == approval_ref,
+                              "event": [(e["diff"] or {}).get("approval_ref") == approval_ref
+                                        for e in events(pid("A", "legacy_av"), "media.avatar.backfill")]}
+        try:
+            bf.check_approval_ref("a\x07b")
+            a4["approval_ref"]["bad_ref"] = "accepted"
+        except AttributeError:
+            a4["approval_ref"]["bad_ref"] = "no check (before the prep)"
+        except Exception as exc:               # noqa: BLE001
+            a4["approval_ref"]["bad_ref"] = type(exc).__name__
+        a4["approval_ref"]["optional"] = (bf.check_approval_ref(None), bf.check_approval_ref("  ")) \
+            if hasattr(bf, "check_approval_ref") else None
         a4["apply"] = {"written": res.get("written"), "conflict": res.get("conflict"),
                        "flag": media_row(pid("A", "legacy_av")).get("avatar"),
                        "linked_flag": media_row(pid("A", "legacy_linked")).get("avatar"),
@@ -1265,8 +1289,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
 
         def listed(role, tkey="A"):
             r = call("GET", "/api/media-retired", role=role, tkey=tkey)
-            rows = [x for x in (r["body"] or []) if isinstance(x, dict) and x.get("id") == rm["id"]] \
-                if isinstance(r["body"], list) else []
+            rows = [x for x in items_of(r["body"]) if isinstance(x, dict) and x.get("id") == rm["id"]]
             return {"status": r["status"], "rows": rows}
         lo, la = listed("owner"), listed("admin")
         r88["list_owner"] = {"status": lo["status"], "found": len(lo["rows"]),
@@ -1325,6 +1348,35 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                         "retired_list": len(listed("owner")["rows"])}
         again = call("POST", url, key="auto", json={"reason": "пак"})
         r88["again"] = [again["status"], again["error_code"]]
+        # FG-693: both review lists page, with a total — no retired file is unreachable
+        extra = [upload() for _ in range(3)]
+        for f in extra:
+            call("DELETE", "/api/media/%s" % f["id"], role="technician", key="auto",
+                 json={"reason": "страниране"})
+        p1 = call("GET", "/api/media-retired?limit=2")
+        b1 = p1["body"] if isinstance(p1["body"], dict) else {}
+        seen, skip, pages = [], 0, 0
+        while skip is not None and pages < 50:
+            b = call("GET", "/api/media-retired?skip=%d&limit=2" % skip)["body"]
+            if not isinstance(b, dict):
+                break
+            seen += [x["id"] for x in b.get("items") or []]
+            skip, pages = b.get("next_skip"), pages + 1
+        total_retired = q(lambda: op_db.media_files.count_documents(
+            {"org_id": A["tenant_id"], "status": "retired"}))
+        rq = call("GET", "/api/media-retire-requests?status=&limit=1")["body"]
+        r88["paging"] = {
+            "first": {"len": len(b1.get("items") or []), "skip": b1.get("skip"), "limit": b1.get("limit"),
+                      "next_skip": b1.get("next_skip"), "total_ok": b1.get("total") == total_retired},
+            "walk": {"all_reached": sorted(seen) == sorted(set(seen)) and len(seen) == total_retired,
+                     "extra_reached": all(f["id"] in seen for f in extra)},
+            "requests": {"shape": sorted(rq) if isinstance(rq, dict) else None,
+                         "len": len(rq.get("items") or []) if isinstance(rq, dict) else None,
+                         "total_ge_1": isinstance(rq, dict) and (rq.get("total") or 0) >= 1},
+            "bad": [call("GET", "/api/media-retired?limit=0")["status"],
+                    call("GET", "/api/media-retired?limit=201")["status"],
+                    call("GET", "/api/media-retired?skip=-1")["status"],
+                    call("GET", "/api/media-retire-requests?limit=500")["status"]]}
         obs["r88"] = r88
 
         # ─────────────────────────────────────────────── FG-541 — project photos
@@ -1984,6 +2036,24 @@ def test_r88_only_the_owner_restores_and_admin_sees_the_list_without_the_action(
     assert r["list_owner_b"] == {"status": 200, "rows": []}       # another firm sees nothing
     assert r["other_tenant"] == 404
     assert r["still_retired"] == "retired" and r["events_before"] == 0   # refusals wrote nothing
+
+
+@real
+def test_fg693_the_review_lists_page_with_a_total(obs):
+    g = obs["r88"]["paging"]
+    assert g["first"] == {"len": 2, "skip": 0, "limit": 2, "next_skip": 2, "total_ok": True}
+    assert g["walk"] == {"all_reached": True, "extra_reached": True}
+    assert g["requests"] == {"shape": ["items", "limit", "next_skip", "skip", "total"], "len": 1,
+                             "total_ge_1": True}
+    assert g["bad"] == [400, 400, 400, 400]
+
+
+@real
+def test_fg692_prep_the_backfill_records_an_optional_approval_ref(obs):
+    a = obs["r83"]["backfill"]["approval_ref"]
+    assert a["result"] is True and a["event"] == [True]
+    assert a["bad_ref"] == "NotApproved"
+    assert a["optional"] == [None, None]
 
 
 @real

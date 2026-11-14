@@ -81,20 +81,54 @@ function ReasonForm({ id, label, required, busy, onConfirm, onCancel }) {
   );
 }
 
+/** A paged list (FG-693): the first page on load, „Покажи още“ appends the next one. */
 function useList(load) {
   const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [next, setNext] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [more, setMore] = useState(false);
   const [problem, setProblem] = useState(null);
   const reload = useCallback(() => {
     setLoading(true);
     setProblem(null);
-    return load()
-      .then((data) => setRows(Array.isArray(data) ? data : []))
-      .catch((err) => { setRows([]); setProblem(problemOf(err)); })
+    return load(0)
+      .then((page) => { setRows(page.items); setTotal(page.total); setNext(page.next); })
+      .catch((err) => { setRows([]); setTotal(0); setNext(null); setProblem(problemOf(err)); })
       .finally(() => setLoading(false));
   }, [load]);
+  const loadMore = useCallback(() => {
+    if (next == null) return Promise.resolve();
+    setMore(true);
+    return load(next)
+      .then((page) => {
+        setRows((prev) => {
+          const have = new Set(prev.map((x) => x.id));
+          return [...prev, ...page.items.filter((x) => !have.has(x.id))];
+        });
+        setTotal(page.total);
+        setNext(page.next);
+      })
+      .catch((err) => toast.error(problemOf(err)))
+      .finally(() => setMore(false));
+  }, [load, next]);
   useEffect(() => { reload(); }, [reload]);
-  return { rows, loading, problem, reload };
+  return { rows, total, next, loading, more, problem, reload, loadMore };
+}
+
+function MoreButton({ list, testid }) {
+  if (list.loading || list.problem || list.next == null) return null;
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <Button size="sm" variant="outline" disabled={list.more} onClick={list.loadMore}
+        data-testid={`${testid}-more`}>
+        {list.more ? <Loader2 className="w-4 h-4 animate-spin" /> : "Покажи още"}
+      </Button>
+      <span className="text-xs text-muted-foreground" data-testid={`${testid}-count`}>
+        {list.rows.length} от {list.total}
+      </span>
+    </div>
+  );
 }
 
 function ListState({ loading, problem, empty, testid }) {
@@ -157,10 +191,10 @@ export default function MediaReviewPage() {
       <Tabs defaultValue="requests">
         <TabsList>
           <TabsTrigger value="requests" data-testid="tab-requests">
-            Чакащи заявки за изваждане <Badge variant="secondary" className="ml-2">{requests.rows.length}</Badge>
+            Чакащи заявки за изваждане <Badge variant="secondary" className="ml-2">{requests.total}</Badge>
           </TabsTrigger>
           <TabsTrigger value="retired" data-testid="tab-retired">
-            Извадени от употреба <Badge variant="secondary" className="ml-2">{retired.rows.length}</Badge>
+            Извадени от употреба <Badge variant="secondary" className="ml-2">{retired.total}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -206,6 +240,7 @@ export default function MediaReviewPage() {
               )}
             </div>
           ))}
+          <MoreButton list={requests} testid="requests" />
         </TabsContent>
 
         <TabsContent value="retired">
@@ -238,6 +273,7 @@ export default function MediaReviewPage() {
               </div>
             );
           })}
+          <MoreButton list={retired} testid="retired" />
         </TabsContent>
       </Tabs>
     </div>

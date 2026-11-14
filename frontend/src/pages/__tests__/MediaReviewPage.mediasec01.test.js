@@ -62,10 +62,13 @@ const RETIRED = (canRestore) => ({
   retired_at: "2026-11-13T08:00:00+00:00", can_restore: canRestore,
 });
 
+const page = (items, total = items.length, next = null) =>
+  ({ data: { items, total, skip: 0, limit: 50, next_skip: next } });
+
 function serve({ canRestore = true } = {}) {
   mockGet.mockImplementation((url) => {
-    if (url === "/media-retire-requests") return Promise.resolve({ data: [REQUEST] });
-    if (url === "/media-retired") return Promise.resolve({ data: [RETIRED(canRestore)] });
+    if (url === "/media-retire-requests") return Promise.resolve(page([REQUEST]));
+    if (url === "/media-retired") return Promise.resolve(page([RETIRED(canRestore)]));
     return Promise.reject({ response: { status: 404 } });
   });
   mockPost.mockResolvedValue({ data: { ok: true } });
@@ -177,7 +180,7 @@ test("the Owner restores a retired file with a reason and an Idempotency-Key", a
   expect(url).toBe("/media/m-ret/restore");
   expect(body).toEqual({ reason: "нужен за отчета" });
   expect(cfg.headers["Idempotency-Key"]).toEqual(expect.any(String));
-  await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/media-retired"));
+  await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { skip: 0, limit: 50 } }));
 });
 
 test("the Admin sees the retired list without a restore button", async () => {
@@ -198,6 +201,37 @@ test("a 403 from the server shows a clear message, not an empty list", async () 
   mockGet.mockRejectedValue({ response: { status: 403, data: { detail: "Access denied" } } });
   render(<MediaReviewPage />);
   expect((await screen.findByTestId("requests-error")).textContent).toMatch(/Нямате достъп/);
+});
+
+// ── FG-693: paging — no retired file is unreachable ──────────────────────
+test("the retired list loads the next page with „Покажи още“ until all are shown", async () => {
+  mockAuth = { user: { id: "u-1", role: "Owner" }, loading: false };
+  const r = (i) => ({ ...RETIRED(true), id: `m-${i}`, filename: `f${i}.jpg` });
+  mockGet.mockImplementation((url, cfg) => {
+    if (url === "/media-retire-requests") return Promise.resolve(page([REQUEST]));
+    if (url === "/media-retired") {
+      const skip = cfg?.params?.skip || 0;
+      return Promise.resolve(skip === 0 ? page([r(1), r(2)], 3, 2) : page([r(3)], 3, null));
+    }
+    return Promise.reject({ response: { status: 404 } });
+  });
+  render(<MediaReviewPage />);
+  await screen.findByTestId("request-rq-1");
+  await act(async () => { fireEvent.mouseDown(screen.getByTestId("tab-retired"), { button: 0 }); });
+  await screen.findByTestId("retired-m-2");
+  expect(screen.queryByTestId("retired-m-3")).toBeNull();
+  expect(screen.getByTestId("retired-count").textContent).toBe("2 от 3");
+  await act(async () => { fireEvent.click(screen.getByTestId("retired-more")); });
+  await screen.findByTestId("retired-m-3");
+  expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { skip: 2, limit: 50 } });
+  expect(screen.queryByTestId("retired-more")).toBeNull();        // everything is shown
+});
+
+test("the request list is asked for page by page too", async () => {
+  await renderPageAs("Admin");
+  expect(mockGet).toHaveBeenCalledWith("/media-retire-requests",
+    { params: { status: "pending", skip: 0, limit: 50 } });
+  expect(screen.queryByTestId("requests-more")).toBeNull();
 });
 
 // ── the mirror stays equal to the backend policy ─────────────────────────
