@@ -698,17 +698,30 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, reques
 
 # Audit logs routes (Platform Admin only)
 @router.get("/audit-logs")
-async def list_audit_logs(user: dict = Depends(require_platform_admin), limit: int = 50, skip: int = 0):
+async def list_audit_logs(request: Request, user: dict = Depends(require_platform_admin),
+                          limit: int = 50, skip: int = 0):
     """
     List audit logs for the organization.
-    
+
     SECURITY: This endpoint is restricted to platform administrators only.
-    Regular org admins cannot access audit logs as they contain sensitive 
+    Regular org admins cannot access audit logs as they contain sensitive
     system-wide information.
+
+    PRIV-01 (FG-726; FLOW-040 §9, §11): being platform admin is not a payroll right.
+    Pay / rate values in every row — also rows written before PRIV-01, in clear — are
+    masked unless the caller holds the payroll read action of the Permission Service
+    catalog (``pay_masking.PAYROLL_READ_ACTION``): off/shadow the legacy finance roles
+    (Owner/Admin/Accountant, the same list as ``hr.payroll_permission``), enforce the
+    Permission Service at company scope — never ``is_platform_admin``. There is no
+    break-glass / Support Access Grant runtime yet: no other way in (PRIV-01 debt).
     """
+    from app.audit.pay_masking import PAYROLL_READ_ACTION, mask_row
+    from app.permissions.money_write import money_values_visible
     tenant = _tenant(user)
     logs = await tenant.audit_logs.find(
         {"org_id": user["org_id"]}, {"_id": 0}
     ).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
     total = await tenant.audit_logs.count_documents({"org_id": user["org_id"]})
+    if not await money_values_visible(request, user, action=PAYROLL_READ_ACTION):
+        logs = [mask_row(row) for row in logs]
     return {"logs": logs, "total": total}

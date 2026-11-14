@@ -253,6 +253,17 @@ def validate_pending(doc: Dict[str, Any]) -> None:
         raise MasterDataInvalid("suggested_matches must be a list")
 
 
+def proposal_retention_class(pending: Dict[str, Any]) -> str:
+    """PRIV-01 (FG-725; FLOW-040 §6 R4): a shown draft / structured metadata inherits the
+    class of the record it is for — here the pending mapping record, operational Master
+    Data work (R2). It depends on the record, never on who proposed it
+    (``source_channel``): a human and an AI proposal of the same record get the same
+    class. R4 is for raw AI content, which this event does not carry. One place, so a
+    different subject class is one change (listed for Krum in the PR)."""
+    from app.audit.envelope import RETENTION_R2_PROJECT_OPERATIONAL
+    return RETENTION_R2_PROJECT_OPERATIONAL
+
+
 async def _audit_proposed(ctx: Any, pending: Dict[str, Any], actor_id: str,
                           model_and_version: Optional[str]) -> Dict[str, Any]:
     """Canonical W0-04 AuditEvent for one pending proposal.
@@ -283,8 +294,6 @@ async def _audit_proposed(ctx: Any, pending: Dict[str, Any], actor_id: str,
         ACTOR_AI,
         ACTOR_HUMAN,
         RESULT_SUCCESS,
-        RETENTION_R2_PROJECT_OPERATIONAL,
-        RETENTION_R4_AI_CONTENT,
         build_event,
     )
     from app.audit.store import record_event
@@ -296,7 +305,12 @@ async def _audit_proposed(ctx: Any, pending: Dict[str, Any], actor_id: str,
         actor_id=actor_id,
         action="master_data.pending.proposed",
         source_flow=SOURCE_FLOW,
-        retention_class=RETENTION_R4_AI_CONTENT if is_ai else RETENTION_R2_PROJECT_OPERATIONAL,
+        # PRIV-01 (FG-725; FLOW-040 §6 R4): "structured metadata, tool calls, показана
+        # чернова, human confirmation и official action — наследяват R1/R2/R3 според
+        # действието". This event is structured metadata of a shown draft (no raw prompt
+        # or response is in it), so an AI proposal inherits the class of the record it
+        # proposes for — the pending mapping record — exactly as a human proposal does.
+        retention_class=proposal_retention_class(pending),
         result=RESULT_SUCCESS,
         entity_type="master_data.pending",
         entity_id=pending["id"],

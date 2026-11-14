@@ -8,6 +8,7 @@ import logging
 from pymongo.errors import DuplicateKeyError
 
 from app.db import db
+from app.audit.pay_masking import mask_changes
 
 # Configure security logger
 security_logger = logging.getLogger("security")
@@ -72,7 +73,10 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
         "action": action,
         "entity_type": entity_type,
         "entity_id": entity_id,
-        "changes": changes,
+        # PRIV-01 (FG-726; FLOW-040 §9): pay / rate values are never stored in clear —
+        # the key stays (the fact that it changed), the value becomes a marker; the
+        # value lives only in its source record (entity_type / entity_id).
+        "changes": mask_changes(changes, entity_type),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     # W0-02 PR-04: a migrated enforce route passes its tenant-resolved handle so
