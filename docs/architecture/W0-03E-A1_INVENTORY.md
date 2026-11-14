@@ -40,6 +40,10 @@
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | projects | get(id = proj_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractor_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_check_advance_proformas | (helper) | invoices | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_check_advance_proformas | (helper) | invoices | find_one(id, advance_proforma_ids, status) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_claim_advance_proformas | (helper) | invoices | update_one(id, kind, $or) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_claim_advance_proformas | (helper) | invoices | update_one(id, ADVANCE_USED_BY) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:create_invoice | POST /finance/invoices | invoices | insert_one(dict(invoice)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | projects | get(id = invoice['project_id']) | TenantData org_id (session) | BARE@base | FIXED |
@@ -393,4 +397,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 392 accesses — FIXED 131, SAFE 261
+Totals: 396 accesses — FIXED 131, SAFE 265
