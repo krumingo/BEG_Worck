@@ -248,6 +248,8 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/subcontractor-performance", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
     _E("GET", "/api/subcontractor-performance/compact", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
     _E("GET", "/api/subcontractor-performance/log", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
+    # ASSET-REP-01 / FG-723: repair cost (an obligation) + paid/remaining from the ledger
+    _E("GET", "/api/assets/units/{unit_id}/repairs", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; FLOW-011, FLOW-006"),
     _E("GET", "/api/projects/{project_id}/smr-groups", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/smr-groups/tree", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/pulse/today", MONEY_VALUES_READ, R20_5B, CANON_B43 + "; R31 (no per-worker money); B-D2"),

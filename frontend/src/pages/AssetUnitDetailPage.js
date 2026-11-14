@@ -49,7 +49,9 @@ export default function AssetUnitDetailPage() {
   const [unit, setUnit] = useState(null);
   const [moves, setMoves] = useState([]);
   const [repairs, setRepairs] = useState([]);
-  const [totalPaid, setTotalPaid] = useState(0);
+  // ASSET-REP-01 (FG-723): the repair cost is an obligation; paid/remaining come only from
+  // the Payment ledger (finance_payments). Non-finance roles get no money keys (SEC-02).
+  const [repairMoney, setRepairMoney] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("moves");
 
@@ -67,7 +69,9 @@ export default function AssetUnitDetailPage() {
     try {
       const r = await API.get(`/assets/units/${unitId}/repairs`);
       setRepairs(r.data?.items || []);
-      setTotalPaid(r.data?.total_paid || 0);
+      setRepairMoney(r.data?.total_cost != null
+        ? { cost: r.data.total_cost, paid: r.data.paid || 0, remaining: r.data.remaining || 0 }
+        : null);
     } catch { setRepairs([]); }
   }, [unitId]);
 
@@ -121,7 +125,8 @@ export default function AssetUnitDetailPage() {
             <Row label="Дата на покупка" icon={Calendar} value={fmtDate(unit.purchase_date)} />
             <Row label="Гаранция" icon={ShieldCheck} value={unit.warranty_months ? `${unit.warranty_months} мес.${w.untilLabel ? ` · до ${w.untilLabel}` : ""}` : "—"} />
             <Row label="Цена" icon={Coins} value={unit.purchase_price != null ? `${unit.purchase_price} €` : "—"} />
-            <Row label="Похарчено ремонти" icon={Wrench} value={`${(totalPaid || 0).toLocaleString("bg-BG")} €`} valueCls="text-amber-400" />
+            {repairMoney && <Row label="Обща цена на ремонтите" icon={Wrench} value={`${(repairMoney.cost || 0).toLocaleString("bg-BG")} €`} valueCls="text-amber-400" />}
+            {repairMoney && <Row label="Платено (по регистъра) / остатък" icon={Wrench} value={`${(repairMoney.paid || 0).toLocaleString("bg-BG")} € / ${(repairMoney.remaining || 0).toLocaleString("bg-BG")} €`} />}
             {unit.article_no && <Row label="Артикулен №" icon={Package} value={unit.article_no} />}
             {unit.qr_id && <Row label="QR код" icon={Package} value={unit.qr_id} mono />}
           </div>
