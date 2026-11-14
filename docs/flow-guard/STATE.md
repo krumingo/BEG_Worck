@@ -86,4 +86,5 @@
 | FLOW-034 | 64 | `COVERAGE.md` (FG-666..670) |
 | FLOW-035 | 65 | `COVERAGE.md` (FG-673..677) |
 | FLOW-036 | 66 | `COVERAGE.md` (FG-680..683) |
-| следващ: FLOW-037 (main) | — | — |
+| FLOW-037 | 68 | `COVERAGE.md` (FG-699..703) |
+| следващ: FLOW-038 (main) | — | — |
