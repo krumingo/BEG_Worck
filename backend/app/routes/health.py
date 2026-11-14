@@ -19,7 +19,10 @@ router = APIRouter(tags=["misc"])
 
 @router.get("/health")
 async def health():
-    return {"status": "ok"}
+    # FG-642: an operational alarm flag when a PWA-02 unique index was skipped at startup
+    from app.services.offline_sync import health_flags
+    alarms = health_flags()
+    return {"status": "ok", "alarms": alarms} if alarms else {"status": "ok"}
 
 @router.get("/version")
 async def version():

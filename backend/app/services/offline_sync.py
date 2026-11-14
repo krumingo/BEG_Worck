@@ -145,6 +145,30 @@ async def ensure_sync_indexes(database) -> List[str]:
     return skipped
 
 
+#: FG-642: unique indexes skipped at this process's startup (duplicates) — the health
+#: endpoint exposes the flag; the record is kept in the system database (``ops_alarms``).
+INDEX_ALARMS: List[Dict[str, Any]] = []
+
+
+async def _raise_index_alarm(system_db, database_name: str, index: str) -> None:
+    doc = {"id": str(uuid.uuid4()), "kind": "pwa02_unique_index_skipped", "status": "open",
+           "database": database_name, "index": index, "raised_at": iso(now_utc()),
+           "action": "scripts/pwa02_unique_index_dryrun.py (read-only), then a decision + Approval"}
+    INDEX_ALARMS.append({k: doc[k] for k in ("kind", "index", "raised_at")})
+    try:
+        # one open alarm per database + index (a restart does not pile them up)
+        await system_db["ops_alarms"].update_one(
+            {"kind": doc["kind"], "database": database_name, "index": index, "status": "open"},
+            {"$setOnInsert": doc, "$set": {"last_seen_at": doc["raised_at"]}}, upsert=True)
+    except Exception:                                          # noqa: BLE001 — the log line stays
+        logger.exception("ALARM PWA-02: could not record the index alarm")
+
+
+def health_flags() -> Dict[str, Any]:
+    """For /api/health (no names of databases or tenants — unauthenticated endpoint)."""
+    return {"pwa02_unique_index_skipped": len(INDEX_ALARMS)} if INDEX_ALARMS else {}
+
+
 async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:
     names = [op_db.name]
     records = await system_db["tenant_registry"].find(
@@ -154,7 +178,9 @@ async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:
         if name and name not in names:
             names.append(name)
     for name in names:
-        await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name])
+        skipped = await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name])
+        for index in skipped:
+            await _raise_index_alarm(system_db, name, index)
     return names
 
 

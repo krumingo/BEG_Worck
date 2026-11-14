@@ -899,10 +899,17 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
     attendance_warnings = []
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
+        # FG-641 (FLOW-013 L88-90): presence on THIS object. A worker reported by someone
+        # else must already be present here; the technician's OWN report is the presence on
+        # this object (FLOW-013: one person on several objects) — it needs a presence that day
+        # and then creates this object's entry below.
+        day_flt = {"org_id": org_id, "date": today, "user_id": wid}
         att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": today, "user_id": wid},
-            {"_id": 0, "status": 1},
-        )
+            {**day_flt, "project_id": data.project_id}, {"_id": 0, "status": 1})
+        if att is None and wid == user["id"]:
+            att = await tenant.attendance_entries.find_one(
+                {**day_flt, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "status": 1}
+            ) or await tenant.attendance_entries.find_one(day_flt, {"_id": 0, "status": 1})
         cal = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
             {"_id": 0, "status": 1},

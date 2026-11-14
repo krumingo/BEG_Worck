@@ -642,6 +642,21 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg["other_object_absent"] = batch([envelope(A["users"]["technician"]["id"], A["tenant_id"], "attendance.mark",
                                                     {"status": "Absent", "project_id": P2, "note": ""})])["body"]["results"][0]["status"]
         fg["tech_objects"] = sorted(r["project_id"] == P2 for r in att_rows(tech["id"], today))
+        # FG-641: presence on THIS object — someone else's report needs it already; the
+        # technician's own report is the presence on its object
+        P3 = str(uuid.uuid4())
+        q(lambda: op_db.projects.insert_one({"id": P3, "org_id": A["tenant_id"], "name": "ST01 A — трети обект",
+                                             "code": "ST01-A-003", "status": "Active"}))
+        other = call("POST", "/api/technician/daily-report", role="owner", json={
+            "project_id": P3, "entries": [{"worker_id": vw["id"], "worker_name": "Зрител", "smr_type": "Чужд", "hours": 2}]})
+        fg["for_other_no_presence_here"] = other["status"]
+        fg["for_other_rows"] = count("employee_daily_reports", {"project_id": P3, "worker_id": vw["id"]})
+        fg["for_other_with_presence_here"] = call("POST", "/api/technician/daily-report", role="owner", json={
+            "project_id": P2, "entries": [{"worker_id": vw["id"], "worker_name": "Зрител", "smr_type": "Свой обект", "hours": 1}]})["status"]
+        own3 = call("POST", "/api/technician/daily-report", role="viewer", json={
+            "project_id": P3, "entries": [{"smr_type": "Собствен", "hours": 1}]})
+        fg["own_report_new_object"] = own3["status"]
+        fg["own_report_presence_created"] = [r.get("source") for r in att_rows(vw["id"], today) if r["project_id"] == P3]
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
             body = call("GET", "/api/technician/my-sites", role=role)["body"]
@@ -1055,6 +1070,16 @@ def test_a_person_on_two_objects_gets_one_entry_per_object_and_the_hours_are_sum
 
 
 @real
+def test_a_report_needs_presence_on_that_object(obs):
+    """FG-641 (FLOW-013 L88-90): for another worker the presence must be on this object; the
+    technician's own report creates its object's presence (no 'report without presence')."""
+    f = obs["flowguard"]
+    assert f["for_other_no_presence_here"] == 400 and f["for_other_rows"] == 0
+    assert f["for_other_with_presence_here"] == 200
+    assert f["own_report_new_object"] == 200 and f["own_report_presence_created"] == ["DailyReport"]
+
+
+@real
 def test_concurrent_marks_one_entry_per_object(obs):
     """FG-640: same object concurrently → 1; different objects → one each."""
     f = obs["flowguard"]
@@ -1165,6 +1190,22 @@ def test_existing_duplicates_never_crash_the_startup_and_the_dry_run_finds_them(
             groups = rep["attendance_day_key_backfill"]["worker_day_groups_with_more_than_one_entry"]
             assert {g["key"]["user_id"] for g in groups} == {"u", "v"}
             assert await d.attendance_entries.count_documents({}) == before      # read-only
+            # FG-642: the installation run records an alarm and the health flag shows it
+            from app.services import offline_sync as osync
+            from app.routes.health import health
+            sysdb = c[name + "_sys"]
+            osync.INDEX_ALARMS.clear()
+            assert (await health()) == {"status": "ok"}
+            await osync.ensure_sync_indexes_for_installation(d, sysdb)
+            await osync.ensure_sync_indexes_for_installation(d, sysdb)          # restart: no pile-up
+            alarms = await sysdb.ops_alarms.find({}, {"_id": 0}).to_list(None)
+            assert len(alarms) == 1 and alarms[0]["index"] == "pwa02_attendance_day_unique"
+            assert alarms[0]["status"] == "open" and alarms[0]["database"] == name
+            h = await health()
+            assert h["status"] == "ok" and h["alarms"]["pwa02_unique_index_skipped"] >= 1
+            assert name not in str(h)                                            # no names leak
+            osync.INDEX_ALARMS.clear()
+            await c.drop_database(name + "_sys")
         finally:
             await c.drop_database(name)
             c.close()
