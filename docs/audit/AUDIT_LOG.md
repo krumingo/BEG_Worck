@@ -12,8 +12,8 @@
 | #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #73 LAB-01 | `2722786` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #75 LAB-02 | `b489ec7` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
+| #73 LAB-01 | `1ef0e47` | **FINDINGS — LAB73-M3** (120 main tests red: OH-01 101 / SUB-ADV-01 1 / f81 18 — stale tests + OH-01 harness binding; not pytest-asyncio). F-73-01 / FG-728 / R89-R90 code OK; Level 3 green; PM-01 + SEC-02 regen 0 | 2026-11-14 |
+| #75 LAB-02 | `5f3fa95` | **FINDINGS — LAB73-M3 (inherited) + R91-M1** (day-paid worker's manual row paid on top of the day). Merge `3f06e70` = merge-tree except 6 regenerated evidence files; Level 3 green; PM-01 + SEC-02 regen 0 | 2026-11-14 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `39a1e27` | **PASS** (code `c41da0b`; R88 restore + review screen; FG-706 keyset paging; FG-707 --approval-ref required for --apply) | 2026-11-14 |
@@ -7288,3 +7288,82 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 - **Level 3 pack, until CI exists:** AUDIT-2 alone runs the full pack (R0, W0, PAY, SEC-01 / 02, PM-01, warehouse, A1 / A2C), once, on the exact commit about to be merged. Programmers run Levels 1–2 only.
 - **No self-wakes and no check-ins.**
 - **Orchestrator:** now `session_01UghxKZh8ft3pLYSmADWU4B`.
+
+## #73 LAB-01 @ `1ef0e47d` + #75 LAB-02 @ `5f3fa950` — 2026-11-14 ~19:30 UTC — FINDINGS (R33, delta over `2722786b` / `b489ec7f`)
+
+Exact commits only. Main is `de720f94`; no main merge was done or checked here.
+
+### Merge `3f06e702` (b75fafaf + 1ef0e47d), checked as for OFF89-M2
+- `git merge-tree --write-tree` gives conflicts only in 6 generated files (PM-01 run_meta, SEC-01 / C01 / C02 / C03, SEC-02 results). The merge differs from merge-tree **only in those 6 files**; all code auto-merges identically.
+- `5f3fa950` over `3f06e702` adds only `docs/evidence/LAB-02/tests-LAB-02-AA.txt`.
+- Regenerated on the exact heads, clean ports:
+  - PM-01: **0 cells** on both.
+  - SEC-02: **0 cells** on both.
+  - A1 inventory: byte-equal (full redirect).
+  - A2B: unchanged.
+  - A2C inventory: stale, but stale on main too (old debt; the guard has 0 violations).
+
+### Code delta
+- **F-73-01 — OK.**
+  - No key: 428 before any read or write.
+  - Peek before numbering: numbering is max+1, so nothing is consumed on a replay.
+  - reserve + work + complete run in **one** `with_transaction`; a WriteConflict retry re-reads the key → replay.
+  - Replay is byte-identical (both answers are `json.loads(stored)`). Another body → 409. No second `log_audit` on a replay.
+  - The cancel / delete key requirement is re-checked inside the transaction.
+  - The frontend sends a key on create / PUT / cancel / delete (`InvoiceEditorPage`); there are no other invoice write callers.
+  - The tests cover 428, replay, 409 and the parallel case (real rs0).
+- **FG-728 — OK.**
+  - The presence check runs before the write and again inside the same transaction as `void_labor_approvals` and the content write.
+  - Note N1 (not blocking): a read inside the transaction does not lock the attendance row, so a concurrent attendance change is a write-skew window. That is narrower than before.
+  - `find_one` on `attendance_entries` takes one entry per worker per day, so with two objects in one day one of them may be refused. This is the programmer's hypothesis (3), for Krum.
+- **R89 / R90 — OK, matches the decision.**
+  - One `received_revenue` rule is used in project_pnl, project_financial_results (cash card: received_gross / invoiced_gross / awaiting), revenue_expense (profit = collected) and revenue_snapshot (collected by payment month; billed = finals − credit notes, no proforma).
+  - Every issued proforma's receipts count. A named proforma reduces only the "awaiting" of its final invoice. Refunds on credit notes subtract.
+  - No double count: revenue is the sum of real receipts.
+- **R91 — R91-M1 (finding, #75).** Covered below.
+
+### LAB73-M3 — 120 main tests red on the branch (blocking for merge to main)
+Same 120 failure names on `2722786b`, `1ef0e47d` and `5f3fa950`. Main `de720f94`: all 7 suites green.
+
+| Suite | main `de720f94` | #73 old / new, #75 | Cause |
+|---|---|---|---|
+| OH-01 `test_oh_01_overhead_no_hard_delete.py` | 231 passed (also with conftest, also `-p no:asyncio`) | 101 failed | compute_project_pnl → project_labor_cost (LAB-01 R62) reads `app.services.labor_cost.db` / `report_normalizer.db`, which the OH-01 harness does not bind → the global motor client → "Event loop is closed". **Proved test-only:** with those two modules bound, 231 passed on `5f3fa950`. |
+| SUB-ADV-01 | 9 passed | 1 failed | `PERMISSION_MATRIX["admin"] == ACTIONS − SUB-ADV` — #73 withholds `labor.manual_entry.approve` from Admin (R62, intended). The assertion is stale. |
+| WH-FIX-01 f81 | 132 passed | 18 failed | 12 × `get_project_aggregate()` now takes `request` (the test calls it directly); 6 × `wh81_03` expects issued-unpaid 500 as trend revenue. Under R86 / R89 revenue is what was received → 0. The assertion encodes the superseded rule. |
+| WH c20–c23 | green | green (with pytest-asyncio) | — |
+
+- **The pytest-asyncio hypothesis is refuted for the 120.** Without the plugin, main's c20–c23 **error** (10 / 14 / 10 / 10 errors), while OH-01, SUB-ADV-01 and f81 still pass. The plugin matters only for c20–c23, which are not among the 120.
+- The programmer's "same names before / after" is true, but those names are regressions against main, not environment noise.
+- **Own miss:** my earlier PASS on `2722786b` / `b489ec7f` did not run these suites.
+- Fix in the PR:
+  - bind `labor_cost` + `report_normalizer` (or every loaded `app.*` module, as f81 does) in OH-01;
+  - update the SUB-ADV-01 admin set (− MANUAL_LABOR_APPROVE_ACTIONS);
+  - update f81: pass `request`, and expect revenue per R89 (keep the "supplier invoice is not revenue" check with a paid sale).
+- Nothing in production behaviour is wrong here, but merging as it is turns main red and drops these guards.
+
+### R91-M1 — a day-paid worker's manual row is paid on top of the day (#75, real money)
+- `payroll_manual_records` dropped `pay_type: AKORD` from the filter. Every approved non-akord manual row now becomes a "manual_hourly" Pay Run record at its stored cost, hours × `profile.hourly_rate`.
+- The cause: `labor_smr` stores pay_type = the profile's (Monthly / Daily).
+- A day-paid worker is paid per day. A second-object manual row on a day an approved report already pays is not a duplicate under the per-project rule, so it is **added on top**.
+- Probe `docs/audit/probes/lab02/test_probe_r91_day_paid.py`, both backends, Monthly and Daily: **Pay Run 200 → 250** (+50 = 4 h × 12.5 on top of the day already paid by the day rate).
+- R91 is about hourly rows. Fix: restrict to `pay_type == "Hourly"`, or price day-paid manual rows through the day formula (split the day as the report lines do). Krum to choose.
+
+### Gates (real mongo:7.0 rs0, enforce where applicable)
+
+| Gate | #73 `1ef0e47d` | #75 `5f3fa950` |
+|---|---|---|
+| R0 | 814 | 814 |
+| W0 | 16 failed = main's 16 by name | same |
+| warehouse (enforce) | 44 files / 1121 / 0 bad | 44 / 1121 / 0 |
+| PAY | 630 | 630 |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31 | 31 |
+| PM-01 | 6 | 6 |
+| A2C / A1 | 0/246, 0/496 | 0/247, 0/498 |
+| LAB `test_lab_0*` | 270 | 375 + env-only `test_lab_01_labor_cost` 25/25 via whenv |
+| jest | 260 / 260 | 269 / 269 |
+
+### Hypotheses for Krum (not findings)
+1. R90 unconditional: every paid proforma is revenue, whether or not a final invoice names it.
+2. Profit = received − costs.
+3. FG-728 with two objects in one day (see N1).
