@@ -1,4 +1,4 @@
-# INV-CN-01 gates (FG-572 + FG-571; Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-14T16:33:56Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (Codex F-84-02 + FG-708 + R84 + FG-599 at head 2730eaec; FG-572 + FG-571; Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-14T16:33:56Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 246 module(s) checked, 0 violation(s)
