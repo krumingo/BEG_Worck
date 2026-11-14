@@ -364,13 +364,13 @@ def _frozen_labor_fields(row: dict) -> dict:
 
 
 def _manual_day_report(rec: dict, project_name: str) -> dict:
-    """R85: a manual akord record as a day-cell report entry of the Pay Run preview."""
+    """R85 + R91: a manual (akord / hourly) record as a day-cell report entry of the Pay Run preview."""
     status = rec.get("payroll_status") or "none"
     batch = (rec.get("payroll_source") or "").replace("pay_run:", "") or None
     return {
         "report_id": rec["report_id"],
         "manual_entry_id": rec.get("manual_entry_id"),
-        "kind": "manual_akord",
+        "kind": "manual_akord" if rec.get("pay_type") == "Akord" else "manual_hourly",
         "project_id": rec.get("project_id", ""),
         "project_name": project_name,
         "hours": round(float(rec.get("hours") or 0), 1),

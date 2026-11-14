@@ -131,9 +131,10 @@ def test_r85_a_daily_report_and_the_same_work_are_never_counted_twice(monkeypatc
     run(monkeypatch, scenario, backend)
 
 
-def test_r85_a_pending_or_an_hourly_manual_row_is_not_paid_by_this_rule(monkeypatch):
-    """Only APPROVED manual AKORD rows (R85). A pending one waits; an hourly manual row is
-    outside R85 (asked of Krum — not changed)."""
+def test_r85_r91_a_pending_manual_row_waits_an_approved_hourly_row_is_paid(monkeypatch):
+    """Only APPROVED manual rows. A pending one waits. R91 (Krum 14.11.2026, extends R85;
+    changes the earlier "hourly is outside R85" boundary): the approved HOURLY manual row
+    (le-man: 2 h × 25 = 50) is in the Pay Run too, at its stored cost."""
     async def scenario(c, op):
         await _akord_setup(op)
         r = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-1"), headers=_key("admin"))
@@ -142,7 +143,9 @@ def test_r85_a_pending_or_an_hourly_manual_row_is_not_paid_by_this_rule(monkeypa
         await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"approval_status": "approved",
                                                                        "approved_by": "owner"}})
         row = await _w1()
-        assert not _manual_reports(row) and row["earned_amount"] == 180.0  # hourly manual row: not here
+        man = _manual_reports(row)
+        assert [(m["report_id"], m["value"], m["kind"]) for m in man] == [("manual:le-man", 50.0, "manual_hourly")]
+        assert row["earned_amount"] == 230.0 and row["akord_amount"] == 0.0, row["earned_formula"]
     run(monkeypatch, scenario)
 
 
@@ -169,4 +172,61 @@ def test_fg697_a_report_for_a_different_smr_the_same_day_does_not_drop_the_akord
         assert not any(w["code"] == "MANUAL_ROW_DUPLICATE_OF_REPORT" for w in row["labor_dq_warnings"])
         lc = await project_labor_cost(ORG, P)
         assert [x for x in lc["lines"] if x.get("manual_entry_id") == rid] and lc["total"] == 240.0
+    run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ R91 (Krum 14.11.2026): hourly manual rows
+async def _approved_hourly_row(c, op):
+    r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner"))
+    assert r.status_code == 200, r.text
+    return "le-man"
+
+
+def test_r91_an_approved_manual_hourly_row_is_in_the_pay_run_once(monkeypatch, backend):
+    """R91: after the Owner's approval the hourly row (2 h × 25 = 50) is in the Pay Run once, at
+    the same cost as THE labor cost (R62); batched → never again; paid → paid."""
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        assert (await _w1())["earned_amount"] == 180.0                   # pending: not yet
+        rid = await _approved_hourly_row(c, op)
+        row = await _w1()
+        assert row["earned_amount"] == 230.0, row["earned_formula"]     # 180 + 50, once
+        man = _manual_reports(row)
+        assert [(m["report_id"], m["value"], m["kind"]) for m in man] == [("manual:" + rid, 50.0, "manual_hourly")]
+        assert row["akord_amount"] == 0.0
+        assert (await project_labor_cost(ORG, P))["total"] == 230.0      # R62: one number
+        run_ = await _create([{"employee_id": "w1", "paid_now_amount": 230.0}])
+        entry = await op.labor_entries.find_one({"id": rid})
+        assert (entry["payroll_status"], entry["payroll_source"]) == ("batched", f"pay_run:{run_['id']}")
+        row = await _w1()                                               # forbidden: never a second time
+        assert row is None or not _manual_reports(row)
+        await pay_runs.mark_pay_run_paid(run_["id"], pay_runs.MarkPaidInput(payment_method="bank_transfer"), OWNER)
+        assert (await op.labor_entries.find_one({"id": rid}))["payroll_status"] == "paid"
+    run(monkeypatch, scenario, backend)
+
+
+def test_r91_an_hourly_row_that_an_approved_report_already_pays_is_not_counted_twice(monkeypatch, backend):
+    """R91: the same duplicate rule as R85 — an approved daily report of the same worker, day,
+    project and SMR already pays the hours → the manual row is in neither the Pay Run nor THE
+    labor cost (DQ MANUAL_ROW_DUPLICATE_OF_REPORT)."""
+    from app.services.labor_cost import project_labor_cost
+    from tests.test_lab_01_s_r62_one_labor_cost import PKG
+
+    async def scenario(c, op):
+        rid = await _approved_hourly_row(c, op)
+        assert (await _w1())["earned_amount"] == 230.0
+        # an approved report of the same worker / day / project / SMR (seeded: a legacy overlap —
+        # FG-463 refuses it on create and approve)
+        await op.employee_daily_reports.insert_one({
+            "id": "R-SAME-H", "org_id": ORG, "worker_id": "w1", "submitted_by": "w1", "date": "2026-11-05",
+            "hours": 2, "project_id": P, "smr_type": "Шпакловка", "execution_package_id": PKG,
+            "status": "APPROVED", "approval_status": "APPROVED", "approved_by": "sm"})
+        row = await _w1()
+        assert not _manual_reports(row), _manual_reports(row)
+        assert any(w["code"] == "MANUAL_ROW_DUPLICATE_OF_REPORT" and w["report_id"] == "manual:" + rid
+                   for w in row["labor_dq_warnings"]), row["labor_dq_warnings"]
+        lc = await project_labor_cost(ORG, P)
+        assert not [x for x in lc["lines"] if x.get("manual_entry_id") == rid]
+        assert row["earned_amount"] == lc["total"]                       # the report pays the day, once
     run(monkeypatch, scenario, backend)

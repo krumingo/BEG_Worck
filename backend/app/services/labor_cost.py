@@ -627,6 +627,9 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
 # never a second time with the daily report: a row whose worker, day and project (or a
 # project-less report of that day) already has an APPROVED report line, or whose LAB-02
 # quantity belongs to an approved report, is not counted (DQ MANUAL_ROW_DUPLICATE_OF_REPORT).
+# R91 (Krum 14.11.2026, extends R85): the approved manual HOURLY rows (hours × the hourly
+# rate stored on the row) go into the Pay Run the same way — after approval, at their stored
+# cost, and never a second time with the daily report (the same duplicate rule).
 DQ_MANUAL_DUPLICATE_OF_REPORT = "MANUAL_ROW_DUPLICATE_OF_REPORT"
 MANUAL_PAYROLL_PREFIX = "manual:"
 
@@ -660,18 +663,20 @@ def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = Non
     return False
 
 
-async def payroll_manual_akord_records(tenant: TenantData, org_id: str, date_from: str, date_to: str,
-                                       worker_id: str = None, payroll_filter: list = None) -> dict:
-    """R85: the approved manual AKORD rows of the window as Pay Run labor records, by worker.
+async def payroll_manual_records(tenant: TenantData, org_id: str, date_from: str, date_to: str,
+                                 worker_id: str = None, payroll_filter: list = None) -> dict:
+    """R85 + R91: the approved manual rows of the window — AKORD and HOURLY — as Pay Run
+    labor records, by worker.
 
     Each record has the shape of a ``compute_person_labor`` line (report_id
-    ``manual:<entry id>``) at the row's stored cost (approved quantity × the rate snapshotted
-    in its LAB-02 approval). ``payroll_filter`` (["!paid", "!batched"]) drops rows already in
-    a Pay Run. A row that duplicates an approved report line is left out (``dq``).
+    ``manual:<entry id>``) at the row's stored cost (akord: approved quantity × the rate
+    snapshotted in its LAB-02 approval; hourly: hours × the hourly rate stored on the row).
+    ``payroll_filter`` (["!paid", "!batched"]) drops rows already in a Pay Run. A row that
+    duplicates an approved report line is left out (``dq``).
     Returns ``{worker_id: {"records": [...], "dq": [...]}}``."""
     from app.services.report_normalizer import fetch_normalized_report_lines
     flt = {"org_id": org_id, "source": {"$ne": SYNC_SOURCE}, "approval_status": MANUAL_APPROVED,
-           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None, "pay_type": AKORD}
+           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
     if worker_id:
         flt["employee_id"] = worker_id
     rows = []
@@ -701,12 +706,33 @@ async def payroll_manual_akord_records(tenant: TenantData, org_id: str, date_fro
         wid = r.get("employee_id")
         slot = out.setdefault(wid, {"records": [], "dq": []})
         rid = MANUAL_PAYROLL_PREFIX + str(r.get("id"))
+        akord = r.get("pay_type") == AKORD
         if manual_row_duplicates_report(r, lines_by_worker.get(wid), approvals.get(r.get("quantity_approval_id")),
                                         (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
             slot["dq"].append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": rid,
-                               "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
+                               "message": _duplicate_message(r)})
             continue
         cost = r.get("labor_cost")
+        if not akord:                                          # R91: a manual hourly row
+            hrs, rate = round(float(r.get("hours") or 0), 2), r.get("hourly_rate")
+            slot["records"].append({
+                "report_id": rid, "manual_entry_id": r.get("id"), "worker_id": wid,
+                "date": normalize_labor_date(r.get("date")), "project_id": r.get("project_id", ""),
+                "smr_type": (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")
+                            or r.get("activity_name") or "",
+                "execution_package_id": r.get("execution_package_id") or None,
+                "hours": hrs, "status": "APPROVED",
+                "cost_type": LABOR, "pay_type": r.get("pay_type") or "Hourly", "pay_type_source": "manual_row",
+                "quantity": None, "approved_quantity": None, "unit": "",
+                "piece_rate": None, "rate": rate,
+                "amount": round(float(cost), 2) if cost is not None else 0.0,
+                "formula": (r.get("labor_formula") or (f"{hrs}ч × {rate}" if rate else f"{hrs}ч"))
+                           + " (ръчен ред на час, R91)",
+                "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
+                "payroll_status": r.get("payroll_status") or "none",
+                "payroll_source": r.get("payroll_source") or "",
+                "quantity_approval_id": None})
+            continue
         q, piece = r.get("quantity"), r.get("piece_rate")
         slot["records"].append({
             "report_id": rid, "manual_entry_id": r.get("id"), "worker_id": wid,
@@ -727,17 +753,31 @@ async def payroll_manual_akord_records(tenant: TenantData, org_id: str, date_fro
     return out
 
 
+# R85 kept its name for its callers; the reader covers the hourly rows too (R91)
+payroll_manual_akord_records = payroll_manual_records
+
+
+def _duplicate_message(row: dict) -> str:
+    kind = "акордов" if row.get("pay_type") == AKORD else "на час"
+    return f"Ръчният ред ({kind}) повтаря одобрен дневен отчет — не се брои втори път."
+
+
 def merge_manual_records(lc: dict, records: list, dq: list = None) -> dict:
-    """R85: ``compute_person_labor``'s result with the manual akord records added (once)."""
+    """R85 + R91: ``compute_person_labor``'s result with the manual records added (once) —
+    akord into ``akord_total``, hourly into ``time_total``."""
     seen = {x.get("report_id") for x in lc.get("lines", [])}
     add = [x for x in records or [] if x["report_id"] not in seen]
     amt = round(sum(x["amount"] for x in add), 2)
+    ak = round(sum(x["amount"] for x in add if x.get("pay_type") == AKORD), 2)
+    hourly = round(amt - ak, 2)
     out = dict(lc)
     out["lines"] = list(lc.get("lines", [])) + add
     out["labor_total"] = round(lc.get("labor_total", 0) + amt, 2)
-    out["akord_total"] = round(lc.get("akord_total", 0) + amt, 2)
+    out["akord_total"] = round(lc.get("akord_total", 0) + ak, 2)
+    out["time_total"] = round(lc.get("time_total", 0) + hourly, 2)
     out["total"] = round(lc.get("total", 0) + amt, 2)
-    out["manual_akord_total"] = round(lc.get("manual_akord_total", 0) + amt, 2)
+    out["manual_akord_total"] = round(lc.get("manual_akord_total", 0) + ak, 2)
+    out["manual_hourly_total"] = round(lc.get("manual_hourly_total", 0) + hourly, 2)
     out["dq_warnings"] = list(lc.get("dq_warnings", [])) + list(dq or []) + [
         {"code": c, "report_id": x["report_id"], "message": "Ръчен ред за труд без стойност — 0."}
         for x in add for c in x["dq"]]
@@ -942,9 +982,9 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             r = by_row.get(a["id"]) or {}
             if a.get("approved_by") and a["approved_by"] in (r.get("employee_id"), r.get("created_by")):
                 self_qty.add(a["id"])
-    # R85 (FG-569): a manual akord row that an approved daily report already pays is not
-    # counted a second time — the same rule as the Pay Run (payroll_manual_akord_records)
-    ak_rows = [r for r in manual if r.get("pay_type") == AKORD]
+    # R85 (FG-569) + R91: a manual row (akord or hourly) that an approved daily report already
+    # pays is not counted a second time — the same rule as the Pay Run (payroll_manual_records)
+    ak_rows = list(manual)
     if ak_rows:
         appr = {a["id"]: a for a in await tenant.labor_quantity_approvals.find(
             {"org_id": org_id, "id": {"$in": sorted({r.get("quantity_approval_id") for r in ak_rows
@@ -964,7 +1004,7 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             if manual_row_duplicates_report(r, lines, a, (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
                 dup.add(r.get("id"))
                 dq.append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": "manual:" + str(r.get("id")),
-                           "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
+                           "message": _duplicate_message(r)})
         manual = [r for r in manual if r.get("id") not in dup]
     for row in manual:
         cost = row.get("labor_cost")
