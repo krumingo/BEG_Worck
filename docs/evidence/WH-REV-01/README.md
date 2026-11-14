@@ -182,3 +182,10 @@
 - Unit тест на `overpaid_cents`.
 
 **Red на `cd454ea`:** новите тестове — 9 failed (409 `INVOICE_PAID_ABOVE_NET`) / 3 passed. Трите са пътят без надплащане.
+
+### Gates на `642227b` (реален Mongo rs, fresh per file)
+- WH-REV-01 **123**; warehouse 44 файла **1121**; PAY **630**; SEC-01 **30**; SEC-02 **31**; R0 **814** — всички passed, 0 failed.
+- W0 **1176 / 16** — същите 16 като `main` @ `3863610`.
+- A2C **0** (245); A1 **0** (494).
+- PM-01 harness **6 passed, 0 skipped**; `run_meta.json` както го е написал harness-ът (779 маршрута / 18696 клетки).
+- Inventories: A1 без промяна (394); A2B добавя `supplier_claims`.
