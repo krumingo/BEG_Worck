@@ -1,0 +1,216 @@
+{
+ "checks": [
+  {
+   "name": "device registered at login (flag ON for tenant A)",
+   "ok": true
+  },
+  {
+   "name": "roster saved online before the signal is lost",
+   "ok": true,
+   "detail": 200
+  },
+  {
+   "name": "offline attendance: Записано на телефона",
+   "ok": true,
+   "detail": "Записано на телефона — ще се изпрати, когато има връзка"
+  },
+  {
+   "name": "offline daily report kept on the phone, back to Днес (badge: Записано на телефона · 2)",
+   "ok": true,
+   "detail": "Записано на телефона\n· 2"
+  },
+  {
+   "name": "offline photo captured on the site screen",
+   "ok": true
+  },
+  {
+   "name": "queue holds the records, payload not in clear",
+   "ok": true,
+   "detail": [
+    {
+     "op": "media.upload",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "attendance.mark",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "technician.daily_report",
+     "status": "saved",
+     "plain": false
+    }
+   ]
+  },
+  {
+   "name": "online: attendance Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "online: photo Чака качване на файл (no File Registry)",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "server: today's attendance recorded from the phone",
+   "ok": true,
+   "detail": {
+    "status": "Present",
+    "source": "offline_sync"
+   }
+  },
+  {
+   "name": "online: daily report Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "same key twice + resend: identical, never duplicated",
+   "ok": true
+  },
+  {
+   "name": "differing mark → Конфликт",
+   "ok": true
+  },
+  {
+   "name": "yesterday's mark → Закъснял",
+   "ok": true
+  },
+  {
+   "name": "console lists the conflict with both versions",
+   "ok": true
+  },
+  {
+   "name": "console lists the late record",
+   "ok": true
+  },
+  {
+   "name": "console shows the device blocked",
+   "ok": true
+  },
+  {
+   "name": "phone: Устройството е блокирано",
+   "ok": true
+  },
+  {
+   "name": "phone: local queue, keys and device id wiped",
+   "ok": true
+  }
+ ],
+ "queue_offline": [
+  {
+   "op": "media.upload",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "attendance.mark",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "technician.daily_report",
+   "status": "saved",
+   "plain": false
+  }
+ ],
+ "statuses_online": [
+  "Чака качване на файл",
+  "Синхронизирано",
+  "Синхронизирано"
+ ],
+ "attendance_today": {
+  "entry": {
+   "id": "00d5074b-1091-4f26-8a19-dcd961bc4f27",
+   "org_id": "01253a7f-21a7-4891-b6f5-18f900272004",
+   "date": "2026-11-14",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "status": "Present",
+   "note": "",
+   "marked_at": "2026-11-14T01:37:51.220232+00:00",
+   "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "source": "offline_sync",
+   "version": 1,
+   "sync_local_id": "886b1127-efae-42cf-a9c6-873bc36c7cf6",
+   "captured_at": "2026-11-14T01:37:46.933000+00:00",
+   "captured_tz": "UTC",
+   "device_id": "3bbfa951-3cf2-45eb-8ac2-b2cbd8e53def",
+   "attendance_day_key": "01253a7f-21a7-4891-b6f5-18f900272004|f0cf50a7-9567-582b-8331-2c873a0f9d64|6bd62732-cb67-5522-8b76-c2efbe56ed29|2026-11-14",
+   "project_name": "ST01 A — синтетичен обект",
+   "project_code": "ST01-A-001"
+  },
+  "entries": [
+   {
+    "id": "00d5074b-1091-4f26-8a19-dcd961bc4f27",
+    "org_id": "01253a7f-21a7-4891-b6f5-18f900272004",
+    "date": "2026-11-14",
+    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+    "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "status": "Present",
+    "note": "",
+    "marked_at": "2026-11-14T01:37:51.220232+00:00",
+    "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "source": "offline_sync",
+    "version": 1,
+    "sync_local_id": "886b1127-efae-42cf-a9c6-873bc36c7cf6",
+    "captured_at": "2026-11-14T01:37:46.933000+00:00",
+    "captured_tz": "UTC",
+    "device_id": "3bbfa951-3cf2-45eb-8ac2-b2cbd8e53def",
+    "attendance_day_key": "01253a7f-21a7-4891-b6f5-18f900272004|f0cf50a7-9567-582b-8331-2c873a0f9d64|6bd62732-cb67-5522-8b76-c2efbe56ed29|2026-11-14",
+    "project_name": "ST01 A — синтетичен обект",
+    "project_code": "ST01-A-001"
+   }
+  ],
+  "date": "2026-11-14",
+  "past_deadline": false,
+  "deadline": "10:00",
+  "active_projects": [
+   {
+    "id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+    "code": "ST01-A-001",
+    "name": "ST01 A — синтетичен обект"
+   }
+  ]
+ },
+ "duplicate": {
+  "first": [
+   "synced",
+   "synced"
+  ],
+  "again": {
+   "local_id": "3f94a327-2b38-43dd-905a-e7325fd69bb5",
+   "idempotency_key": "dc6a94b1-6c95-4022-abee-f739964274e9",
+   "status": "synced",
+   "result": {
+    "entity_type": "attendance",
+    "entity_id": "00d5074b-1091-4f26-8a19-dcd961bc4f27",
+    "date": "2026-11-14",
+    "identical": true
+   },
+   "replay": true,
+   "received_at": "2026-11-14T01:37:55.345441+00:00",
+   "captured_at": "2026-11-14T01:37:55.334000+00:00"
+  }
+ },
+ "history_status": 404,
+ "summary": {
+  "passed": 18,
+  "failed": 0
+ }
+}

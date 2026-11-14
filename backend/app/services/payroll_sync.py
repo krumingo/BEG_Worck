@@ -106,7 +106,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                 {"org_id": org_id, "worker_id": eid, "id": {"$in": selected_ids},
                  "status": "APPROVED",
                  "payroll_status": {"$nin": ["paid", "batched"]}},
-                {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
+                {"$inc": {"version": 1}, "$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
             )
         else:
             # Legacy mode: mark all approved unpaid reports for the selected days.
@@ -116,7 +116,7 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                     {"org_id": org_id, "worker_id": eid, "date": {"$in": dates},
                      "status": "APPROVED",
                      "payroll_status": {"$nin": ["paid", "batched"]}},
-                    {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
+                    {"$inc": {"version": 1}, "$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
                 )
 
     # ── C. v1 payslips mirror — RETIRED. Admin HR + cashflow now read v3
@@ -147,7 +147,7 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
             await tenant.employee_daily_reports.update_many(
                 {"org_id": org_id, "worker_id": er["employee_id"],
                  "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
-                {"$set": {"payroll_status": "paid"}},
+                {"$inc": {"version": 1}, "$set": {"payroll_status": "paid"}},
             )
 
     # C. v1 payslips mirror — RETIRED (no status update needed).
@@ -180,7 +180,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                     {"org_id": org_id, "worker_id": er["employee_id"],
                      "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
                      "payroll_status": "batched"},
-                    {"$set": {"payroll_status": "none", "payroll_source": None}},
+                    {"$inc": {"version": 1}, "$set": {"payroll_status": "none", "payroll_source": None}},
                 )
     else:
         for eid in employee_ids:
@@ -198,5 +198,5 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                         {"org_id": org_id, "worker_id": eid,
                          "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
                          "payroll_status": "batched"},
-                        {"$set": {"payroll_status": "none", "payroll_source": None}},
+                        {"$inc": {"version": 1}, "$set": {"payroll_status": "none", "payroll_source": None}},
                     )

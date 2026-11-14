@@ -71,6 +71,16 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// PWA-02: Background Sync (where supported) — the queue's keys live with the page session,
+// so the worker only asks an open page to send; without an open page it waits for the next
+// open / `online` event.
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "bw-offline-queue") return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((list) => list.forEach((c) => c.postMessage({ type: "BW_SYNC_FLUSH" }))),
+  );
+});
+
 self.addEventListener("message", (event) => {
   const type = event.data && event.data.type;
   if (type === "SKIP_WAITING") self.skipWaiting();

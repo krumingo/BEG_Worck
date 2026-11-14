@@ -15,6 +15,7 @@ import {
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
   FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode, Camera, Inbox } from "lucide-react";
 import InstallAppButton from "@/components/pwa/InstallAppButton";
+import { UnsentBadge, useLogoutGuard } from "@/components/offline/OfflineQueueUI";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
@@ -114,6 +115,8 @@ const NAV_GROUPS = [
     children: [
       { to: "/settings", icon: Settings, labelKey: "nav.companySettings" },
       { to: "/users", icon: Users, labelKey: "nav.users" },
+      // PWA-02: the offline-sync console (Owner/Admin only)
+      { to: "/sync-console", icon: Smartphone, labelKey: "nav.syncConsole", ownerAdminOnly: true },
     ],
   },
 ];
@@ -237,7 +240,9 @@ export default function DashboardLayout({ children }) {
 
   const toggleGroup = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const handleLogout = async () => { await logout(); navigate("/login"); };
+  // PWA-02 (R61-5): unsent records → warn first; they stay encrypted on the phone.
+  const logoutGuard = useLogoutGuard(async () => { await logout(); navigate("/login"); });
+  const handleLogout = logoutGuard.request;
   const mobileTabs = getTabsForRole(user?.role);
   const isProfileRoute = location.pathname === "/profile";
   const isPlatformAdmin = user?.is_platform_admin === true;
@@ -255,7 +260,8 @@ export default function DashboardLayout({ children }) {
   const seesFinance = canReadFinance(user?.role);
   const getGroups = () => {
     return NAV_GROUPS.filter(g => seesFinance || !g.finance).map(g => {
-      const children = g.children ? g.children.filter(c => seesFinance || !c.finance) : g.children;
+      const children = g.children ? g.children.filter(c => (seesFinance || !c.finance)
+        && (!c.ownerAdminOnly || ["Owner", "Admin"].includes(user?.role))) : g.children;
       if (g.id === "settings" && isPlatformAdmin) {
         return { ...g, children: [...(children || []), ...PLATFORM_ADMIN_CHILDREN] };
       }
@@ -327,6 +333,7 @@ export default function DashboardLayout({ children }) {
             <h1 className="text-sm font-bold tracking-tight text-foreground">BEG_Work</h1>
             <p className="text-[11px] text-muted-foreground truncate max-w-[150px]">{org?.name || t("common.loading")}</p>
           </div>
+          <UnsentBadge />
           <NotificationBell />
         </div>
 
@@ -371,6 +378,7 @@ export default function DashboardLayout({ children }) {
           <span className="font-bold text-sm">BEG_Work</span>
         </div>
         <div className="flex items-center gap-2">
+          <UnsentBadge />
           <NotificationBell />
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild><Button variant="ghost" size="icon" data-testid="mobile-menu-toggle"><Menu className="w-5 h-5" /></Button></SheetTrigger>
@@ -466,6 +474,7 @@ export default function DashboardLayout({ children }) {
       </nav>
 
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+      {logoutGuard.dialog}
     </div>
   );
 }

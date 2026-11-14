@@ -133,10 +133,16 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,
-              "audit_logs"),
+              "audit_logs",
+              # PWA-02 (R61): the offline sync ledger — one receipt per idempotency key,
+              # field-vs-office conflicts, late records waiting for the office, and items
+              # that arrived from a blocked device.
+              "sync_receipts", "sync_conflicts", "sync_late", "sync_quarantine"),
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",
+              # PWA-02 (R61-6): the per-tenant device register (revoked_at/by/reason).
+              "sync_devices",
               "ai_cache",
               # R0-01: the checkout record a Stripe webhook resolves its tenant
               # from, and the processed-event ledger (unique stripe_event_id).
@@ -178,9 +184,13 @@ TENANT_ROOT = "organizations"
 #: rate-limit counters and security events — an unknown email or a throttled IP
 #: belongs to no tenant, and neither collection holds a business record, a raw
 #: email, a token or a password.
+#:
+#: ``ops_alarms`` (PWA-02 FG-636/642): installation-level operational alarms in the SYSTEM
+#: database (a unique index skipped at startup) — database + index names only, no business
+#: record, never read into a tenant's view.
 TECHNICAL: FrozenSet[str] = frozenset({
     "md_uniqueness_runs", "billing_webhook_rejections",
-    "auth_rate_limits", "auth_security_events"})
+    "auth_rate_limits", "auth_security_events", "ops_alarms"})
 
 #: Collections a PLATFORM principal (not a tenant) legitimately writes rows to:
 #: the platform administrator's own user record and its security log

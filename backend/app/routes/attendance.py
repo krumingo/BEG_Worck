@@ -4,6 +4,7 @@ Attendance, Work Reports, Reminders & Notifications routes.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -109,9 +110,21 @@ async def is_past_deadline(org_id: str):
     end_hour = int(end.split(":")[0])
     return now_hour() >= end_hour
 
-async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source):
+def attendance_day_key(org_id, user_id, project_id, date) -> str:
+    """FG-640: org | worker | object | local day (FLOW-013: a worker may be on two objects)."""
+    return "%s|%s|%s|%s" % (org_id, user_id, project_id or "", date)
+
+
+async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source,
+                                  extra=None):
+    """``extra`` (PWA-02, additive): fields the offline sync stamps on the entry it creates
+    (``version``, ``sync_local_id``, ``captured_at``, ``device_id``…); never overrides the
+    fields below."""
     tenant = TenantData.for_resolved_org(db, org_id)
-    existing = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
+    # FG-640 (FLOW-013 „Един човек на няколко обекта“): one entry per worker, OBJECT and day —
+    # 4 h on one object and 4 h on another are two entries; the hours are summed elsewhere.
+    existing = await tenant.attendance_entries.find_one(
+        {"org_id": org_id, "date": date, "user_id": user_id, "project_id": project_id})
     if existing:
         raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
     if status not in ATTENDANCE_STATUSES:
@@ -130,7 +143,15 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
         "marked_by_user_id": marked_by,
         "source": source,
     }
-    await tenant.attendance_entries.insert_one(entry)
+    for k, v in (extra or {}).items():
+        entry.setdefault(k, v)
+    # FG-627/640: one entry per worker, object and day, enforced by a partial unique index
+    # (PWA-02, ``ensure_sync_indexes``) — the check above alone is check-then-insert.
+    entry["attendance_day_key"] = attendance_day_key(org_id, user_id, project_id, date)
+    try:
+        await tenant.attendance_entries.insert_one(entry)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
     await auto_resolve_reminders(org_id, "MissingAttendance", date, user_id, user_id)
     return {k: v for k, v in entry.items() if k != "_id"}
 
@@ -434,7 +455,18 @@ async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Dep
 async def get_my_attendance_today(user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     date = today_str()
-    entry = await tenant.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
+    # FG-647: one entry per object (FLOW-013) — all of today's, ``entry`` stays the first one
+    entries = await tenant.attendance_entries.find(
+        {"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0}
+    ).sort("marked_at", 1).to_list(50)
+    if entries:
+        pids = list({e.get("project_id") for e in entries if e.get("project_id")})
+        names = {p["id"]: p for p in await tenant.projects.find(
+            {"id": {"$in": pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(50)} if pids else {}
+        for e in entries:
+            pr = names.get(e.get("project_id")) or {}
+            e["project_name"], e["project_code"] = pr.get("name", ""), pr.get("code", "")
+    entry = entries[0] if entries else None
     past_deadline = await is_past_deadline(user["org_id"])
     active_pids = await get_user_active_project_ids(user["id"], user["org_id"])
     projects = []
@@ -442,7 +474,8 @@ async def get_my_attendance_today(user: dict = Depends(get_current_user)):
         projs = await tenant.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
         projects = projs
     _, end = await get_org_attendance_window(user["org_id"])
-    return {"entry": entry, "date": date, "past_deadline": past_deadline, "deadline": end, "active_projects": projects}
+    return {"entry": entry, "entries": entries, "date": date, "past_deadline": past_deadline, "deadline": end,
+            "active_projects": projects}
 
 @router.get("/attendance/my-range")
 async def get_my_attendance_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):

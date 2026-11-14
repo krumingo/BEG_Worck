@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 import uuid
 
 from app.db import db
@@ -167,8 +168,11 @@ async def my_sites(user: dict = Depends(get_current_user)):
         )
         roster_count = len(roster.get("workers", [])) if roster else 0
 
+        from app.services.offline_sync_handlers import photo_allowed
         result.append({
             "project_id": pid,
+            # FG-639 (additive): the same guard the photo upload applies
+            "can_upload_photo": await photo_allowed(user, pid),
             "name": p.get("name", ""),
             "code": p.get("code", ""),
             "address_text": p.get("address_text", ""),
@@ -421,6 +425,8 @@ class RosterSubmit(BaseModel):
 class AttendanceRosterSubmit(BaseModel):
     date: Optional[str] = None
     workers: list  # [{worker_id, worker_name, status}]
+    # FG-650: why workers left out of today's list are removed (their presence is VOIDED)
+    removal_reason: Optional[str] = None
     # status: Present, Leave, SickLeave, Absent, Other
 
 
@@ -459,6 +465,40 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
     d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
+    # FG-650: workers left out of today's list — checked BEFORE anything is written. Their
+    # presence on this object is voided (never deleted), with a reason; refused if in use.
+    from app.services import attendance_void
+    keep_ids = {w.get("worker_id") or w.get("id", "") for w in data.workers} - {""}
+    prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    removed_ids = set(w.get("worker_id") for w in (prev_roster or {}).get("workers", [])) - keep_ids
+    to_void = []
+    if removed_ids:
+        to_void = await tenant.attendance_entries.find(
+            {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}},
+            {"_id": 0}).to_list(500)
+    reason = (data.removal_reason or "").strip()
+    # FG-658: an entry something relies on is kept (and its worker stays on the list) — the
+    # rest of the list is saved; the answer says per worker what was refused and why
+    refused, kept_ids = [], set()
+    for e in list(to_void):
+        # FG-659: a closed day first (pay run / approved or submitted report), then in use
+        locked = await attendance_void.correction_locked(tenant, e)
+        why = None if locked else await attendance_void.attendance_in_use(tenant, e)
+        if locked or why:
+            refused.append({"worker_id": e.get("user_id"), "status": 409,
+                            "error_code": "CORRECTION_OR_REVERSAL_REQUIRED" if locked else "ENTRY_IN_USE",
+                            "relies_on": locked or why, "entry_id": e.get("id")})
+            kept_ids.add(e.get("user_id"))
+            to_void.remove(e)
+            continue
+        same_day_same_hand = d == datetime.now(timezone.utc).strftime("%Y-%m-%d") \
+            and e.get("marked_by_user_id") == user["id"]
+        if not reason and not same_day_same_hand:
+            raise HTTPException(status_code=422, detail={
+                "error_code": "REASON_REQUIRED",
+                "message": "Посочете причина за премахването от списъка (присъствието се анулира)"})
+    reason = reason or attendance_void.DEFAULT_ROSTER_REASON
+
     workers = []
     submitted_ids = set()
     for w in data.workers:
@@ -472,38 +512,65 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         workers.append({"worker_id": wid, "worker_name": wname, "status": status})
         submitted_ids.add(wid)
 
-        # Upsert attendance_entry (source of truth)
+        # Upsert attendance_entry (source of truth) — FG-640: per worker, OBJECT and day, so
+        # saving this site never moves the worker's entry on another object to this one
         existing_att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": d, "user_id": wid}
+            {"org_id": org_id, "date": d, "user_id": wid, "project_id": project_id}
         )
+        from app.routes.attendance import attendance_day_key
+        day_key = attendance_day_key(org_id, wid, project_id, d)   # FG-635/640 (PWA-02)
+        site_update = {"$inc": {"version": 1}, "$set": {
+            "status": status, "project_id": project_id, "updated_at": now, "note": ""}}
         if existing_att:
-            await tenant.attendance_entries.update_one(
-                {"id": existing_att["id"]},
-                {"$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
-            )
+            # FG-663: same status on the same object → nothing to write (a plain save on a
+            # closed day is harmless); a CHANGE on a closed day is refused for this worker
+            if existing_att.get("status") == status and existing_att.get("project_id") == project_id:
+                continue
+            locked = await attendance_void.correction_locked(tenant, existing_att)
+            if locked:
+                refused.append({"worker_id": wid, "status": 409, "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+                                "relies_on": locked, "entry_id": existing_att.get("id")})
+                workers[-1]["status"] = existing_att.get("status")     # the list shows what stands
+                continue
+            await tenant.attendance_entries.update_one({"id": existing_att["id"]}, site_update)
         else:
-            await tenant.attendance_entries.insert_one({
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "date": d,
-                "project_id": project_id,
-                "user_id": wid,
-                "status": status,
-                "note": "",
-                "marked_at": now,
-                "marked_by_user_id": user["id"],
-                "source": "TechPortal",
-            })
+            try:
+                await tenant.attendance_entries.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "date": d,
+                    "project_id": project_id,
+                    "user_id": wid,
+                    "status": status,
+                    "note": "",
+                    "marked_at": now,
+                    "marked_by_user_id": user["id"],
+                    "source": "TechPortal",
+                    "attendance_day_key": day_key,
+                })
+            except DuplicateKeyError:
+                # a concurrent save marked the same worker and day first: already marked —
+                # this save updates it, exactly as when the entry was found above (FG-663 lock)
+                won = await tenant.attendance_entries.find_one(
+                    {"org_id": org_id, "attendance_day_key": day_key}, {"_id": 0})
+                if won and won.get("status") != status:
+                    locked = await attendance_void.correction_locked(tenant, won)
+                    if locked:
+                        refused.append({"worker_id": wid, "status": 409,
+                                        "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+                                        "relies_on": locked, "entry_id": won.get("id")})
+                        continue
+                    await tenant.attendance_entries.update_one(
+                        {"org_id": org_id, "attendance_day_key": day_key}, site_update)
 
-    # Remove attendance_entries for workers who were in previous roster but not in the new list
-    prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
-    if prev_roster:
-        prev_ids = set(w.get("worker_id") for w in prev_roster.get("workers", []))
-        removed_ids = prev_ids - submitted_ids
-        if removed_ids:
-            await tenant.attendance_entries.delete_many(
-                {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}}
-            )
+    for r in refused:                            # FG-661: each refusal is on record
+        await attendance_void.audit_refusal(user, r, project_id, d)
+    # Workers who were in the previous roster but not in the new list: VOID (FG-650)
+    if to_void:
+        await attendance_void.void_attendance(tenant, user, to_void, reason)
+    for w in (prev_roster or {}).get("workers", []):
+        if w.get("worker_id") in kept_ids:
+            workers.append(w)                    # still present (in use) — still on the list
 
     # Also save/update roster
     existing_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
@@ -527,6 +594,7 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         "total": len(workers),
         "present": present_count,
         "workers": workers,
+        "refused": refused,
     }
 
 
@@ -836,12 +904,77 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
 
 # ── Daily Report (DRAFT — NO work_sessions) ───────────────────────
 
+REPORT_AUTO_PRESENCE = "report_auto_presence"
+
+
+async def report_auto_presence_enabled(tenant, org_id) -> bool:
+    """FG-641: the tenant setting (default OFF) — Krum's answer to D21 only flips it."""
+    flag = await tenant.feature_flags.find_one({"org_id": org_id, "module_code": REPORT_AUTO_PRESENCE},
+                                               {"_id": 0, "enabled": 1})
+    return bool(flag and flag.get("enabled") is True)
+
+
+async def set_report_auto_presence(user, enabled: bool) -> None:
+    """FG-641: switched only by the platform administrator (PUT /api/feature-flags), with an
+    AuditEvent — Krum's answer to D21."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    tenant = _tenant(user)
+    stamp = datetime.now(timezone.utc).isoformat()
+    await tenant.feature_flags.update_one(
+        {"org_id": user["org_id"], "module_code": REPORT_AUTO_PRESENCE},
+        {"$set": {"enabled": bool(enabled), "updated_at": stamp, "updated_by": user["id"]},
+         "$setOnInsert": {"created_at": stamp}}, upsert=True)
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action="attendance.report_auto_presence_set", source_flow="FLOW-013",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="feature_flag",
+        entity_id=REPORT_AUTO_PRESENCE, reason=None, structured_diff={"enabled": bool(enabled)},
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=None,
+        source_channel="feature_flags"))
+
+
+async def _audit_auto_presence(user, project_id, date, ap):
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action="attendance.auto_from_report", source_flow="FLOW-013",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="attendance",
+        entity_id="%s:%s:%s" % (ap["worker_id"], project_id, date), reason="автоматично от отчет",
+        structured_diff={"worker_id": ap["worker_id"], "project_id": project_id, "date": date,
+                         "presence_on": ap.get("from_project_id"), "setting": REPORT_AUTO_PRESENCE},
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=None,
+        source_channel="daily_report"))
+
+
+async def _insert_auto_attendance(tenant, kw, entry):
+    """FG-635: duplicate day key = already marked. Inside the offline transaction the error
+    must abort it (the batch item is then retried and finds the entry), so it is re-raised."""
+    try:
+        await tenant.attendance_entries.insert_one(entry, **kw)
+    except DuplicateKeyError:
+        if kw.get("session") is not None:
+            raise
+
+
 @router.post("/technician/daily-report")
 async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_current_user)):
     """
     DRAFT ONLY: Saves to employee_daily_reports with status=Draft.
     work_sessions are created on APPROVE, not here.
     See /app/memory/SOURCE_OF_TRUTH.md for full policy.
+    """
+    return await submit_daily_report_core(data, user)
+
+
+async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_stamp: Optional[dict] = None):
+    """The daily-report write (the route above and the PWA-02 offline sync).
+
+    ``sync_stamp`` (PWA-02 only, additive): the offline record's fields — every draft is
+    inserted already carrying ``sync_local_id`` (+ ``sync_entry_index``), and all writes run in
+    ONE transaction, so a crash or a stale takeover can never leave an untagged duplicate
+    (AUDIT-2 PWA92-M1). Without it the online path behaves exactly as before.
     """
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -863,12 +996,27 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
     # Validate attendance: each worker must be Present/Late — HARD BLOCK
     attendance_warnings = []
+    auto_presence = []          # FG-641: only with report_auto_presence ON
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
+        # FG-641 (FLOW-013 L89-90, literal reading until Krum decides — HANDOFF D21): a report
+        # for ANYONE on this object, the technician included, needs a presence on THIS object.
+        # Only with the tenant setting ``report_auto_presence`` (default OFF) does a presence
+        # on another object the same day let the report create this object's presence.
+        day_flt = {"org_id": org_id, "date": today, "user_id": wid}
         att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": today, "user_id": wid},
-            {"_id": 0, "status": 1},
-        )
+            {**day_flt, "project_id": data.project_id}, {"_id": 0, "status": 1})
+        if att is None:
+            elsewhere = await tenant.attendance_entries.find_one(
+                {**day_flt, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "project_id": 1})
+            if elsewhere and await report_auto_presence_enabled(tenant, org_id):
+                auto_presence.append({"worker_id": wid, "from_project_id": elsewhere.get("project_id")})
+                att = {"status": "Present"}
+            else:
+                raise HTTPException(status_code=400, detail={
+                    "error_code": "PRESENCE_REQUIRED_ON_OBJECT",
+                    "message": f"Работникът {entry.worker_name or wid} не е отбелязан като присъстващ "
+                               f"на този обект за датата. Първо потвърдете присъствието в Хора."})
         cal = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
             {"_id": 0, "status": 1},
@@ -912,132 +1060,156 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
     missing_smr_created = []
     draft_ids = []
+    report = {}
 
-    for entry in data.entries:
-        wid = entry.worker_id or user["id"]
+    async def _write(session):
+        # may run more than once (a transaction retry): start clean every time
+        kw = {} if session is None else {"session": session}
+        missing_smr_created.clear()
+        draft_ids.clear()
+        report.clear()
 
-        # Validate worker is in roster (if roster exists)
-        if roster_ids and wid not in roster_ids and wid != user["id"]:
-            raise HTTPException(status_code=400, detail=f"Worker {wid} not in today's roster")
+        for entry_index, entry in enumerate(data.entries):
+            wid = entry.worker_id or user["id"]
 
-        # Get worker name
-        worker_name = entry.worker_name
-        if not worker_name and roster:
-            for rw in roster.get("workers", []):
-                if rw.get("worker_id") == wid:
-                    worker_name = rw.get("worker_name", "")
-                    break
-        if not worker_name:
-            worker_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+            # Validate worker is in roster (if roster exists)
+            if roster_ids and wid not in roster_ids and wid != user["id"]:
+                raise HTTPException(status_code=400, detail=f"Worker {wid} not in today's roster")
 
-        # Determine SMR source
-        smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
+            # Get worker name
+            worker_name = entry.worker_name
+            if not worker_name and roster:
+                for rw in roster.get("workers", []):
+                    if rw.get("worker_id") == wid:
+                        worker_name = rw.get("worker_name", "")
+                        break
+            if not worker_name:
+                worker_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
 
-        # Create DRAFT in employee_daily_reports
-        is_admin_entry = user["role"] in ["Admin", "Owner", "SiteManager"]
-        draft = {
+            # Determine SMR source
+            smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
+
+            # Create DRAFT in employee_daily_reports
+            is_admin_entry = user["role"] in ["Admin", "Owner", "SiteManager"]
+            draft = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "project_id": data.project_id,
+                "date": today,
+                "worker_id": wid,
+                "worker_name": worker_name,
+                "smr_type": entry.smr_type,
+                "smr_subtype": entry.smr_subtype or "",
+                "hours": round(entry.hours, 2),
+                "notes": entry.notes or "",
+                "location_id": entry.location_id,
+                "smr_source": smr_source,
+                "status": "Draft",
+                "submitted_by": user["id"],
+                "entered_by_admin": is_admin_entry,
+                "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
+                "created_at": now,
+                "updated_at": now,
+            }
+            if sync_stamp:
+                draft.update(sync_stamp)
+                draft["sync_entry_index"] = entry_index
+            await tenant.employee_daily_reports.insert_one(draft, **kw)
+            draft_ids.append(draft["id"])
+
+            # Auto-create attendance_entry if not exists (report = present).
+            # FG-640 (FLOW-013): per worker, OBJECT and day — a report on a second object
+            # creates that object's entry (4 h here + 4 h there = two entries, 8 h summed).
+            existing_att = await tenant.attendance_entries.find_one(
+                {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}, **kw
+            )
+            if not existing_att and any(ap["worker_id"] == wid for ap in auto_presence):
+                await _insert_auto_attendance(tenant, kw, {
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "date": today,
+                    "project_id": data.project_id,
+                    "user_id": wid,
+                    "status": "Present",
+                    "note": "Автоматично от отчет",
+                    "auto_from_report": True,
+                    "marked_at": now,
+                    "marked_by_user_id": user["id"],
+                    "source": "DailyReportAuto",
+                    "attendance_day_key": "%s|%s|%s|%s" % (org_id, wid, data.project_id or "", today),
+                })
+
+            # Check if SMR type is unknown → create missing_smr
+            if smr_source == "manual":
+                ms = {
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "project_id": data.project_id,
+                    "project_name": project.get("name", ""),
+                    "smr_type": entry.smr_type,
+                    "activity_type": entry.smr_type,
+                    "activity_subtype": entry.smr_subtype or "",
+                    "qty": entry.hours,
+                    "unit": "часа",
+                    "source": "mobile",
+                    "status": "reported",
+                    "urgency_type": "emergency",
+                    "emergency_reason": "Въведено от терена",
+                    "notes": entry.notes,
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": user["id"],
+                    "created_by_name": worker_name,
+                    "attachments": [],
+                    "client_approval": None,
+                    "ai_estimated_price": None,
+                    "ai_price_breakdown": None,
+                    "offer_line_ids": [],
+                    "linked_extra_work_id": None,
+                    "linked_offer_id": None,
+                    "linked_change_order_id": None,
+                }
+                await tenant.missing_smr.insert_one(ms, **kw)
+                missing_smr_created.append(ms["id"])
+
+        # Create/update work_report summary
+        total_hours = round(sum(e.hours for e in data.entries), 2)
+        report.update({
             "id": str(uuid.uuid4()),
             "org_id": org_id,
             "project_id": data.project_id,
+            "user_id": user["id"],
             "date": today,
-            "worker_id": wid,
-            "worker_name": worker_name,
-            "smr_type": entry.smr_type,
-            "smr_subtype": entry.smr_subtype or "",
-            "hours": round(entry.hours, 2),
-            "notes": entry.notes or "",
-            "location_id": entry.location_id,
-            "smr_source": smr_source,
-            "status": "Draft",
             "submitted_by": user["id"],
-            "entered_by_admin": is_admin_entry,
-            "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
-            "created_at": now,
-            "updated_at": now,
-        }
-        await tenant.employee_daily_reports.insert_one(draft)
-        draft_ids.append(draft["id"])
-
-        # Auto-create attendance_entry if not exists (report = present)
-        existing_att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}
+            "submitted_at": now,
+            "entries_count": len(data.entries),
+            "total_hours": total_hours,
+            "general_notes": data.general_notes,
+            "photos": data.photos,
+            "source": "technician_mobile",
+            "status": "Draft",
+        })
+        existing_report = await tenant.work_reports.find_one(
+            {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}, **kw
         )
-        if not existing_att:
-            await tenant.attendance_entries.insert_one({
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "date": today,
-                "project_id": data.project_id,
-                "user_id": wid,
-                "status": "Present",
-                "note": "Автоматично от дневен отчет",
-                "marked_at": now,
-                "marked_by_user_id": user["id"],
-                "source": "DailyReport",
-            })
+        if existing_report:
+            await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
+                "entries_count": report["entries_count"], "total_hours": total_hours,
+                "general_notes": report["general_notes"], "photos": report["photos"],
+                "submitted_at": now, "status": "Draft",
+            }}, **kw)
+            report["id"] = existing_report["id"]
+        else:
+            await tenant.work_reports.insert_one(report, **kw)
 
-        # Check if SMR type is unknown → create missing_smr
-        if smr_source == "manual":
-            ms = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "project_id": data.project_id,
-                "project_name": project.get("name", ""),
-                "smr_type": entry.smr_type,
-                "activity_type": entry.smr_type,
-                "activity_subtype": entry.smr_subtype or "",
-                "qty": entry.hours,
-                "unit": "часа",
-                "source": "mobile",
-                "status": "reported",
-                "urgency_type": "emergency",
-                "emergency_reason": "Въведено от терена",
-                "notes": entry.notes,
-                "created_at": now,
-                "updated_at": now,
-                "created_by": user["id"],
-                "created_by_name": worker_name,
-                "attachments": [],
-                "client_approval": None,
-                "ai_estimated_price": None,
-                "ai_price_breakdown": None,
-                "offer_line_ids": [],
-                "linked_extra_work_id": None,
-                "linked_offer_id": None,
-                "linked_change_order_id": None,
-            }
-            await tenant.missing_smr.insert_one(ms)
-            missing_smr_created.append(ms["id"])
-
-    # Create/update work_report summary
-    total_hours = round(sum(e.hours for e in data.entries), 2)
-    report = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "project_id": data.project_id,
-        "user_id": user["id"],
-        "date": today,
-        "submitted_by": user["id"],
-        "submitted_at": now,
-        "entries_count": len(data.entries),
-        "total_hours": total_hours,
-        "general_notes": data.general_notes,
-        "photos": data.photos,
-        "source": "technician_mobile",
-        "status": "Draft",
-    }
-    existing_report = await tenant.work_reports.find_one(
-        {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}
-    )
-    if existing_report:
-        await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
-            "entries_count": report["entries_count"], "total_hours": total_hours,
-            "general_notes": report["general_notes"], "photos": report["photos"],
-            "submitted_at": now, "status": "Draft",
-        }})
-        report["id"] = existing_report["id"]
+    if sync_stamp:
+        from app.services.invoice_line_lock import run_transaction
+        await run_transaction(tenant, _write)
     else:
-        await tenant.work_reports.insert_one(report)
+        await _write(None)
+    total_hours = round(sum(e.hours for e in data.entries), 2)
+    for ap in auto_presence:
+        await _audit_auto_presence(user, data.project_id, today, ap)
 
     # Hours warnings per unique worker
     hours_warnings = []
@@ -1329,17 +1501,35 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
     )
     if blocking > 0:
         raise HTTPException(status_code=400, detail="Работникът има подаден или одобрен отчет. Първо коригирайте отчета.")
-
-    # Delete Draft reports
-    del_result = await tenant.employee_daily_reports.delete_many(
+    # FG-655: a report the office already has keeps status "Draft" but carries the approval
+    # state — never voided from the field
+    in_office = await tenant.employee_daily_reports.count_documents(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
-         "status": {"$in": ["Draft"]}}
-    )
+         "approval_status": {"$in": ["SUBMITTED", "APPROVED"]}})
+    if in_office:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "REPORT_SUBMITTED",
+            "message": "Отчетът вече е подаден/одобрен в офиса — корекцията минава през отчета"})
 
-    # Remove from attendance_entries
-    await tenant.attendance_entries.delete_many(
-        {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id}
-    )
+    # FG-650: VOID (never delete) the Draft reports and then the presence, with a reason
+    from app.services import attendance_void
+    reason = (data.get("reason") or "").strip() or attendance_void.DEFAULT_ROSTER_REASON
+    drafts = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "status": {"$in": ["Draft"]}}, {"_id": 0}).to_list(100)
+    entries = await tenant.attendance_entries.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id},
+        {"_id": 0}).to_list(50)
+    draft_ids = [r["id"] for r in drafts]
+    for e in entries:
+        locked = await attendance_void.correction_locked(tenant, e)      # FG-659
+        if locked:
+            raise attendance_void.refuse_locked(e, locked)
+        why = await attendance_void.attendance_in_use(tenant, e, ignore_report_ids=draft_ids)
+        if why:
+            raise attendance_void.refuse_in_use(e, why)
+    voided_reports = await attendance_void.void_reports(tenant, user, drafts, reason)
+    await attendance_void.void_attendance(tenant, user, entries, reason)
 
     # Remove from roster
     roster = await tenant.site_daily_rosters.find_one(
@@ -1354,7 +1544,8 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
 
     return {
         "removed": True,
-        "drafts_deleted": del_result.deleted_count,
+        "drafts_deleted": len(voided_reports),   # FG-650: voided, the rows stay
+        "drafts_voided": len(voided_reports),
         "worker_id": worker_id,
     }
 
@@ -1396,7 +1587,7 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     if data.notes is not None:
         update["notes"] = data.notes
 
-    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$inc": {"version": 1}, "$set": update})
     return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
 
 
@@ -1411,7 +1602,9 @@ async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Draft not found")
     if doc.get("status") not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only delete Draft entries")
-    await tenant.employee_daily_reports.delete_one({"id": draft_id})
+    # FG-650: voided with a reason and an AuditEvent — the row stays in history
+    from app.services import attendance_void
+    await attendance_void.void_reports(tenant, user, [doc], "Изтрит ред от черновата")
     return {"ok": True}
 
 
