@@ -751,10 +751,17 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         # a report relies on the presence (the viewer's report on P2) → 409, nothing voided
         call("POST", "/api/technician/site/%s/attendance" % P2, role="owner",
              json={"date": today, "workers": [{"worker_id": vw["id"], "status": "Present"}]})
+        w653 = str(uuid.uuid4())
+        call("POST", "/api/technician/site/%s/attendance" % P2, role="owner",
+             json={"date": today, "workers": [{"worker_id": vw["id"], "status": "Present"},
+                                              {"worker_id": w653, "status": "Present"}]})
         used = call("POST", "/api/technician/site/%s/attendance" % P2, role="owner",
                     json={"date": today, "workers": [], "removal_reason": "проба"})
-        fg["in_use"] = {"status": used["status"], "code": used["error_code"],
-                        "relies_on": ((used["body"] or {}).get("detail") or {}).get("relies_on")}
+        ref = (used["body"] or {}).get("refused") or [{}]
+        fg["in_use"] = {"status": used["status"], "code": ref[0].get("error_code"), "relies_on": ref[0].get("relies_on"),
+                        "worker": ref[0].get("worker_id") == vw["id"], "per_worker_status": ref[0].get("status")}
+        fg["in_use_rest_voided"] = q(lambda: layer.attendance_entries.count_documents({"user_id": w653}))
+        fg["in_use_kept_on_list"] = [w.get("worker_id") == vw["id"] for w in (used["body"] or {}).get("workers", [])]
         fg["in_use_still_active"] = q(lambda: layer.attendance_entries.count_documents(
             {"user_id": vw["id"], "project_id": P2}))
         # the remove-with-drafts path voids the drafts and the presence too
@@ -770,6 +777,62 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             {"id": "dr-651"}, {"_id": 0}).to_list(None))] + [r.get("status") for r in q(
             lambda: op_db.attendance_entries.find({"user_id": w651}, {"_id": 0}).to_list(None))])
         fg["report_void_events"] = count("audit_events", {"action": "daily_report.voided"})
+        # FG-655: a report the office already has (status Draft, approval SUBMITTED) is never voided
+        w655 = str(uuid.uuid4())
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w655, "status": "Present"}]})
+        q(lambda: op_db.employee_daily_reports.insert_one({
+            "id": "dr-655", "org_id": A["tenant_id"], "project_id": P4, "date": today, "worker_id": w655,
+            "hours": 3, "status": "Draft", "approval_status": "SUBMITTED"}))
+        r655 = call("POST", "/api/technician/site/%s/remove-worker-with-drafts" % P4, role="owner",
+                    json={"worker_id": w655, "reason": "проба"})
+        fg["fg655"] = {"status": r655["status"], "code": r655["error_code"]}
+        fg["fg655_report"] = q(lambda: op_db.employee_daily_reports.find_one({"id": "dr-655"}, {"_id": 0, "status": 1}))["status"]
+        # FG-656: the read-only history of today's voids (Owner/Admin; the read is audited)
+        hist = call("GET", "/api/sync/voided?date=%s" % today, role="owner")
+        items = (hist["body"] or {}).get("items", [])
+        mine650 = [i for i in items if i["worker_id"] == w650]
+        fg["hist_status"] = hist["status"]
+        fg["hist_650"] = mine650[-1] if mine650 else None             # the oldest: the default reason
+        fg["hist_650_reasons"] = sorted(i["reason"] for i in mine650)
+        fg["hist_report"] = any(i["kind"] == "daily_report" and i["id"] == "dr-651" for i in items)
+        fg["hist_by_technician"] = call("GET", "/api/sync/voided?date=%s" % today, role="technician")["status"]
+        fg["hist_read_events"] = count("audit_events", {"action": "history.voided_read"})
+        # FG-658: the console corrects / voids a presence that came from the phone
+        pres = call("GET", "/api/sync/presence?date=%s" % today, role="owner")["body"]
+        own_p2 = [x for x in pres if x["user_id"] == own["id"] and x["project_id"] == P2]
+        e658 = own_p2[0] if own_p2 else {}
+        fix = "/api/sync/presence/%s/fix" % e658.get("id")
+        stale658 = call("POST", fix, role="owner", key=str(uuid.uuid4()), json={
+            "action": "correct", "status": "SickLeave", "reason": "болен", "version": (e658.get("version") or 0) + 5})
+        fg["fix_stale"] = stale658["error_code"]
+        k658 = str(uuid.uuid4())
+        ok658 = call("POST", fix, role="owner", key=k658, json={
+            "action": "correct", "status": "SickLeave", "reason": "болен", "version": e658.get("version") or 0})
+        fg["fix_correct"] = {"status": ok658["status"], "version_up": (ok658["body"] or {}).get("version") == (e658.get("version") or 0) + 1}
+        fg["fix_replay"] = (call("POST", fix, role="owner", key=k658, json={
+            "action": "correct", "status": "SickLeave", "reason": "болен", "version": e658.get("version") or 0})["body"] or {}).get("replay")
+        fg["fix_no_reason"] = call("POST", fix, role="owner", key=str(uuid.uuid4()), json={
+            "action": "void", "version": 99})["status"]
+        fg["fix_by_technician"] = call("POST", fix, role="technician", key=str(uuid.uuid4()), json={
+            "action": "void", "reason": "проба", "version": 0})["status"]
+        cur = q(lambda: op_db.attendance_entries.find_one({"id": e658.get("id")}, {"_id": 0}))
+        fg["fix_corrected_row"] = {"status": cur.get("status"), "correction_reason": cur.get("correction_reason")}
+        vo = call("POST", fix, role="owner", key=str(uuid.uuid4()), json={
+            "action": "void", "reason": "двоен запис", "version": cur.get("version")})
+        fg["fix_void"] = vo["status"]
+        fg["fix_void_in_history"] = any(i["id"] == e658.get("id") and i["reason"] == "двоен запис"
+                                        for i in (call("GET", "/api/sync/voided?date=%s" % today, role="owner")["body"] or {}).get("items", []))
+        fg["fix_events"] = [count("audit_events", {"action": "attendance.corrected", "entity_id": e658.get("id")}),
+                            count("audit_events", {"action": "attendance.voided", "entity_id": e658.get("id")})]
+        # FG-657: "keep office" when the office entry was voided → RECORD_GONE, conflict stays open
+        call("POST", site, role="owner", json={"date": today, "workers": [{"worker_id": adm["id"], "status": "Present"}]})
+        c657 = batch([att(adm["id"], status="Absent")], role="admin")["body"]["results"][0]
+        cid657 = c657["result"].get("conflict_id")
+        call("POST", site, role="owner", json={"date": today, "workers": [], "removal_reason": "проба"})
+        keep = call("POST", "/api/sync/conflicts/%s/resolve" % cid657, role="owner", key=str(uuid.uuid4()),
+                    json={"decision": "keep_office", "reason": "офисът"})
+        fg["fg657"] = {"conflict": c657["status"], "status": keep["status"], "code": keep["error_code"],
+                       "after": q(lambda: op_db.sync_conflicts.find_one({"id": cid657}, {"_id": 0, "status": 1}))["status"]}
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
             body = call("GET", "/api/technician/my-sites", role=role)["body"]
@@ -1237,10 +1300,51 @@ def test_presence_is_voided_never_deleted(obs):
     assert f["remark_active"] == 1 and f["remark_raw"] == 2           # one active, the void kept
     assert f["other_hand_no_reason"] == {"status": 422, "code": "REASON_REQUIRED"}
     assert f["other_hand_reason"] == 200 and f["other_hand_reason_row"] == {"status": "voided"}
-    assert f["in_use"] == {"status": 409, "code": "ENTRY_IN_USE", "relies_on": "daily_report"}
-    assert f["in_use_still_active"] == 1
+    # FG-658: one in-use entry does not refuse the list — per-worker 409, the rest saved
+    assert f["in_use"] == {"status": 200, "code": "ENTRY_IN_USE", "relies_on": "daily_report",
+                           "worker": True, "per_worker_status": 409}
+    assert f["in_use_still_active"] == 1 and f["in_use_rest_voided"] == 0
+    assert f["in_use_kept_on_list"] == [True]
     assert f["rm_drafts"] == {"status": 200, "voided": 1} and f["rm_rows"] == ["voided", "voided"]
     assert f["report_void_events"] >= 1
+
+
+@real
+def test_a_report_the_office_has_is_never_voided_from_the_field(obs):
+    """FG-655."""
+    f = obs["flowguard"]
+    assert f["fg655"] == {"status": 409, "code": "REPORT_SUBMITTED"} and f["fg655_report"] == "Draft"
+
+
+@real
+def test_the_history_of_voids_is_read_only_owner_admin_and_audited(obs):
+    """FG-656 (FLOW-037 §12.2)."""
+    f = obs["flowguard"]
+    assert f["hist_status"] == 200 and f["hist_by_technician"] == 403
+    h = f["hist_650"]
+    assert h and h["kind"] == "attendance" and h["reason"] == "Премахнат от списъка за деня"
+    assert h["voided_by"] and h["voided_at"] and h["audit_event_id"] and h["status_before"] == "Present"
+    assert f["hist_650_reasons"] == ["Премахнат от списъка за деня", "Прехвърлен на друг обект"]
+    assert f["hist_report"] is True and f["hist_read_events"] >= 1
+
+
+@real
+def test_the_console_corrects_or_voids_a_phone_presence(obs):
+    """FG-658: Owner/Admin, reason, Idempotency-Key, version CAS, AuditEvent."""
+    f = obs["flowguard"]
+    assert f["fix_stale"] == "CONFLICT_STALE"
+    assert f["fix_correct"] == {"status": 200, "version_up": True} and f["fix_replay"] is True
+    assert f["fix_no_reason"] == 422 and f["fix_by_technician"] == 403
+    assert f["fix_corrected_row"] == {"status": "SickLeave", "correction_reason": "болен"}
+    assert f["fix_void"] == 200 and f["fix_void_in_history"] is True
+    assert f["fix_events"] == [1, 1]
+
+
+@real
+def test_keep_office_on_a_voided_office_entry_is_record_gone(obs):
+    """FG-657."""
+    f = obs["flowguard"]
+    assert f["fg657"] == {"conflict": "conflict", "status": 409, "code": "RECORD_GONE", "after": "open"}
 
 
 def test_no_hard_delete_of_presence_or_reports_remains():

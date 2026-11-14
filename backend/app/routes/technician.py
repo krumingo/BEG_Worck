@@ -477,10 +477,17 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
             {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}},
             {"_id": 0}).to_list(500)
     reason = (data.removal_reason or "").strip()
-    for e in to_void:
+    # FG-658: an entry something relies on is kept (and its worker stays on the list) — the
+    # rest of the list is saved; the answer says per worker what was refused and why
+    refused, kept_ids = [], set()
+    for e in list(to_void):
         why = await attendance_void.attendance_in_use(tenant, e)
         if why:
-            raise attendance_void.refuse_in_use(e, why)
+            refused.append({"worker_id": e.get("user_id"), "status": 409, "error_code": "ENTRY_IN_USE",
+                            "relies_on": why, "entry_id": e.get("id")})
+            kept_ids.add(e.get("user_id"))
+            to_void.remove(e)
+            continue
         same_day_same_hand = d == datetime.now(timezone.utc).strftime("%Y-%m-%d") \
             and e.get("marked_by_user_id") == user["id"]
         if not reason and not same_day_same_hand:
@@ -537,6 +544,9 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
     # Workers who were in the previous roster but not in the new list: VOID (FG-650)
     if to_void:
         await attendance_void.void_attendance(tenant, user, to_void, reason)
+    for w in (prev_roster or {}).get("workers", []):
+        if w.get("worker_id") in kept_ids:
+            workers.append(w)                    # still present (in use) — still on the list
 
     # Also save/update roster
     existing_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
@@ -560,6 +570,7 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         "total": len(workers),
         "present": present_count,
         "workers": workers,
+        "refused": refused,
     }
 
 
@@ -1466,6 +1477,15 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
     )
     if blocking > 0:
         raise HTTPException(status_code=400, detail="Работникът има подаден или одобрен отчет. Първо коригирайте отчета.")
+    # FG-655: a report the office already has keeps status "Draft" but carries the approval
+    # state — never voided from the field
+    in_office = await tenant.employee_daily_reports.count_documents(
+        {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
+         "approval_status": {"$in": ["SUBMITTED", "APPROVED"]}})
+    if in_office:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "REPORT_SUBMITTED",
+            "message": "Отчетът вече е подаден/одобрен в офиса — корекцията минава през отчета"})
 
     # FG-650: VOID (never delete) the Draft reports and then the presence, with a reason
     from app.services import attendance_void

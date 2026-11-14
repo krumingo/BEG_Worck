@@ -139,14 +139,61 @@ export function RevokeDialog({ device, onClose, onDone }) {
   );
 }
 
+// FG-658: correct / void a presence that came from the phone or a late confirmation — Owner/
+// Admin, reason required, Idempotency-Key, the version the console showed (CAS on the server).
+export function PresenceFix({ item, onDone }) {
+  const [reason, setReason] = useState("");
+  const [status, setStatus] = useState(item.status === "Present" ? "Absent" : "Present");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [key] = useState(newKey);
+  const go = async (action) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await API.post(`/sync/presence/${item.id}/fix`, { action, reason, version: item.version || 0,
+        ...(action === "correct" ? { status } : {}) }, { headers: { "Idempotency-Key": `${key}:${action}` } });
+      onDone();
+    } catch (e) {
+      const d = e.response && e.response.data && e.response.data.detail;
+      setError((d && d.message) || "Неуспешно");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const ok = reason.trim().length >= 3 && !busy;
+  return (
+    <div className="mt-2 space-y-2" data-testid="presence-fix">
+      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина (задължително)"
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" data-testid="presence-fix-reason" />
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+          data-testid="presence-fix-status">{ATT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+        <button type="button" disabled={!ok} onClick={() => go("correct")} className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"
+          data-testid="presence-fix-correct">Коригирай</button>
+        <button type="button" disabled={!ok} onClick={() => go("void")} className="rounded-md border border-destructive/50 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-40"
+          data-testid="presence-fix-void">Анулирай</button>
+      </div>
+      {error && <p className="text-xs text-destructive" data-testid="presence-fix-error">{error}</p>}
+    </div>
+  );
+}
+
 export default function SyncConsolePage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [revoking, setRevoking] = useState(null);
+  const [presence, setPresence] = useState([]);
+  const [voided, setVoided] = useState([]);
   const load = useCallback(async () => {
     try {
       setData((await API.get("/sync/console")).data);
       setError(null);
+      // FG-656 / FG-658 — today's presence from the phone, and what was voided today
+      const [p, v] = await Promise.all([API.get("/sync/presence").catch(() => ({ data: [] })),
+        API.get("/sync/voided").catch(() => ({ data: { items: [] } }))]);
+      setPresence(p.data || []);
+      setVoided((v.data && v.data.items) || []);
     } catch (e) {
       setError("Конзолата не може да се зареди");
     }
@@ -189,6 +236,30 @@ export default function SyncConsolePage() {
               <p className="font-medium">{OP_LABELS[x.op_type] || x.op_type} · {LATE_REASONS[x.reason] || x.reason}</p>
               <p className="text-xs text-muted-foreground">{x.author_name} · записано {fmt(x.captured_at)} · получено {fmt(x.received_at)}</p>
               <LateDecision item={x} onDone={load} />
+            </li>
+          ))}</ul>
+        )}
+      </Section>
+
+      <Section icon={Smartphone} title="Присъствия от телефона днес" count={presence.length} testId="console-presence">
+        {!presence.length ? <Empty text="Няма." /> : (
+          <ul className="space-y-2">{presence.map((x) => (
+            <li key={x.id} className="rounded-lg border border-border p-3 text-sm" data-testid="console-presence-item">
+              <p className="font-medium">{x.status} · {x.late_confirmed_by ? "потвърден закъснял" : "от телефона"}</p>
+              <p className="text-xs text-muted-foreground">записано {fmt(x.captured_at)} · версия {x.version || 0}</p>
+              <PresenceFix item={x} onDone={load} />
+            </li>
+          ))}</ul>
+        )}
+      </Section>
+
+      <Section icon={ShieldOff} title="Анулирани днес" count={voided.length} testId="console-voided">
+        {!voided.length ? <Empty text="Няма анулирани записи." /> : (
+          <ul className="space-y-2">{voided.map((x) => (
+            <li key={`${x.kind}-${x.id}`} className="rounded-lg border border-border p-3 text-sm" data-testid="console-voided-item">
+              <p className="font-medium">{x.kind === "attendance" ? "Присъствие" : "Дневен отчет"} · {x.worker_name || x.worker_id} · {x.status_before || "—"}{x.hours != null ? ` · ${x.hours} ч` : ""}</p>
+              <p className="text-xs text-muted-foreground">„{x.reason || "—"}“ · {x.voided_by_name || x.voided_by} · {fmt(x.voided_at)}</p>
+              {x.audit_event_id && <p className="font-mono text-[10px] text-muted-foreground" data-testid="console-voided-event">{x.audit_event_id}</p>}
             </li>
           ))}</ul>
         )}

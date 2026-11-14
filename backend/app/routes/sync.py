@@ -3,6 +3,7 @@
 Everything here is behind the per-tenant feature flag ``offline_queue`` (off by default;
 only the platform administrator switches it). See ``app/services/offline_sync.py``.
 """
+import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, Request
@@ -99,6 +100,40 @@ async def resolve_conflict(conflict_id: str, body: Dict[str, Any] = Body(...),
     key = _require_key(idempotency_key)
     return await sync.resolve_conflict(user, conflict_id, body.get("decision"),
                                        _require_reason(body.get("reason")), body.get("payload"), key)
+
+
+async def _day(user: dict, date: Optional[str]) -> str:
+    if date:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            raise sync.refuse(422, "DATE_INVALID", "Невалидна дата")
+        return date
+    return sync.local_day(sync.now_utc(), await sync.tenant_zone(user))
+
+
+@router.get("/voided")
+async def voided_history(date: Optional[str] = None, user: dict = Depends(require_admin)):
+    """FG-656: read-only history of the presence / reports voided that day (audited read)."""
+    from app.services import attendance_void
+    return await attendance_void.voided_history(sync._tenant(user), user, await _day(user, date))
+
+
+@router.get("/presence")
+async def phone_presence(date: Optional[str] = None, user: dict = Depends(require_admin)):
+    """FG-658: that day's presence that came from the phone or a late confirmation."""
+    from app.services import attendance_void
+    return await attendance_void.console_presence(sync._tenant(user), await _day(user, date))
+
+
+@router.post("/presence/{entry_id}/fix")
+async def fix_phone_presence(entry_id: str, body: Dict[str, Any] = Body(...),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                             user: dict = Depends(require_admin)):
+    """FG-658: void or correct (status) such a presence — reason, Idempotency-Key, version CAS."""
+    from app.services import attendance_void
+    key = _require_key(idempotency_key)
+    return await attendance_void.console_fix(
+        sync._tenant(user), user, entry_id, body.get("action"), _require_reason(body.get("reason")),
+        body.get("version"), key, status=body.get("status"))
 
 
 @router.get("/ops/alarms")

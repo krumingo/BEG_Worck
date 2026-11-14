@@ -116,6 +116,14 @@ class TenantCollection:
             out = {"$and": [out, {"status": {"$ne": HIDDEN_STATUS[self.name]}}]}
         return out
 
+    def voided(self, flt: Optional[Mapping] = None, projection: Optional[Mapping] = None, **kw):
+        """FG-656: the EXPLICIT include-voided read — only the hidden rows (voided presence /
+        report), for a read-only history; the caller audits it. Every other read hides them."""
+        if self.name not in HIDDEN_STATUS:
+            raise TenantScopeViolation("%s has no voided rows" % self.name)
+        return self._raw.find(self._scope.scoped({**dict(flt or {}), "status": HIDDEN_STATUS[self.name]}),
+                              _proj(projection), **kw)
+
     async def tombstone(self, record_id: Any, projection: Optional[Mapping] = None,
                         **kw) -> Optional[Dict]:
         """The tenant's TOMBSTONED record with this id (PRJ-01 / D14), else ``None`` —

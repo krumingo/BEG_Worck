@@ -892,6 +892,13 @@ async def resolve_conflict(user: Dict[str, Any], conflict_id: str, decision: str
     doc = claim["doc"]
     stamp = iso(now_utc())
     if decision == "keep_office":
+        # FG-657: "keep the office's" needs the office record to still exist (a voided one is
+        # gone for every read) — otherwise the conflict stays open
+        if doc.get("entity_type") == "attendance" and doc.get("kind") not in CORRECTION_ONLY_KINDS \
+                and not await tenant.attendance_entries.find_one(
+                    {"org_id": user["org_id"], "id": doc.get("entity_id")}, {"_id": 0, "id": 1}):
+            await _reopen(user, "sync_conflicts", conflict_id)
+            raise refuse(409, "RECORD_GONE", "Офисният запис вече не съществува (анулиран) — решете отново")
         result = {"error_code": "CONFLICT_KEPT_OFFICE", "message": reason}
         status = "kept_office"
         await _settle_receipt(user, doc, REJECTED, result)
