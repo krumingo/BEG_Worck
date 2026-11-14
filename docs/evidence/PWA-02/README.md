@@ -48,7 +48,7 @@
 - Всеки запис/решение → canonical AuditEvent (`source_flow FLOW-037`, `source_channel offline_sync`).
 
 ## Доказателства
-### Браузър срещу реалния backend (`e2e/`) — **18 PASS / 0 FAIL на 1c6ff5b** (`e2e-results.json`, скрийншотите обновени)
+### Браузър срещу реалния backend (`e2e/`) — **18 PASS / 0 FAIL на 4dd947c** (`e2e-results.json`, скрийншотите обновени)
 Реален uvicorn + реален MongoDB 7.0 replica set (локален docker), production build зад `e2e/proxy.js`,
 ST-01 синтетични tenant-и A/B, флагът включен само за tenant A. Предварително инсталиран Chromium.
 Скрийншоти deviceScaleFactor 2: телефон 390×844 (Android), десктоп 1366×860.
@@ -87,11 +87,12 @@ node docs/evidence/PWA-02/e2e/run.js http://localhost:4180 run.json <out>
   идемпотентност, конфликт/закъснял/карантина, решения, реалните handler-и R1–R10; `results.json`.
 - `tests/test_pwa_02_local_day.py` — 25 чисти теста: денят около полунощ по София, двете смени на
   часовото време 2026, разлика в часовника, бъдеще.
-- Гейтове (`gates.txt`): R0 814 · PAY 630 · SEC-01 30 · SEC-02 31 · PM-01 6 (матрицата само през harness-а) ·
-  A1/A2C 0 нарушения · W0 16 = точно наборът на main (`w0_failed.txt`) · Warehouse 44 файла / 1121 (= main).
+- Гейтове на 4dd947c (`gates.txt`): R0 814 · PAY 630 · SEC-01 30 · SEC-02 31 · PM-01 6 (матрицата само през
+  harness-а) · A1 498/0, A2C 247/0 · W0 16 = точно наборът на main (`w0_failed.txt`) · Warehouse 44 файла / 1121 (= main) ·
+  PWA-02 44 + 28.
 
 ### Frontend (jest)
-`src/lib/offline/__tests__/` (queue, sendOrQueue), `PwaBanners`, `DashboardLayout` — 29 suites / 276 passed; build без нови предупреждения.
+`src/lib/offline/__tests__/` (queue, sendOrQueue), `PwaBanners`, `DashboardLayout` — 33 suites / 288 passed; build без нови предупреждения.
 
 ## AUDIT-2 (PR #92 на 614510e) — поправено
 - **PWA92-M1 (блокиращо) — дневен отчет два пъти при срив/повторение.** Преди: черновите се вмъкваха
