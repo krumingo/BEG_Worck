@@ -15,7 +15,7 @@
 | #73 LAB-01 | `a1859bf` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
-| #92 PWA-02 | `614510e` | **FAIL** (PWA92-M1 daily-report crash-retry duplicate; gates green; FLOW Guard pending) | 2026-11-13 |
+| #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `582eb9d` | **PASS** (code `fdd3ec7`; MEDIA91-M1 closed; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-13 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
@@ -6962,3 +6962,58 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 - Foreign device: 409.
 - Cross-tenant revoke: 404, and the console is isolated.
 - Same key in parallel: 1 row, 1 receipt.
+
+## 2026-11-14 — #92 PWA-02 `4140b027` (code `4dd947c6`) — PASS
+
+- **Head:** `4140b027` = `4dd947c6` + `docs/evidence/PWA-02` only (README, gates, e2e results, screenshots).
+- **Merge check:** clean onto main `3863610`; role-union 0; no unclassified collections. `ops_alarms` is classified TECHNICAL.
+
+### Findings — all closed
+
+- **PWA92-M1** (crash-retry duplicate daily report):
+  - Closed by `5d115d2d`: the drafts are inserted already tagged, in one transaction, with a unique partial index.
+  - Probe on `4dd947c6`:
+    - post-write crash: 1 tagged row;
+    - **S7 (same local_id under 2 keys, in parallel): 1 row (old head: 2)**.
+- **PWA92-N1** (a generic exception made the batch 500): closed. The item answers `retry` / `SERVER_ERROR_RETRY`.
+- **PWA92-M2** (A2C 1 violation, `getattr(database, …)`): closed by `41ef3848`. A2C 0/247.
+- **PWA92-M3** (W0 18: `ops_alarms` unclassified + stale A2B inventory): closed by `4dd947c6`. W0 16 = main's set.
+
+### Debt, not blocking
+
+- **PWA92-N2:** a foreign `project_id` on attendance is accepted, as on main (`check_project_writable` returns on not-found).
+- **Observation:** `attendance_void.py:147` / `:248` use `._raw.update_one` with a literal `org_id`, to reach voided (hidden) rows.
+
+### No-delete check
+
+- No `delete_one` / `delete_many` / `find_one_and_delete` on `attendance_entries` or `employee_daily_reports` in `app/` or `scripts/`, directly, via `tenant.collection(…)` or via variables.
+- Main had 4 (`technician.py:504` / `1334` / `1340` / `1414`); all are replaced by void.
+
+### Isolation (probe)
+
+- Daily report into a foreign project: 404, nothing written.
+- Foreign device: 409.
+- Cross-tenant revoke: 404, and the console is isolated.
+- Same key in parallel: 1 row, 1 receipt.
+
+### Gates on `4dd947c6` (real Mongo, warehouse in enforce)
+
+| Gate | Result |
+|---|---|
+| PWA-02 suites | 72 |
+| SEC-01 | 30 |
+| SEC-02 | 31; **harness regen 0 cells** |
+| PM-01 | 6 / 0 skipped; **regen 0 cells** |
+| PAY | 630 |
+| A2C / A1 | 0/247, 0/498 |
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| **warehouse** | **44 / 1121** |
+| jest (on `4140b027`) | 33 / 288 |
+
+- **Not counted:** on `db8a7e33`, a SEC-02 run hit the known pulse "7777" uuid flake (main's probe; FG-567 lives on #73). The re-run passed 31/31.
+
+### Deploy note
+
+- `pwa02_attendance_day_unique` / `pwa02_daily_report_sync_unique` are skipped with an ALARM (`ops_alarms`) if duplicates exist.
+- Run `scripts/pwa02_unique_index_dryrun.py` (read-only) per tenant before deploy.
