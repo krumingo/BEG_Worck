@@ -2450,6 +2450,9 @@ def test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoi
             assert (await approve(c, n["id"])).status_code == 200                       # balance 36
             extra = lambda amt: {}                                                     # noqa: E731
         issued = (await op.invoices.find_one({"id": bill["id"]}))["issue_date"][:10]
+        if path == "expected":            # the expectation arose on the invoice's day (F-84-02 apart)
+            await op.expected_credit_notes.update_one({"id": "ecn-r84"},
+                                                      {"$set": {"created_at": issued + "T09:00:00+00:00"}})
 
         async def refund(amount, **kw):
             return await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
@@ -2473,4 +2476,71 @@ def test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoi
         assert r.status_code == 201, r.text
         pay = await op.finance_payments.find_one({"id": r.json()["payment_id"]})
         assert pay["date"] == today.isoformat()
+    run(monkeypatch, mode, scenario)
+
+
+def test_f84_02_a_refund_is_never_dated_before_its_expected_credit_row(monkeypatch, mode):
+    """Codex F-84-02 / FG-708: a refund against an expectation is dated no earlier than
+    max(invoice date, the day each NAMED row arose — Europe/Sofia). The day before → 422
+    REFUND_DATE_BEFORE_EXPECTED_CREDIT with no payment, no settlement, no AuditEvent; the
+    same day and a later day → 201. A row created 23:30 UTC belongs to the next Sofia day."""
+    async def scenario(c, op):
+        bill = await r84_setup(c, op)
+        issued = datetime.fromisoformat((await op.invoices.find_one({"id": bill["id"]}))["issue_date"][:10])
+        day = lambda n: (issued + timedelta(days=n)).date().isoformat()            # noqa: E731
+        # the row arose on issued+2 in Sofia (23:30 UTC on issued+1)
+        await op.expected_credit_notes.update_one({"id": "ecn-r84"},
+                                                  {"$set": {"created_at": day(1) + "T23:30:00+00:00"}})
+
+        async def snapshot():
+            return (await op.finance_payments.count_documents({}),
+                    (await op.expected_credit_notes.find_one({"id": "ecn-r84"})).get("settlements"),
+                    await op.audit_events.count_documents(
+                        {"action": "finance.invoice.expected_credit_refund_registered"}))
+        before = await snapshot()
+        for d in (day(0), day(1)):                                   # after the invoice, before the row
+            r = await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+                "amount": 10.0, "reason": "връщане", "account_id": BANK_A, "method": "BankTransfer",
+                "date": d, "expected_credit_rows": [{"id": "ecn-r84", "amount": 10.0}]})
+            assert r.status_code == 422 and code(r) == "REFUND_DATE_BEFORE_EXPECTED_CREDIT", (d, r.text)
+            assert r.json()["detail"]["expected_since"] == day(2)
+        assert await snapshot() == before
+        for d in (day(2), day(3)):                                   # the same day, a later day
+            r = await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+                "amount": 10.0, "reason": "връщане", "account_id": BANK_A, "method": "BankTransfer",
+                "date": d, "expected_credit_rows": [{"id": "ecn-r84", "amount": 10.0}]})
+            assert r.status_code == 201, (d, r.text)
+        # FG-708's other checks hold: the future and before-the-invoice still refused
+        r = await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+            "amount": 1.0, "reason": "в", "account_id": BANK_A, "method": "BankTransfer",
+            "date": day(-1), "expected_credit_rows": [{"id": "ecn-r84", "amount": 1.0}]})
+        assert r.status_code == 422 and code(r) == "REFUND_DATE_BEFORE_INVOICE", r.text
+    run(monkeypatch, mode, scenario)
+
+
+def test_f84_02_the_row_date_is_checked_again_inside_the_transaction(monkeypatch, mode):
+    """F-84-02: the check runs again on the rows as the transaction reads them — a row
+    whose date moves after the pre-check (simulated by failing the pre-check open) is
+    still refused, and nothing is written."""
+    from app.routes import invoice_corrections as routes
+    real = routes._check_refund_after_expected
+    calls = []
+
+    async def first_open(tenant, invoice_id, links, refund_date, *, session=None):
+        calls.append(session is not None)
+        if session is None:
+            return None                                                # the pre-check misses it
+        return await real(tenant, invoice_id, links, refund_date, session=session)
+    monkeypatch.setattr(routes, "_check_refund_after_expected", first_open)
+
+    async def scenario(c, op):
+        bill = await r84_setup(c, op)
+        tomorrow_row = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+        await op.expected_credit_notes.update_one({"id": "ecn-r84"}, {"$set": {"created_at": tomorrow_row}})
+        before = await op.finance_payments.count_documents({})
+        r = await r84_refund(c, bill, [{"id": "ecn-r84", "amount": 10.0}], 10.0)   # today < the row's day
+        assert r.status_code == 422 and code(r) == "REFUND_DATE_BEFORE_EXPECTED_CREDIT", r.text
+        assert await op.finance_payments.count_documents({}) == before
+        assert (await op.expected_credit_notes.find_one({"id": "ecn-r84"})).get("settlements") is None
+        assert calls[:1] == [False] and True in calls                    # pre-check, then in the transaction
     run(monkeypatch, mode, scenario)

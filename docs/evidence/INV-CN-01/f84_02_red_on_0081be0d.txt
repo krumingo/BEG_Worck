@@ -1,0 +1,16 @@
+# F-84-02 red proof: tests/test_inv_cn_01_credit_notes.py -k f84_02 with app/ at 0081be0d, real Mongo rs0.
+# The first test is the behaviour red (a refund dated before the row → 201). The second fails structurally (the in-transaction helper does not exist at 0081be0d).
+E           AssertionError: ('2026-11-08', '{"invoice":{"awaiting_credit_note":true,"counterparty_address":null,"counterparty_eik":"175074752","co...55.991093+00:00","vat_amount":40.0,"vat_percent":20.0},"ok":true,"payment_id":"95a2a3f2-d255-5398-820e-cdebe33a594c"}')
+E           assert (201 == 422)
+E           AssertionError: ('2026-11-08', '{"invoice":{"awaiting_credit_note":true,"counterparty_address":null,"counterparty_eik":"175074752","co...56.722507+00:00","vat_amount":40.0,"vat_percent":20.0},"ok":true,"payment_id":"f017f0e6-fab4-5253-b2df-1e935dd2719b"}')
+E           assert (201 == 422)
+E           AssertionError: ('2026-11-08', '{"invoice":{"awaiting_credit_note":true,"counterparty_address":null,"counterparty_eik":"175074752","co...57.451239+00:00","vat_amount":40.0,"vat_percent":20.0},"ok":true,"payment_id":"68a6b945-eba8-5b6e-8101-e5f1c5e8afdc"}')
+E           assert (201 == 422)
+E       AttributeError: module 'app.routes.invoice_corrections' has no attribute '_check_refund_after_expected'
+E       AttributeError: module 'app.routes.invoice_corrections' has no attribute '_check_refund_after_expected'
+E       AttributeError: module 'app.routes.invoice_corrections' has no attribute '_check_refund_after_expected'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_02_a_refund_is_never_dated_before_its_expected_credit_row[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_02_a_refund_is_never_dated_before_its_expected_credit_row[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_02_a_refund_is_never_dated_before_its_expected_credit_row[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_02_the_row_date_is_checked_again_inside_the_transaction[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_02_the_row_date_is_checked_again_inside_the_transaction[shadow]

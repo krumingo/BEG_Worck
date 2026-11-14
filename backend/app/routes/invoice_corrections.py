@@ -844,6 +844,8 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
         tenant = fin._tenant(user)
         invoice = _correctable(await tenant.invoices.get(invoice_id, {"_id": 0}))
         refund_date = _refund_date(body.get("date"), invoice)                   # FG-708
+        if links is not None:                                                     # F-84-02, before the write
+            await _check_refund_after_expected(tenant, invoice_id, links, refund_date)
         method = body.get("method") or "BankTransfer"
         account_id = await fin._resolve_payment_account(tenant, method, body.get("account_id"))
         if not await tenant.financial_accounts.get(account_id):
@@ -889,6 +891,39 @@ REFUND_TZ = ZoneInfo("Europe/Sofia")
 REFUND_DATE_INVALID = "REFUND_DATE_INVALID"
 REFUND_DATE_IN_FUTURE = "REFUND_DATE_IN_FUTURE"
 REFUND_DATE_BEFORE_INVOICE = "REFUND_DATE_BEFORE_INVOICE"
+REFUND_DATE_BEFORE_EXPECTED_CREDIT = "REFUND_DATE_BEFORE_EXPECTED_CREDIT"
+
+
+def _row_date(row: dict):
+    """The calendar day (Europe/Sofia) an expected_credit_notes row arose — from its
+    ``created_at``; None when it cannot be read."""
+    try:
+        at = datetime.fromisoformat(str(row.get("created_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return at.astimezone(REFUND_TZ).date()
+
+
+async def _check_refund_after_expected(tenant, invoice_id: str, links, refund_date: str, *, session=None):
+    """F-84-02: a refund against expected credit rows is never dated before any named row
+    arose (FG-708: not before the invoice AND not before each named expectation). Run
+    before the write and again inside the transaction; a row whose date cannot be read
+    is refused too (fail closed)."""
+    value = date.fromisoformat(refund_date)
+    for link in links:
+        row = await tenant.expected_credit_notes.find_one(
+            {"id": link["id"], "invoice_id": invoice_id}, {"_id": 0, "id": 1, "created_at": 1},
+            session=session)
+        if row is None:
+            continue                     # unknown row → EXPECTED_CREDIT_LINK_INVALID later
+        arose = _row_date(row)
+        if arose is None or value < arose:
+            raise ic.unprocessable(REFUND_DATE_BEFORE_EXPECTED_CREDIT,
+                                   "Датата на връщането е преди възникването на очакваното кредитно известие",
+                                   expected_credit_note_id=row["id"],
+                                   expected_since=arose.isoformat() if arose else None)
 
 
 def _refund_date(raw, invoice: dict) -> str:
@@ -945,6 +980,8 @@ async def _register_expected_refund(tenant, user, current, links, amount, reason
     invoice_id = current["id"]
     if current.get("direction") != "Received":
         raise ic.unprocessable(ic.EXPECTED_LINK_INVALID, "Връщане срещу очаквано известие е само по входяща фактура")
+    # F-84-02, again inside the transaction (the rows as this transaction reads them)
+    await _check_refund_after_expected(tenant, invoice_id, links, refund_date, session=session)
     coverage = await ic.expected_coverage(tenant, invoice_id, session=session)
     for link in links:
         row = coverage.get(link["id"])
