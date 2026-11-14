@@ -1,9 +1,9 @@
 """
 MEDIA-SEC-01 — the media rules that are a BUSINESS decision, in one place.
 
-FLOW Guard pass 46: three questions are open with Krum (who sees avatars; an Owner's own
-retire request; restoring a retired file). Until he answers, the orchestrator's interim
-choices apply. Each one is a single constant here, so a later decision changes one line
+FLOW Guard pass 46: three questions were open with Krum (who sees avatars; an Owner's own
+retire request; restoring a retired file). Krum R88 (14.11.2026) decided avatars (the whole
+firm) and restoring (Owner only); the remaining interim choices are the orchestrator's. Each one is a single constant here, so a later decision changes one line
 (plus its test), not the routes.
 
 R83(2) — the Owner-approval flow is an INTERIM substitute for the canonical Approval
@@ -21,8 +21,12 @@ RETIRE_REQUEST_ROLES = frozenset({"Admin"})
 #: … and an Owner approves or rejects it (never the requester — second-person check)
 RETIRE_APPROVER_ROLES = frozenset({"Owner"})
 
-#: restoring a retired file — interim: not offered (open question to Krum)
-RESTORE_ENABLED = False
+#: Krum R88 (14.11.2026, FG-558): a retired file CAN be restored — by the Owner only, with
+#: a reason and an AuditEvent (``POST /api/media/{id}/restore``)
+RESTORE_ENABLED = True
+RESTORE_ROLES = frozenset({"Owner"})
+#: who sees the list of retired files (FG-558: retired metadata is Owner/Admin only)
+RETIRED_LIST_ROLES = frozenset({"Owner", "Admin"})
 
 #: R83(1) / FG-575: company roles that never upload a file, at ANY upload entry point
 UPLOAD_DENIED_ROLES = frozenset({"Viewer"})

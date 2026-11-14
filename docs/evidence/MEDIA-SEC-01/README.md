@@ -31,7 +31,7 @@ Branch `claude/media-sec-01` from main `3863610`. Canon: CLAUDE.md §2 rules 9 a
 | FG-578 | Backfill: only files UPLOADED as profile (no `linked_at`); `--approved-by` = an active Owner's **user id** (the run is that Owner's tenant only); every `update_one` checked (`conflict` → transaction rolled back); `--revert` mode; dry run default. |
 | minor | `uses` (record ids) only for Owner/Admin (`file_holders.redact`; others get `use_kinds` + `uses_count`); `hr.py` / `auth.py` avatar write + `user.avatar.change` in ONE transaction; `/media/link` writes AuditEvent `media.file.link` (FG-544). |
 
-**Interim decisions, one constant each** (`backend/app/services/media_policy.py`), until Krum answers: avatars visible to everyone in the firm (`AVATAR_VISIBILITY`); an **Admin** files the retire request and an **Owner** approves (`RETIRE_REQUEST_ROLES` / `RETIRE_APPROVER_ROLES`); no restore (`RESTORE_ENABLED = False`).
+**Interim decisions, one constant each** (`backend/app/services/media_policy.py`), until Krum answers: avatars visible to everyone in the firm (`AVATAR_VISIBILITY`); an **Admin** files the retire request and an **Owner** approves (`RETIRE_REQUEST_ROLES` / `RETIRE_APPROVER_ROLES`); no restore (`RESTORE_ENABLED = False`). **Superseded by Krum R88 (14.11.2026, canon 01845564):** avatars stay visible to the whole firm; the Owner can restore a retired file (below).
 
 **The Owner-approval flow is INTERIM** — debt to **W0-07** (canonical Approval runtime); it must not become a second Approval source of truth. Each request carries `interim_until: "W0-07"`.
 
@@ -73,6 +73,17 @@ FG-607, FG-608, FG-595, FG-596 resolved by FLOW Guard; the own-ref rule proven.
 
 Red-before: `red_pass49_on_700629f.txt` — 3 failed (2 refusal events on a replay; the 1st file's marker leaked; another user's movement skipped the marker). `red_pass48_on_cb19aeb.txt` regenerated with the same tests: 7 failed.
 
+## Krum R88 (14.11.2026, FG-558) — restoring a retired file
+
+Canon: commit `01845564` (RECOVERY_EXECUTION_PROPOSAL, Р88): „Изваден от употреба файл може да бъде върнат само от Собственика, с причина и AuditEvent.“
+
+| Route | Rule |
+|---|---|
+| `POST /api/media/{id}/restore` | Owner only (`media_policy.RESTORE_ROLES`; Admin, Technician, Viewer, SiteManager, Accountant → 403 `RESTORE_NOT_ALLOWED`, nothing written); `Idempotency-Key` (428; a replay returns the same answer); a reason (missing / blank → **422** `REASON_REQUIRED` as the orchestrator specified — the retire routes answer 400 for the same; too long / control characters → 400). One transaction: CAS on "still retired AND the `ref_version` read" (else 409 `MEDIA_CHANGED`), `ref_version` +1, the retire fields move into `retire_history` (with `restored_at/by`, `restore_reason`) — nothing is lost; `status` returns to what an upload writes (none); AuditEvent `media.file.restored` (actor, reason, the retire state before, the ref_version change). A file that is not retired → 409 `MEDIA_NOT_RETIRED`; another tenant's id → 404. The original never left the disk; links, context and the avatar flag are untouched. |
+| `GET /api/media-retired` | The tenant's retired files, newest first — Owner/Admin (FG-558); others 403. Each row has `can_restore` (true for the Owner only) and, for the Owner, the restore action (`POST /api/media/{id}/restore`, needs reason + Idempotency-Key). |
+
+Tests: `test_r88_*` (Owner restores + replay + audit + history; Admin/Technician/Viewer/SiteManager/Accountant 403; Admin sees the list without the action; another firm sees nothing / 404; no key 428; no or blank reason 422). Red before: `red_r88_on_582eb9d.txt` — 3 failed.
+
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
 Until it is applied, a legacy avatar (uploaded before MEDIA-SEC-01, no `avatar` flag) shows initials instead of the photo.
@@ -102,7 +113,8 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 * **FG-543, FG-545, FG-546** — out of scope by instruction (FG-545 = the FLOW-029 archive model, Wave 2).
 * `MissingSMRPage.js:712` still shows attachments with a plain `<img src=".../api/media/file/...">`. That route already required a login before this change, so these images most likely don't load today. The same `AuthImage` fix applies.
 * ~~`EmployeesPage.js` new-employee avatar with `context_type="avatar"`~~ — fixed in pass 47 (FG-590a).
-* Retired media has no "restore" path yet (same as retired project photos) — open question to Krum (`media_policy.RESTORE_ENABLED`).
+* ~~Retired media has no "restore" path~~ — done by R88 (below). Retired **project photos** still have none (a separate route, not in R88's scope).
+* The retired list and the restore are API only — no frontend screen yet (like the retire request / Owner approval).
 * **W0-07**: the interim Owner-approval flow (`media_retire_requests`) moves into the canonical Approval runtime.
 * **FG-588 option (a) — debt**: a pre-commit hook in the (locked) warehouse service so the claim runs INSIDE `service.execute`'s transaction; needs Krum. Option 4 (pending-holder marker) closes the proven race meanwhile.
 * **OCR from-media (`ocr_invoice.py` from-media) — debt (FG-597)**: claim-then-write outside one transaction; unreachable today (pre-existing 500: `create_ocr_intake` calls `extract_invoice_text(media_id=...)` without a tenant). Before that 500 is fixed, the route gets the pending-holder pattern (or the claim inside the write's transaction).
@@ -117,4 +129,5 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 ## Resolved / waiting
 
 * **FG-557** — RESOLVED (FLOW Guard pass 46).
-* Waiting for Krum: who sees avatars; an Owner's own retire request; restoring a retired file — each one constant in `media_policy.py`.
+* Decided by Krum R88: who sees avatars (the whole firm), restoring (Owner only), the backfill (only with Krum's personal "да" in the conversation; dry run stays the default, never run).
+* Still with Krum: an Owner's own retire request; retire-request expiry — today's behaviour is kept.

@@ -1255,6 +1255,78 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         p47["fg588"] = g
         obs["pass47"] = p47
 
+        # ─────────────────────────────── Krum R88 (FG-558) — the Owner restores a retired file
+        r88: Dict[str, Any] = {}
+        rm = upload()
+        r88["retire"] = call("DELETE", "/api/media/%s" % rm["id"], role="technician", key="auto",
+                             json={"reason": "грешна снимка"})["status"]
+        before_row = media_row(rm["id"])
+        before_ver = before_row.get("ref_version")
+
+        def listed(role, tkey="A"):
+            r = call("GET", "/api/media-retired", role=role, tkey=tkey)
+            rows = [x for x in (r["body"] or []) if isinstance(x, dict) and x.get("id") == rm["id"]] \
+                if isinstance(r["body"], list) else []
+            return {"status": r["status"], "rows": rows}
+        lo, la = listed("owner"), listed("admin")
+        r88["list_owner"] = {"status": lo["status"], "found": len(lo["rows"]),
+                             "can_restore": [x.get("can_restore") for x in lo["rows"]],
+                             "restore": [x.get("restore") for x in lo["rows"]],
+                             "reason": [x.get("retired_reason") for x in lo["rows"]]}
+        r88["list_admin"] = {"status": la["status"], "found": len(la["rows"]),
+                             "can_restore": [x.get("can_restore") for x in la["rows"]],
+                             "has_restore_link": ["restore" in x for x in la["rows"]]}
+        r88["list_technician"] = listed("technician")["status"]
+        r88["list_viewer"] = listed("viewer")["status"]
+        r88["list_owner_b"] = listed("owner", "B")
+        url = "/api/media/%s/restore" % rm["id"]
+        r88["denied"] = {role: call("POST", url, role=role, key="auto",
+                                    json={"reason": "върни"})["status"]
+                         for role in ("admin", "technician", "viewer", "requester", "accountant")}
+        r88["no_key"] = call("POST", url, json={"reason": "върни"})["status"]
+        nr = call("POST", url, key="auto", json={})
+        r88["no_reason"] = [nr["status"], nr["error_code"]]
+        br = call("POST", url, key="auto", json={"reason": "   "})
+        r88["blank_reason"] = [br["status"], br["error_code"]]
+        r88["other_tenant"] = call("POST", url, role="owner", tkey="B", key="auto",
+                                   json={"reason": "върни"})["status"]
+        r88["still_retired"] = media_row(rm["id"]).get("status")
+        r88["events_before"] = len(events(rm["id"], "media.file.restored"))
+        k88 = uuid.uuid4().hex
+        ok = call("POST", url, key=k88, json={"reason": "снимката е нужна за отчета"})
+        rep = call("POST", url, key=k88, json={"reason": "снимката е нужна за отчета"})
+        row = media_row(rm["id"])
+        ev = q(lambda: op_db.audit_events.find({"entity_id": rm["id"],
+                                                "action": "media.file.restored"},
+                                               {"_id": 0}).to_list(None))
+        r88["restore"] = {"status": ok["status"], "body": ok["body"],
+                          "replay_same": rep["status"] == 200 and rep["body"] == ok["body"]}
+        r88["row"] = {"status": row.get("status"),
+                      "retired_fields_left": [f for f in ("retired_reason", "retired_at", "retired_by")
+                                              if f in row],
+                      "history": [{"retired_reason": h.get("retired_reason"),
+                                   "restore_reason": h.get("restore_reason"),
+                                   "restored_by_owner": h.get("restored_by") == users_a["owner"]["id"]}
+                                  for h in row.get("retire_history") or []],
+                      "ref_version_up": (row.get("ref_version") or 0) == (before_ver or 0) + 1,
+                      "stored_kept": bool(row.get("stored_filename"))
+                      and row.get("stored_filename") == before_row.get("stored_filename")
+                      and row.get("context_type") == before_row.get("context_type")}
+        r88["event"] = {"count": len(ev),
+                        "actor_is_owner": [e.get("actor_id") == users_a["owner"]["id"] for e in ev],
+                        "reason": [e.get("reason") for e in ev],
+                        "before_reason": [((e.get("structured_diff") or {}).get("before") or {})
+                                          .get("retired_reason") for e in ev],
+                        "source_flow": [e.get("source_flow") for e in ev]}
+        r88["after"] = {"tech_get": call("GET", "/api/media/%s" % rm["id"], role="technician")["status"],
+                        "in_list": rm["id"] in [x.get("id") for x in
+                                                (call("GET", "/api/media")["body"] or [])
+                                                if isinstance(x, dict)],
+                        "retired_list": len(listed("owner")["rows"])}
+        again = call("POST", url, key="auto", json={"reason": "пак"})
+        r88["again"] = [again["status"], again["error_code"]]
+        obs["r88"] = r88
+
         # ─────────────────────────────────────────────── FG-541 — project photos
         other = pid("A", "other")
         own_up = call("POST", "/api/projects/%s/photos" % other,
@@ -1877,6 +1949,49 @@ def test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused(obs
     assert r["fail"]["status"] == 400 and r["fail"]["retire_during"] == "MEDIA_IN_USE"
     assert r["fail"]["pending_after"] == 0 and r["fail"]["media_status"] is None
     assert r["fail_delete_after"] == 200
+
+
+@real
+def test_r88_the_owner_lists_and_restores_a_retired_file(obs):
+    r = obs["r88"]
+    assert r["retire"] == 200
+    assert r["list_owner"] == {"status": 200, "found": 1, "can_restore": [True],
+                               "restore": [{"method": "POST",
+                                            "path": "/api/media/%s/restore" % r["restore"]["body"]["restored"],
+                                            "requires": ["reason", "Idempotency-Key"]}],
+                               "reason": ["грешна снимка"]}
+    assert r["restore"]["status"] == 200 and r["restore"]["replay_same"] is True
+    assert r["row"] == {"status": None, "retired_fields_left": [],
+                        "history": [{"retired_reason": "грешна снимка",
+                                     "restore_reason": "снимката е нужна за отчета",
+                                     "restored_by_owner": True}],
+                        "ref_version_up": True, "stored_kept": True}
+    assert r["event"] == {"count": 1, "actor_is_owner": [True],
+                          "reason": ["снимката е нужна за отчета"],
+                          "before_reason": ["грешна снимка"], "source_flow": ["FLOW-029"]}
+    assert r["after"] == {"tech_get": 200, "in_list": True, "retired_list": 0}
+    assert r["again"] == [409, "MEDIA_NOT_RETIRED"]
+
+
+@real
+def test_r88_only_the_owner_restores_and_admin_sees_the_list_without_the_action(obs):
+    r = obs["r88"]
+    assert r["denied"] == {"admin": 403, "technician": 403, "viewer": 403, "requester": 403,
+                           "accountant": 403}
+    assert r["list_admin"] == {"status": 200, "found": 1, "can_restore": [False],
+                               "has_restore_link": [False]}
+    assert r["list_technician"] == 403 and r["list_viewer"] == 403
+    assert r["list_owner_b"] == {"status": 200, "rows": []}       # another firm sees nothing
+    assert r["other_tenant"] == 404
+    assert r["still_retired"] == "retired" and r["events_before"] == 0   # refusals wrote nothing
+
+
+@real
+def test_r88_restore_needs_a_key_and_a_reason(obs):
+    r = obs["r88"]
+    assert r["no_key"] == 428
+    assert r["no_reason"] == [422, "REASON_REQUIRED"]
+    assert r["blank_reason"] == [422, "REASON_REQUIRED"]
 
 
 @real

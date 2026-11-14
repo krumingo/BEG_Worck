@@ -813,6 +813,100 @@ async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
     return [_request_view(r, user) for r in rows]
 
 
+#: the fields a retire writes on the row — on restore they move into ``retire_history``
+_RETIRE_FIELDS = ("retired_reason", "retired_at", "retired_by", "retired_in_use", "retired_uses",
+                  "retire_request_id", "retire_approved_by")
+
+
+def _restore_reason(value) -> str:
+    """R88: a restore states why — missing / blank → 422 ``REASON_REQUIRED`` (the
+    orchestrator's contract for this route); too long / control characters → 400 (the
+    PAY-01-C01 reason rule every lifecycle reason follows)."""
+    reason = value.strip() if isinstance(value, str) else ""
+    if not reason:
+        raise lifecycle.refuse(422, "REASON_REQUIRED", "Посочете причина за връщането")
+    from app.services.money_amount import check_reason
+    check_reason(reason)
+    return reason
+
+
+@router.post("/media/{media_id}/restore")
+async def restore_media(media_id: str, body: Optional[dict] = Body(None),
+                        user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Krum R88 (FG-558): the Owner restores a retired file.
+
+    Owner only (``media_policy.RESTORE_ROLES``; everyone else 403, nothing written), an
+    ``Idempotency-Key`` (428; a replay returns the same answer) and a reason (422). One
+    transaction: a CAS on "still retired AND the ``ref_version`` read" (409
+    ``MEDIA_CHANGED`` otherwise), ``ref_version`` +1, the retire fields move into
+    ``retire_history`` (nothing is lost), ``status`` goes back to what an upload writes
+    (none), and the canonical AuditEvent ``media.file.restored``. The original never left
+    the disk; links, avatar flag and context are untouched."""
+    from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES
+    if not RESTORE_ENABLED or user.get("role") not in RESTORE_ROLES:
+        raise lifecycle.refuse(403, "RESTORE_NOT_ALLOWED",
+                               "Само Собственикът може да върне файл")
+    key = lifecycle.require_key(idempotency_key)
+    why = _restore_reason((body or {}).get("reason"))
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+
+    async def work(session):
+        media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id},
+                                                  {"_id": 0}, session=session)
+        if not media:
+            raise HTTPException(status_code=404, detail="Media file not found")
+        if media.get("status") != MEDIA_RETIRED:
+            raise lifecycle.refuse(409, "MEDIA_NOT_RETIRED", "Файлът не е изваден от употреба")
+        now = lifecycle.now_iso()
+        entry = {f: media.get(f) for f in _RETIRE_FIELDS if f in media}
+        entry.update({"restored_at": now, "restored_by": user["id"], "restore_reason": why})
+        res = await tenant.media_files.update_one(
+            {"id": media_id, "org_id": org_id, "status": MEDIA_RETIRED,
+             "ref_version": media.get("ref_version")},
+            {"$unset": dict({"status": ""}, **{f: "" for f in _RETIRE_FIELDS}),
+             "$push": {"retire_history": entry}, "$inc": {"ref_version": 1}},
+            session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "MEDIA_CHANGED", "Файлът току-що се промени")
+        await lifecycle.audit(session, user, action="media.file.restored",
+                              entity_type="media_file", entity_id=media_id, reason=why,
+                              key=key, source_flow="FLOW-029",
+                              diff={"before": {"status": MEDIA_RETIRED,
+                                               **{f: media.get(f) for f in _RETIRE_FIELDS
+                                                  if f in media}},
+                                    "after": {"status": "active"},
+                                    "ref_version": {"before": media.get("ref_version"),
+                                                    "after": (media.get("ref_version") or 0) + 1},
+                                    "stored_filename": media.get("stored_filename")})
+        return {"ok": True, "restored": media_id}
+
+    return await lifecycle.keyed_transaction(user, key, "media.file.restored",
+                                             {"media_id": media_id, "reason": why}, work)
+
+
+@router.get("/media-retired")
+async def list_retired_media(user: dict = Depends(get_current_user)):
+    """The retired files of the tenant (FG-558: Owner/Admin only), newest first. Each row
+    says whether THIS user may restore it (R88: the Owner) and how."""
+    from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES, RETIRED_LIST_ROLES
+    if user.get("role") not in RETIRED_LIST_ROLES:
+        raise HTTPException(status_code=403, detail="Access denied")
+    rows = await _tenant(user).media_files.find(
+        {"org_id": user["org_id"], "status": MEDIA_RETIRED},
+        {"_id": 0, "id": 1, "filename": 1, "stored_filename": 1, "content_type": 1,
+         "context_type": 1, "context_id": 1, "owner_user_id": 1, "created_at": 1,
+         **{f: 1 for f in _RETIRE_FIELDS}}).sort("retired_at", -1).to_list(200)
+    may = RESTORE_ENABLED and user.get("role") in RESTORE_ROLES
+    for r in rows:
+        r["can_restore"] = may
+        if may:
+            r["restore"] = {"method": "POST", "path": "/api/media/%s/restore" % r["id"],
+                            "requires": ["reason", "Idempotency-Key"]}
+    return rows
+
+
 @router.post("/media/{media_id}/pending-holders/{marker_id}/release")
 async def release_stale_pending_holder(media_id: str, marker_id: str,
                                        user: dict = Depends(get_current_user),

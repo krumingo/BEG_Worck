@@ -1,0 +1,16 @@
+# MEDIA-SEC-01 Krum R88 (FG-558) — the Owner restores a retired file — the NEW tests/test_media_sec_01.py run against 582eb9d (no restore, no retired list), real Mongo rs0
+E       KeyError: 'restored'
+E       AssertionError: assert {'accountant'...an': 404, ...} == {'accountant'...an': 403, ...}
+E         
+E         Differing items:
+E         {'requester': 404} != {'requester': 403}
+E         {'accountant': 404} != {'accountant': 403}
+E         {'viewer': 404} != {'viewer': 403}
+E         {'technician': 404} != {'technician': 403}
+E         {'admin': 404} != {'admin': 403}
+E         Use -v to get more diff
+E       assert 404 == 428
+FAILED tests/test_media_sec_01.py::test_r88_the_owner_lists_and_restores_a_retired_file
+FAILED tests/test_media_sec_01.py::test_r88_only_the_owner_restores_and_admin_sees_the_list_without_the_action
+FAILED tests/test_media_sec_01.py::test_r88_restore_needs_a_key_and_a_reason
+3 failed, 55 passed in 12.17s
