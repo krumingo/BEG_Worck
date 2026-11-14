@@ -1558,16 +1558,9 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "system_role": u.get("role", ""),
         })
     
-    # Calculate total paid salaries for this project (from payroll if exists)
-    total_salaries_paid = 0
-    try:
-        payroll_entries = await tenant.payroll_entries.find(
-            {"project_id": project_id, "org_id": org_id, "status": "Paid"},
-            {"_id": 0, "net_pay": 1}
-        ).to_list(1000)
-        total_salaries_paid = sum(e.get("net_pay", 0) for e in payroll_entries)
-    except Exception as e:
-        logger.warning(f"projects.py calc error: {e}")
+    # FG-506: the salaries PAID for this project (a cash fact for the cash balance card) from
+    # the ONE pay-run ledger (paid pay runs, allocated per project) — not legacy payroll_entries
+    total_salaries_paid = (await paid_labor_for_projects_v3(org_id, [project_id]))["gross_labor"]
     
     card_team = {
         "members": team_list,
@@ -2359,7 +2352,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["total_hours"] += float(entry.get("hours_worked", 0))
                 wd["report_count"] += 1
 
-    # C) From work_sessions (approved labor)
+    # C) From work_sessions (presence) — R62 (FG-421): the MONEY is THE labor cost below
     sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "started_at": 1,
@@ -2370,7 +2363,6 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
         if not wid:
             continue
         wd = worker_data[wid]
-        wd["total_earned"] += float(s.get("labor_cost", 0))
         d = (s.get("started_at") or "")[:10]
         if d:
             wd["days"].add(d)
@@ -2380,6 +2372,12 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["last_date"] = d
         if s.get("worker_name"):
             wd["name"] = s["worker_name"]
+
+    # R62 (FG-421): what a worker earned on the project = THE labor cost's lines of him
+    from app.services.labor_cost import project_labor_cost
+    for rec in (await project_labor_cost(org_id, project_id))["lines"]:
+        if rec.get("worker_id"):
+            worker_data[rec["worker_id"]]["total_earned"] += float(rec.get("amount") or 0)
 
     # D) From attendance_entries
     att_entries = await tenant.attendance_entries.find(
@@ -2443,16 +2441,45 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
 
 # ── Parent aggregate (own + children, read-only) ──────────────────
 
+AGGREGATE_MONEY_BLOCKS = ("invoices", "pnl", "paid_labor", "materials")
+
+
+def _aggregate_without_money(out: dict) -> dict:
+    """FG-566 (R20): the aggregate for a caller without the finance right — counts and hours
+    only: no invoices, P&L, paid labor, materials or labor cost (top level and per child)."""
+    for blk in (out, *[c for c in out.get("children") or [] if isinstance(c, dict)]):
+        for k in AGGREGATE_MONEY_BLOCKS:
+            blk.pop(k, None)
+        work = blk.get("work")
+        if isinstance(work, dict):
+            for part in (work, *[v for v in work.values() if isinstance(v, dict)]):
+                part.pop("labor_cost", None)
+    return out
+
+
 @router.get("/projects/{project_id}/aggregate")
-async def get_project_aggregate(project_id: str, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance(keep=("total",))   # FG-566 (R20-5M): plus the explicit view below
+async def get_project_aggregate(project_id: str, request: Request, user: dict = Depends(get_current_user)):
     """Read-only aggregate: own data + all children data (a child includes its warranty
-    sub-projects — R60, FG-280)."""
+    sub-projects — R60, FG-280). FG-566 (R20 / SEC-02): finance roles see everything; any
+    other caller only a project he is a CURRENT member of, and no money."""
+    from app.permissions.money_write import money_values_visible
     tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if not await tenant.projects.get(project_id, {"_id": 0, "id": 1}):
         # PRJ-01 / FG-280: another tenant's (or an unknown) project is not found here
         raise HTTPException(status_code=404, detail="Project not found")
+    sees_money = await money_values_visible(request, user)
+    if not sees_money and not await project_team.is_member(_team(user), user["id"], project_id):
+        # FG-566: object visibility — a non-finance caller only on a project he works on
+        raise HTTPException(status_code=403, detail="Access denied")
+    out = await _project_aggregate(tenant, org_id, project_id, today, user)
+    return out if sees_money else _aggregate_without_money(out)
+
+
+async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, user: dict) -> dict:
+    """The full aggregate (money included) — callers apply FG-566's view."""
 
     # Get all project IDs (parent + children)
     children = await tenant.projects.find(
@@ -2511,15 +2538,23 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     async def count_invoices(pids):
         invs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": pids}, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-            {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
-        ).to_list(500)
+            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1,
+             "advance_proforma_ids": 1},
+        ).to_list(5000)
+        # R86 (FG-565): revenue = the payments RECEIVED (FLOW-006 ledger), net — the P&L
+        # report's own rule; the issued (invoiced) amount is a separate field
+        from app.services.project_pnl import received_revenue
+        rec = await received_revenue(tenant, org_id, pids, invoices=invs)
+        issued_net = rec["invoiced_net"]
         # Proformas are future receivables, not P&L revenue — kept out of invoiced/paid
         real = [i for i in invs if (i.get("kind") or "Invoice") != "Proforma"]
         profs = [i for i in invs if (i.get("kind") or "Invoice") == "Proforma"]
         count = len(real)
-        invoiced = round(sum(i.get("total", 0) for i in real if i.get("status") not in ["Draft", "Cancelled"]), 2)
-        paid = round(sum(i.get("paid_amount", 0) or 0 for i in real), 2)
-        unpaid = round(invoiced - paid, 2)
+        # FG-695 / FG-698 (R86): invoiced and "чака плащане" by the shared rule (every issued
+        # status, Overdue included; no proforma / credit note; a named advance reduces it)
+        invoiced = rec["invoiced_gross"]
+        paid = round(sum(i.get("paid_amount", 0) or 0 for i in real if (i.get("kind") or "Invoice") != "CreditNote"), 2)
+        unpaid = rec["awaiting_payment_gross"]
         overdue = round(sum(
             (i.get("total", 0) - (i.get("paid_amount") or 0))
             for i in real
@@ -2530,10 +2565,15 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
             (i.get("total", 0) - (i.get("paid_amount") or 0))
             for i in profs if i.get("status") != "Cancelled"
         ), 2)
-        return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue, "proforma_future": proforma_future}
+        return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue,
+                "proforma_future": proforma_future, "issued_net": issued_net,
+                "received_net": rec["received_net"], "awaiting_payment_net": rec["awaiting_payment_net"]}
 
+    from app.services.project_pnl import REVENUE_BASIS as rev_basis
     own_inv = await count_invoices([project_id])
-    child_inv = await count_invoices(subtree_ids) if subtree_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}
+    child_inv = await count_invoices(subtree_ids) if subtree_ids else {
+        "count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0, "issued_net": 0,
+        "received_net": 0, "awaiting_payment_net": 0}
     for c in children:
         per_child[c["id"]]["invoices"] = await count_invoices(group[c["id"]])
 
@@ -2561,15 +2601,20 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     for c in children:
         per_child[c["id"]]["reports"] = await count_report_hours(group[c["id"]])
 
-    # ── Work Sessions (часове + labor cost) ──
+    # ── Work Sessions (часове) + labor cost — R62 (FG-421): the cost is THE labor cost of
+    # each project (approved reports + Owner-approved manual rows), not the sessions
+    from app.services.labor_cost import project_labor_cost
+
     async def count_work(pids):
         sessions = await tenant.work_sessions.find(
             {"org_id": org_id, "site_id": {"$in": pids}},
-            {"_id": 0, "duration_hours": 1, "labor_cost": 1},
+            {"_id": 0, "duration_hours": 1},
         ).to_list(5000)
         hours = round(sum(s.get("duration_hours", 0) for s in sessions), 1)
-        cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
-        return {"hours": hours, "labor_cost": cost, "sessions": len(sessions)}
+        cost = 0.0
+        for pid_ in pids:
+            cost += (await project_labor_cost(org_id, pid_))["total"]
+        return {"hours": hours, "labor_cost": round(cost, 2), "sessions": len(sessions)}
 
     own_work = await count_work([project_id])
     child_work = await count_work(subtree_ids) if subtree_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}
@@ -2647,14 +2692,25 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
             "own": own_paid, "children": child_paid,
             "total": {"gross_labor": round(own_paid["gross_labor"] + child_paid["gross_labor"], 2)},
         },
+        # FG-505 (R62): the P&L labor is THE approved labor cost (project_labor_cost, the
+        # "work" block) — not the PAID labor (a cash fact, shown apart as paid_labor)
+        # R86 (Krum 14.11.2026, FG-565; changes R80): revenue = only the payments RECEIVED
+        # against issued documents (FLOW-006 ledger), net — the same rule as the P&L report.
+        # The issued amount and "фактурирано, чака плащане" are shown apart.
         "pnl": {
-            "revenue": round(own_inv["paid"] + child_inv["paid"], 2),
+            "revenue": round(own_inv["received_net"] + child_inv["received_net"], 2),
+            "revenue_basis": rev_basis,
+            "invoiced_net": round(own_inv["issued_net"] + child_inv["issued_net"], 2),
+            "awaiting_payment_net": round(own_inv["awaiting_payment_net"] + child_inv["awaiting_payment_net"], 2),
+            "awaiting_payment_label": "Фактурирано, чака плащане",
+            "labor": round(own_work["labor_cost"] + child_work["labor_cost"], 2),
+            "labor_basis": "approved (project_labor_cost)",
             "expenses": round(
-                own_paid["gross_labor"] + child_paid["gross_labor"] +
+                own_work["labor_cost"] + child_work["labor_cost"] +
                 own_mat["ex_vat"] + child_mat["ex_vat"], 2),
             "profit": round(
-                (own_inv["paid"] + child_inv["paid"]) -
-                (own_paid["gross_labor"] + child_paid["gross_labor"] +
+                (own_inv["received_net"] + child_inv["received_net"]) -
+                (own_work["labor_cost"] + child_work["labor_cost"] +
                  own_mat["ex_vat"] + child_mat["ex_vat"]), 2),
         },
     }

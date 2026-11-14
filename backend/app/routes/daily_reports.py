@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
+import math
 import uuid
 
 from app.db import db
@@ -13,6 +14,9 @@ from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.tenancy.data_access import TenantData
+from app.services.labor_cost import void_labor_approvals
+from app.services.report_corrections import (CORRECTOR, audit_report_correction, authorize_report_edit,
+                                             correction_fields, reopen_effects, self_approval_ids)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -239,6 +243,94 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
     return clean
 
 
+# LAB-01-C (LAB01B-1 / FG-64): the fields a person may write on a report line — the same
+# set POST /daily-reports (DayEntryInput) and the batch save store. Anything that would
+# price or classify the line (SMR package, pay type, piece rate, approved quantity,
+# DOWNTIME) is set only by an approver's record, never by the person who fills the line.
+DAY_ENTRY_FIELDS = ("id", "project_id", "smr_id", "extra_work_id", "work_description",
+                    "hours_worked", "note")
+DAY_ENTRY_FORBIDDEN = ("execution_package_id", "pay_type", "piece_rate", "approved_quantity",
+                       "labor_pay_type", "labor_piece_rate", "cost_type", "activity_type")
+
+
+def _clean_day_entries(entries) -> list:
+    """Validate and rebuild ``day_entries`` from the allowed fields only (400 on a pricing
+    field, a non-list, a non-object entry or negative/non-numeric hours)."""
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="day_entries must be a list")
+    clean = []
+    seen_ids = set()
+    for e in entries:
+        if not isinstance(e, dict):
+            raise HTTPException(status_code=400, detail="each day entry must be an object")
+        bad = sorted(k for k in e if k in DAY_ENTRY_FORBIDDEN)
+        if bad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"day_entries may not set {bad}: package, pay type, rate, quantity and "
+                       f"DOWNTIME are set by the approver, not on the report line")
+        try:
+            hours = float(e.get("hours_worked", 0) or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="hours_worked must be a number")
+        if not math.isfinite(hours) or hours < 0:
+            raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
+        row = {k: e.get(k) for k in DAY_ENTRY_FIELDS if k in e}
+        row["id"] = row.get("id") or str(uuid.uuid4())
+        # LAB-01-D (FG-72): entry ids are unique per report
+        if not isinstance(row["id"], str) or row["id"] in seen_ids:
+            raise HTTPException(status_code=400, detail=f"duplicate day entry id: {row['id']}")
+        seen_ids.add(row["id"])
+        row["hours_worked"] = hours
+        clean.append(row)
+    return clean
+
+
+PRESENCE_STATUSES = ("Present", "Late")
+LEAVE_CALENDAR = ("leave", "sick", "vacation")
+
+
+async def _presence_refusal(tenant: TenantData, org_id: str, worker_id: str, day: str,
+                            project_id: str, session=None):
+    """FG-728 (FLOW-013 L89: „не може да създаде отчет за човек, който не е присъстващ на
+    съответния обект"): None when the worker is present ON ``project_id`` that day (an
+    attendance entry Present / Late of that object — a legacy entry without an object counts
+    for the day — and no leave in the calendar), else the refusal message."""
+    cal = await tenant.worker_calendar.find_one(
+        {"org_id": org_id, "date": day, "worker_id": worker_id, "status": {"$in": list(LEAVE_CALENDAR)}},
+        {"_id": 0, "status": 1}, session=session)
+    if cal:
+        return f"Работникът е в {cal['status']} на {day} — не може да бъде отчетен на обекта."
+    att = await tenant.attendance_entries.find_one(
+        {"org_id": org_id, "date": day, "user_id": worker_id}, {"_id": 0, "status": 1, "project_id": 1},
+        session=session)
+    if not att or att.get("status") not in PRESENCE_STATUSES \
+            or att.get("project_id") not in (project_id, None, ""):
+        return f"Работникът не е отбелязан като присъстващ на обекта на {day}. Първо потвърдете присъствието в Хора."
+    return None
+
+
+async def _require_presence_on_moved_entries(tenant: TenantData, org_id: str, report: dict, new_entries,
+                                             session=None) -> None:
+    """FG-728: a correction that moves a day entry to ANOTHER object (one the report did not
+    have) needs the worker's presence on that object that day — else 400
+    PRESENCE_REQUIRED_ON_OBJECT, nothing written. (The person of a report cannot be changed
+    by this PUT.)"""
+    if new_entries is None:
+        return
+    old = {e.get("project_id") for e in (report.get("day_entries") or []) if isinstance(e, dict)}
+    if report.get("project_id"):
+        old.add(report["project_id"])
+    worker = report.get("employee_id") or report.get("worker_id")
+    day = report.get("report_date") or report.get("date")
+    for target in sorted({e.get("project_id") for e in new_entries if e.get("project_id")} - old):
+        msg = await _presence_refusal(tenant, org_id, worker, day, target, session=session)
+        if msg:
+            raise HTTPException(status_code=400, detail={
+                "code": "PRESENCE_REQUIRED_ON_OBJECT", "project_id": target, "worker_id": worker,
+                "date": day, "message": msg})
+
+
 @router.put("/daily-reports/{report_id}")
 async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
     tenant = _tenant(user)
@@ -246,22 +338,48 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report["approval_status"] not in ["DRAFT", "REJECTED"]:
-        raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED reports can be edited")
-
     allowed = ["day_status", "leave_from", "leave_to", "notes", "day_entries"]
     update = {k: v for k, v in data.items() if k in allowed}
 
     if "day_entries" in update:
-        for e in update["day_entries"]:
-            if not e.get("id"):
-                e["id"] = str(uuid.uuid4())
-            if float(e.get("hours_worked", 0)) < 0:
-                raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
+        update["day_entries"] = _clean_day_entries(update["day_entries"])
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    # LAB-01-H (R36): the author corrects their own DRAFT / returned report; Admin, Owner or
+    # the project's SiteManager corrects ANY report (approved included) — with an AuditEvent.
+    projects = [e.get("project_id") for e in (report.get("day_entries") or [])]
+    projects += [e.get("project_id") for e in (update.get("day_entries") or [])]
+    if report.get("project_id"):
+        projects.append(report["project_id"])
+    mode = await authorize_report_edit(
+        user, report, projects=projects,
+        author_ids=(report.get("employee_id"), report.get("created_by")),
+        author_statuses=("DRAFT", "REJECTED"), tenant=tenant)
+    # FG-728: an entry moved to another object needs presence there — before any write
+    await _require_presence_on_moved_entries(tenant, org_id, report, update.get("day_entries"))
+
+    now = datetime.now(timezone.utc).isoformat()
+    update["updated_at"] = now
+    # LAB-01-I (LAB01H-1): a corrected APPROVED report goes back to SUBMITTED
+    set_fields, add = correction_fields(report, user, mode, now)
+    update.update(set_fields)
+    before = {k: report.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at", "reopened_by_correction")}
+    # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write.
+    # FG-728: the presence is checked again in the SAME transaction as these two writes
+    from app.services.invoice_line_lock import run_transaction
+
+    async def _write(session):
+        await _require_presence_on_moved_entries(tenant, org_id, report, update.get("day_entries"),
+                                                 session=session)
+        await void_labor_approvals(tenant, org_id, report_id, user["id"],
+                                   "report_corrected" if mode == CORRECTOR else "report_edited",
+                                   session=session)
+        await tenant.employee_daily_reports.update_one(
+            {"id": report_id}, {"$set": update, **({"$addToSet": add} if add else {})}, session=session)
+    await run_transaction(tenant, _write)
+    await reopen_effects(tenant, org_id, report, user, now)
+    await audit_report_correction(db, user=user, mode=mode, report=report, before=before,
+                                  after={k: update[k] for k in before}, endpoint="PUT /daily-reports/{id}")
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -305,6 +423,9 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     status = report.get("approval_status") or report.get("status", "")
     if status == "APPROVED":
         return {"status": "failed", "report_id": rid, "reason": "already_approved"}
+    # LAB-01-I (LAB01H-1, CLAUDE §8): nobody approves a report they authored or corrected
+    if actor.get("id") in self_approval_ids(report):
+        return {"status": "failed", "report_id": rid, "reason": "self_approval"}
 
     worker_id = report.get("worker_id", "")
     hours = float(report.get("hours") or report.get("hours_worked") or 0)
@@ -355,6 +476,48 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     else:
         regular_hours = hours
         overtime_hours = 0
+
+    # FG-463 / LAB73-R1 (R62): an approved manual labor row already carries this worker's hours
+    # on this project and day — approving the report would count them twice. Checked in ONE
+    # transaction with the day's lock, which this approval claims before any side effect (a
+    # concurrent manual-row approval / create of that day then sees the claim → 409).
+    from app.services.labor_cost import MANUAL_APPROVED, bump_labor_day_lock, overlapping_manual_rows
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    # FG-490: an old-style batch report (employee_id + day_entries) is the worker's day too;
+    # its projects are those of its entries — none at all = every project of the tenant
+    day_worker = report.get("worker_id") or report.get("employee_id") or ""
+    day_date = report.get("date") or report.get("report_date") or ""
+    if report.get("day_entries") is not None:
+        day_projects = sorted({e.get("project_id") for e in report.get("day_entries") or []
+                               if isinstance(e, dict) and e.get("project_id")})
+    else:
+        day_projects = [project_id] if project_id else []
+
+    class _ApprovedManualRow(Exception):
+        pass
+
+    async def claim_day(session):
+        await bump_labor_day_lock(tenant, org_id, day_worker, day_date, session=session,
+                                  report_claim=rid, claim_projects=day_projects or None)
+        for pid_ in (day_projects or [None]):
+            if await overlapping_manual_rows(tenant, org_id, pid_, day_worker, day_date,
+                                             (MANUAL_APPROVED,), session=session):
+                raise _ApprovedManualRow()
+    if day_worker and day_date:
+        try:
+            try:
+                from app.services.labor_cost import ensure_labor_day_locks
+                await ensure_labor_day_locks(db)   # never created inside a transaction
+                await run_in_transaction(db, claim_day)
+            except TransactionsUnavailable:
+                # a deployment without transactions approved reports before LAB73-R1 and still
+                # does: the same claim and check, without the cross-request atomicity
+                import logging
+                logging.getLogger(__name__).warning(
+                    "LAB73-R1: no MongoDB transactions — the report/manual-row day check is not atomic")
+                await claim_day(None)
+        except _ApprovedManualRow:
+            return {"status": "failed", "report_id": rid, "reason": "duplicate_of_approved_manual_row"}
 
     # A) Slip number — canonical counter_type sequence (shared by single + bulk)
     slip_number = report.get("slip_number")
@@ -479,6 +642,8 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
         return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
     if status == "REJECTED":
         return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
+    # LAB-01-D (FG-72): bump + void BEFORE the status write
+    await void_labor_approvals(tenant, actor["org_id"], rid, actor["id"], "report_rejected")
     await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": {
         "approval_status": "REJECTED", "status": "REJECTED",
         "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
@@ -492,6 +657,8 @@ _APPROVE_FAIL_MSG = {
     "negative_split_value": "Отрицателни часове в разделението.",
     "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
     "reason_required": "Изисква се причина за override на извънреден труд.",
+    "self_approval": "Не можете да одобрите отчет, който сте създали или поправили — одобрява друг човек.",
+    "duplicate_of_approved_manual_row": "За този работник, обект и ден има одобрен ръчен ред за труд — часовете не се броят два пъти (сторнирайте реда или поправете отчета).",
 }
 
 
@@ -513,7 +680,8 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     res = await approve_report_one(report, user, override=(data or {}).get("override"),
                                    block_overtime_without_override=False)
     if res["status"] == "failed":
-        raise HTTPException(status_code=400, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
+        code = {"self_approval": 403, "duplicate_of_approved_manual_row": 409}.get(res["reason"], 400)
+        raise HTTPException(status_code=code, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
     if res["status"] == "blocked":  # not expected on single path
         raise HTTPException(status_code=409, detail="overtime_requires_override")
 
@@ -538,25 +706,105 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
+# R36 correctors: Admin, Owner, SiteManager (the project's — checked after the lookup)
+RESET_ROLES = ("Admin", "Owner", "SiteManager")
+# LAB-01-M (FG-112): every caller without the right to reset THIS report gets the same 403 —
+# a missing report, another project's report, its payroll state are never revealed to them.
+RESET_DENIED = "Нямате право да връщате този отчет"
+
+
+async def _reset_status_field(report: dict):
+    """(field, value) the report's approval is read from — the CAS compares exactly it."""
+    if report.get("approval_status"):
+        return "approval_status", report["approval_status"]
+    return "status", report.get("status")
+
+
+async def _return_budget_once(tenant, org_id: str, report: dict, reset_id: str, now: str,
+                              session=None) -> bool:
+    """LAB-01-M (FG-110): give the report's consumed hours back to its activity budget at most
+    once per reset (keyed by ``reset_id`` in ``returned_resets``). Runs INSIDE the reset's
+    transaction (``session``), so it commits together with the claim or not at all."""
+    smr_type = report.get("smr_type") or report.get("activity_type") or ""
+    hours = report.get("hours") or report.get("hours_worked") or 0
+    if not (smr_type and report.get("project_id") and hours):
+        return True
+    budget = await tenant.activity_budgets.find_one({
+        "org_id": org_id, "project_id": report["project_id"], "smr_type_id": smr_type}, session=session)
+    if not budget:
+        return True
+    if reset_id in (budget.get("returned_resets") or []):
+        return True
+    new_consumed = max(0, round((budget.get("consumed_hours", 0) or 0) - float(hours), 2))
+    planned = budget.get("planned_hours", 0) or 1
+    res = await tenant.activity_budgets.update_one(
+        {"id": budget["id"], "consumed_hours": budget.get("consumed_hours"),
+         "returned_resets": {"$ne": reset_id}},
+        {"$set": {"consumed_hours": new_consumed, "burn_percent": round(new_consumed / planned * 100, 1),
+                  "last_updated": now},
+         "$addToSet": {"returned_resets": reset_id}}, session=session)
+    if not getattr(res, "modified_count", 0):
+        # the budget changed under us: abort the whole transaction — nothing is written
+        raise HTTPException(status_code=409, detail="Бюджетът на дейността току-що беше променен — опитайте пак")
+    return True
+
+
+async def _run_reset_transaction(raw_db, body):
+    """LAB-01-N: the reset's writes run in ONE MongoDB transaction (auth_tx.run_in_transaction):
+    all commit together or none. A deployment without transactions is refused (503, nothing
+    written) — there is no non-transactional path here. (The DB-free tests replace this
+    function explicitly with a session-less runner: tests/test_lab_01_l_reset.py.)"""
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        return await run_in_transaction(raw_db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail=(
+            "Базата данни не поддържа транзакции — връщането на отчета не е изпълнено"))
+
+
 @router.post("/daily-reports/{report_id}/reset")
 async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     """Reset an APPROVED report back to SUBMITTED. Voids created work_sessions."""
+    from app.deps.auth import can_manage_project
     tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can reset")
-    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
+    org_id = user["org_id"]
+    # PM73-01: deny by default BEFORE the lookup.
+    if user.get("role") not in RESET_ROLES:
+        raise HTTPException(status_code=403, detail=RESET_DENIED)
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
+    privileged = user.get("role") in ("Admin", "Owner")
     if not report:
+        if not privileged:
+            raise HTTPException(status_code=403, detail=RESET_DENIED)
         raise HTTPException(status_code=404, detail="Report not found")
-    current_status = report.get("approval_status") or report.get("status", "")
+    projects = [e.get("project_id") for e in (report.get("day_entries") or []) if isinstance(e, dict)]
+    if report.get("project_id"):
+        projects.append(report["project_id"])
+    if not privileged:
+        # LAB-01-M (FG-112): the SiteManager's project right is decided FIRST, so a SiteManager
+        # of another project learns neither the payroll state nor the status of the report.
+        project_ids = sorted({p for p in projects if p})
+        if not project_ids:
+            raise HTTPException(status_code=403, detail=RESET_DENIED)
+        for pid in project_ids:
+            if not await can_manage_project(user, pid):
+                raise HTTPException(status_code=403, detail=RESET_DENIED)
+    # LAB-01-L (FG-99): R36 role rule + the LAB-01-J payroll lock (Pay Run lines, both
+    # formats, confirmed runs included) — 409 when the report is in payroll. A caller who may
+    # reset the report gets the details.
+    await authorize_report_edit(user, report, projects=projects, author_ids=(),
+                                author_statuses=(), tenant=tenant)
+    current_status = (report.get("approval_status") or report.get("status") or "").upper()
     if current_status != "APPROVED":
-        raise HTTPException(status_code=400, detail="Only APPROVED reports can be reset")
+        # LAB-01-M (FG-110): not (or no longer) approved — e.g. a concurrent reset won — 409
+        raise HTTPException(status_code=409, detail="Само одобрен отчет може да бъде върнат (вече е върнат или не е одобрен) — презаредете")
 
-    # Check payroll not finalized for this period
-    report_date = report.get("date", "")
+    # Check payroll not finalized for this period (both formats: date / report_date)
+    report_date = report.get("date") or report.get("report_date") or ""
     if report_date:
         # R0-06-C01: a payment in progress or failed may already have moved money — locked too.
         finalized = await tenant.pay_runs.find_one({
-            "org_id": user["org_id"],
+            "org_id": org_id,
             "status": {"$in": ["paid", "paying", "payment_failed"]},
             "period_start": {"$lte": report_date},
             "period_end": {"$gte": report_date},
@@ -565,43 +813,53 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
             raise HTTPException(status_code=400, detail="Cannot reset: payroll for this period is paid")
 
     now = datetime.now(timezone.utc).isoformat()
-
-    # Void work_sessions created by this report
-    await tenant.work_sessions.update_many(
-        {"approved_report_id": report_id, "org_id": user["org_id"]},
-        {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
-    )
-
-    # Reverse budget consumed on void
-    if report.get("smr_type") or report.get("activity_type"):
-        smr_type = report.get("smr_type") or report.get("activity_type", "")
-        hours = report.get("hours") or report.get("hours_worked", 0)
-        if smr_type and report.get("project_id") and hours:
-            budget = await tenant.activity_budgets.find_one({
-                "org_id": user["org_id"],
-                "project_id": report["project_id"],
-                "smr_type_id": smr_type,
-            })
-            if budget:
-                new_consumed = max(0, round((budget.get("consumed_hours", 0) or 0) - hours, 2))
-                planned = budget.get("planned_hours", 0) or 1
-                burn_pct = round((new_consumed / planned) * 100, 1)
-                await tenant.activity_budgets.update_one(
-                    {"id": budget["id"]},
-                    {"$set": {
-                        "consumed_hours": new_consumed,
-                        "burn_percent": burn_pct,
-                        "last_updated": now,
-                    }}
-                )
-
-    # Reset report
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    reset_id = str(uuid.uuid4())
+    reset_fields = {
         "approval_status": "SUBMITTED", "status": "SUBMITTED",
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
-        "updated_at": now,
-    }})
+    }
+
+    async def body(session):
+        # LAB-01-M/N (FG-110): ONE transaction — the compare-and-set claim of the report
+        # (status APPROVED → SUBMITTED, report_version bump, last_reset), the voided work
+        # sessions and quantity approvals and the budget return commit together or not at
+        # all. Everything is re-read inside (the driver may retry the body): a concurrent
+        # winner makes this claim find nothing → 409, nothing written.
+        current = await tenant.employee_daily_reports.find_one(
+            {"id": report_id, "org_id": org_id}, session=session)
+        if not current:
+            raise HTTPException(status_code=409, detail="Отчетът вече не съществува — презаредете")
+        field, value = await _reset_status_field(current)
+        if (value or "").upper() != "APPROVED":
+            raise HTTPException(status_code=409, detail=(
+                "Отчетът току-що беше върнат или променен от друг човек — презаредете"))
+        won = await tenant.employee_daily_reports.find_one_and_update(
+            {"id": report_id, "org_id": org_id, field: value},
+            {"$set": dict(reset_fields, updated_at=now,
+                          last_reset={"id": reset_id, "by": user["id"], "at": now,
+                                      "budget_returned": True, "audit_written": True}),
+             "$inc": {"report_version": 1}}, session=session)
+        if not won:
+            raise HTTPException(status_code=409, detail=(
+                "Отчетът току-що беше върнат или променен от друг човек — презаредете"))
+        await tenant.work_sessions.update_many(
+            {"approved_report_id": report_id, "org_id": org_id},
+            {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
+            session=session)
+        await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_reset",
+                                   bump=False, session=session)
+        await _return_budget_once(tenant, org_id, current, reset_id, now, session=session)
+        # LAB-01-L (FG-99) / LAB-01-O: the canonical chained AuditEvent (who, when, before /
+        # after) is written INSIDE the same transaction — it commits with the reset or not at all
+        before = {k: current.get(k) for k in reset_fields}
+        await audit_report_correction(db, user=user, mode=CORRECTOR, report=current, before=before,
+                                      after=dict(reset_fields, reset_id=reset_id, budget_returned=True),
+                                      endpoint="POST /daily-reports/{id}/reset",
+                                      action="daily_report.reset", session=session)
+        return current
+
+    await _run_reset_transaction(db, body)
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -957,13 +1215,35 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
     now = datetime.now(timezone.utc).isoformat()
     saved = 0
 
-    for emp_id, emp_entries in by_emp.items():
-        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
-
-        # Check for existing report
+    # LAB-01-E (FG-79) + LAB-01-H (R36): every existing report this batch would change is
+    # checked BEFORE any write — the author (the worker, or who created it) only on their own
+    # DRAFT / returned report; Admin, Owner or the SiteManager of the batch's project on ANY
+    # report (approved included), audited. One refusal → nothing written.
+    existing_by_emp, modes, refused = {}, {}, []
+    for emp_id in by_emp:
         existing = await tenant.employee_daily_reports.find_one({
             "org_id": org_id, "employee_id": emp_id, "report_date": report_date
         })
+        if not existing:
+            continue
+        try:
+            modes[emp_id] = await authorize_report_edit(
+                user, existing, projects=[project_id],
+                author_ids=(existing.get("employee_id"), existing.get("created_by")),
+                author_statuses=("DRAFT", "REJECTED"), tenant=tenant)
+        except HTTPException as exc:
+            refused.append({"employee_id": emp_id, "report_id": existing["id"],
+                            "status_code": exc.status_code, "reason": exc.detail})
+        existing_by_emp[emp_id] = existing
+    if refused:
+        code = max(r["status_code"] for r in refused)  # 409 (payroll) > 403 > 400
+        raise HTTPException(status_code=code, detail={"message": "batch-save refused; nothing written",
+                                                      "refused": refused})
+
+    for emp_id, emp_entries in by_emp.items():
+        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
+
+        existing = existing_by_emp.get(emp_id)
 
         if existing:
             # Merge: add new entries to existing, avoid exact duplicates
@@ -972,9 +1252,21 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             kept = [e for e in old_entries if e.get("project_id") != project_id]
             merged = kept + emp_entries
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
-            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
-                "day_entries": merged, "total_hours": merged_total, "updated_at": now,
-            }})
+            mode = modes[emp_id]
+            change = {"day_entries": merged, "total_hours": merged_total, "updated_at": now}
+            set_fields, add = correction_fields(existing, user, mode, now)  # LAB-01-I
+            change.update(set_fields)
+            # LAB-01-D (FG-72): bump + void BEFORE the content write
+            await void_labor_approvals(tenant, org_id, existing["id"], user["id"],
+                                       "report_corrected" if mode == CORRECTOR else "batch_saved")
+            await tenant.employee_daily_reports.update_one(
+                {"id": existing["id"]}, {"$set": change, **({"$addToSet": add} if add else {})})
+            await reopen_effects(tenant, org_id, existing, user, now)
+            await audit_report_correction(
+                db, user=user, mode=mode, report=existing,
+                before={"day_entries": old_entries, "total_hours": existing.get("total_hours")},
+                after={"day_entries": merged, "total_hours": merged_total},
+                endpoint="POST /daily-reports/batch-save")
         else:
             report = {
                 "id": str(uuid.uuid4()),

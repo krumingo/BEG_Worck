@@ -95,7 +95,7 @@ async def project_in_tenant(tenant, project_id: Any) -> None:
 
 
 # SEC-01-C03-B (FG-15): money keys of a labor row (the same set as SEC-02's LABOR_MONEY_FIELDS).
-LABOR_MONEY_FIELDS = frozenset({"hourly_rate", "labor_cost"})
+LABOR_MONEY_FIELDS = frozenset({"hourly_rate", "labor_cost", "piece_rate", "labor_formula"})  # + LAB-01
 
 
 async def labor_money_visible(request, user: Dict[str, Any]) -> bool:

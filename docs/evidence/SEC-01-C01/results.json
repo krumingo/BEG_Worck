@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.8,
+ "seconds": 35.9,
  "rows": [
   {
    "mode": "off",
@@ -2245,6 +2245,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2262,6 +2264,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2279,6 +2283,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2296,6 +2302,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2313,6 +2321,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2369,6 +2379,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2386,6 +2398,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2429,6 +2443,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2816,8 +2832,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -2829,8 +2849,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -2868,8 +2892,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -5204,6 +5232,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5221,6 +5251,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5238,6 +5270,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5255,6 +5289,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5272,6 +5308,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5328,6 +5366,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5345,6 +5385,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5388,6 +5430,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -5775,8 +5819,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -5788,8 +5836,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -5827,8 +5879,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -8748,6 +8804,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8765,6 +8823,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8782,6 +8842,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8799,6 +8861,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8816,6 +8880,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8872,6 +8938,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8889,6 +8957,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -8932,6 +9002,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -9319,8 +9391,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -9332,8 +9408,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -9371,8 +9451,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -11707,6 +11791,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11724,6 +11810,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11741,6 +11829,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11758,6 +11848,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11775,6 +11867,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11831,6 +11925,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11848,6 +11944,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -11891,6 +11989,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -12278,8 +12378,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -12291,8 +12395,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -12330,8 +12438,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -15377,6 +15489,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15394,6 +15508,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15411,6 +15527,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15428,6 +15546,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15445,6 +15565,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15507,6 +15629,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15524,6 +15648,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15571,6 +15697,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -15986,8 +16114,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -15999,8 +16131,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -16042,8 +16178,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -18526,6 +18666,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18543,6 +18685,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18560,6 +18704,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18577,6 +18723,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18594,6 +18742,8 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18656,6 +18806,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18673,6 +18825,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -18720,6 +18874,8 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -19135,8 +19291,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",
@@ -19148,8 +19308,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",
@@ -19191,8 +19355,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",

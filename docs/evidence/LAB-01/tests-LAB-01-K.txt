@@ -1,0 +1,12 @@
+# LAB-01-K checks (2026-11-07) — audit RETAKE-1: create_pay_run writes only on an explicit STARTED; parent 6ac47d0
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## LAB-01 tests (incl. test_retake1_create_writes_only_on_an_explicit_started × failed/weird/empty)
+90 passed, 1 skipped, 1 warning in 4.89s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 161.54s (0:02:41)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 72.41s (0:01:12)
+  non-legacy_routes failures: 0

@@ -667,6 +667,10 @@ async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict 
     if report["status"] == "Rejected":
         update["status"] = "Draft"
         update["reject_reason"] = None
+    # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
+    from app.services.labor_cost import void_labor_approvals
+    await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "work_report_edited",
+                               collection="work_reports")
     await tenant.work_reports.update_one({"id": report_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "report_edited", "work_report", report_id)
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})

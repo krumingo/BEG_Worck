@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -530,11 +530,31 @@ export default function PayRunsPage() {
     return { count: rows.length, net: Math.round(net * 100) / 100, paid: Math.round(paid * 100) / 100, carry: Math.round((net - paid) * 100) / 100 };
   })();
 
+  // LAB-01-E (R29): one Idempotency-Key per Pay Run request body. A double click or a retry
+  // of the same body reuses the key (the backend returns the first run, never a second one);
+  // a different body or a finished save gets a new key.
+  const idemRef = useRef({ body: null, key: null });
+  const idemKeyFor = (body) => {
+    const s = JSON.stringify(body);
+    if (idemRef.current.body !== s) {
+      const key = (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      idemRef.current = { body: s, key };
+    }
+    return idemRef.current.key;
+  };
+  const postPayRun = async (body) => {
+    const res = await API.post("/pay-runs", body, { headers: { "Idempotency-Key": idemKeyFor(body) } });
+    idemRef.current = { body: null, key: null };
+    return res;
+  };
+
   const handleSaveDraft = async () => {
     if (!preview) return;
     setCreating(true);
     try {
-      await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "draft" });
+      await postPayRun({ run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "draft" });
       toast.success("Чернова записана");
       setTab("history");
     } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
@@ -545,7 +565,7 @@ export default function PayRunsPage() {
     if (!preview) return;
     setCreating(true);
     try {
-      const res = await API.post("/pay-runs", { run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
+      const res = await postPayRun({ run_type: "weekly", period_start: periodStart, period_end: periodEnd, rows: buildRows(), status: "confirmed" });
       const newId = res.data?.id;
       // Pay immediately so the advance balance drops and (later) cash leaves Каса — one action.
       if (newId) {

@@ -258,7 +258,8 @@ async def get_package_net_financial(
     from app.services.canonical_material_cost import package_material_split
     split = await package_material_split(tenant, org_id, pkg)
     mat = split["total"]          # consumption + фира, once
-    lab = pkg.get("actual_labor_cost", 0)
+    from app.services.labor_cost import package_labor_actual
+    lab = await package_labor_actual(org_id, pkg)   # R62: THE labor cost, at read time
     # FG-89: the package's share of the project's CURRENT OH-01 allocation, by used hours,
     # computed on read (no stored second figure)
     from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
@@ -452,10 +453,12 @@ async def get_financial_alerts(
     # time), not the `actual_material_cost` cache.
     from app.services.canonical_material_cost import project_material_cost, split_for_package
     mat_cost = await project_material_cost(tenant, org_id, project_id)
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "activity_name": 1}).to_list(200)
     for pkg in pkgs:
         sale = pkg.get("sale_total", 0)
-        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (labor_split.get(pkg["id"]) or {}).get("cost", 0.0)
         if sale > 0 and actual > sale * 0.9:
             alerts.append({"type": "margin_drop", "severity": "critical", "package_id": pkg["id"], "message": f"{pkg.get('activity_name', '')}: разходи {round(actual, 2)} / продажба {sale} EUR"})
 
@@ -490,9 +493,11 @@ async def get_project_risk(
         explanations.append(f"{overdue} просрочени фактури")
 
     # Labor risk
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "planned_hours": 1, "used_hours": 1, "labor_budget_total": 1, "actual_labor_cost": 1}).to_list(200)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "planned_hours": 1, "used_hours": 1, "labor_budget_total": 1}).to_list(200)
     over_hours = any(p.get("used_hours", 0) > (p.get("planned_hours") or 99999) for p in pkgs if p.get("planned_hours"))
-    over_budget = any((p.get("actual_labor_cost", 0) or 0) > p.get("labor_budget_total", 0) > 0 for p in pkgs)
+    over_budget = any((labor_split.get(p.get("id")) or {}).get("cost", 0.0) > p.get("labor_budget_total", 0) > 0 for p in pkgs)
     if over_hours:
         flags.append("labor_over_hours")
         explanations.append("Надвишени планирани часове")

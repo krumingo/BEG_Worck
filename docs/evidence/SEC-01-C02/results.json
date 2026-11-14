@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 25.5,
+ "seconds": 33.7,
  "rows": [
   {
    "mode": "off",
@@ -2119,6 +2119,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2138,6 +2140,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2157,6 +2161,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2176,6 +2182,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2195,6 +2203,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2259,6 +2269,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2278,6 +2290,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -2327,6 +2341,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4565,6 +4581,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4584,6 +4602,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4603,6 +4623,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4622,6 +4644,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4641,6 +4665,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4705,6 +4731,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4724,6 +4752,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -4773,6 +4803,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7707,6 +7739,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7726,6 +7760,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7745,6 +7781,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7764,6 +7802,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7783,6 +7823,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7847,6 +7889,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7866,6 +7910,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -7915,6 +7961,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10153,6 +10201,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10172,6 +10222,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10191,6 +10243,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10210,6 +10264,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10229,6 +10285,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10293,6 +10351,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10312,6 +10372,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -10361,6 +10423,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13441,6 +13505,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13460,6 +13526,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13479,6 +13547,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13498,6 +13568,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13517,6 +13589,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13587,6 +13661,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13606,6 +13682,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -13659,6 +13737,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16065,6 +16145,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16084,6 +16166,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16103,6 +16187,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16122,6 +16208,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16141,6 +16229,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16211,6 +16301,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16230,6 +16322,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -16283,6 +16377,8 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
@@ -17336,7 +17432,8 @@
      "synced": 1,
      "unchanged": 1,
      "reversed": 1,
-     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "dq_warnings": []
     }
    },
    "second": {
@@ -17346,7 +17443,8 @@
      "synced": 0,
      "unchanged": 2,
      "reversed": 0,
-     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "dq_warnings": []
     },
     "written": []
    },
@@ -17403,11 +17501,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-09",
-   "to_date": "2026-11-07",
+   "from_date": "2026-10-15",
+   "to_date": "2026-11-13",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-15T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-13T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17415,10 +17513,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-09",
+   "from_date": "2026-11-15",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-15T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   },
@@ -17427,11 +17525,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-09",
-   "to_date": "2026-11-07",
+   "from_date": "2026-10-15",
+   "to_date": "2026-11-13",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-15T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-13T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17439,10 +17537,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-09",
+   "from_date": "2026-11-15",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-15T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   }

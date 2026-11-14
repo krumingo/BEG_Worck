@@ -457,6 +457,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 PROBE_PROJECT2 = "P2"          # a second project per tenant where nobody is a member
 
 
+R62_PKG_SUFFIX = "-r62pkg"    # FG-461: the SMR package of a project in the probe fixture
+
+
 def probe_id(tkey: str, *parts: str) -> str:
     return "pm01probe-%s-%s" % (tkey, "-".join(parts))
 
@@ -497,8 +500,20 @@ async def seed_existing_records(op_db, fx: Dict[str, Any]) -> None:
             "id": probe_id(tkey, "ep1"), "org_id": org, "project_id": p1,
             "activity_name": "Probe activity", "qty": 1, "labor_budget_total": 100,
             "created_at": now})
+        # R62 / FG-461: a manual labor row names an SMR package of its project — one per
+        # project (id = project id + R62_PKG_SUFFIX), for the SEC-01 labor probes
+        # LAB73-R1: the day-lock collection exists as after startup (its index is created at
+        # startup, which the harness skips) — no collection creation inside a probed request
+        from app.services.labor_cost import ensure_labor_day_locks
+        await ensure_labor_day_locks(op_db)
+        for pid_ in (p1, p2):
+            await op_db.execution_packages.insert_one({
+                "id": pid_ + R62_PKG_SUFFIX, "org_id": org, "project_id": pid_,
+                "activity_name": "Probe manual SMR", "qty": 1, "created_at": now})
+        # LAB-01: an hourly rate is the pay only of an HOURLY worker (no pay_type → Monthly,
+        # which needs monthly_salary) — the probe worker is hourly, 20/h
         await op_db.employee_profiles.insert_one({"org_id": org, "user_id": tech,
-                                                  "hourly_rate": 20})
+                                                  "hourly_rate": 20, "pay_type": "Hourly"})
         await op_db.labor_entries.insert_one({
             "id": probe_id(tkey, "le1"), "org_id": org, "project_id": p1,
             "employee_id": tech, "execution_package_id": probe_id(tkey, "ep1"),
@@ -653,6 +668,10 @@ ENFORCE_EXTRA_WRITES = {
     # SUB-ADV-01 (R39): the advance (Owner/Accountant) and its deduction on an act.
     ("POST", "/api/subcontractor-packages/{pkg_id}/advances"): "denial",
     ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"): "denial",
+    # R62 / FG-58: the Owner-only approval of a manual labor row — an audited denial
+    ("POST", "/api/labor-entries/{entry_id}/approve"): "denial",
+    ("POST", "/api/labor-entries/{entry_id}/reject"): "denial",
+    ("POST", "/api/labor-entries/{entry_id}/reverse"): "denial",
     # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
     ("GET", "/api/reports/company-finance-export"): "denial",
     # SEC-02-A (D1): the money-only file exports (significant verb "export").

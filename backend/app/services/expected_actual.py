@@ -1,10 +1,16 @@
 """
 Service - Expected vs Actual comparison layer.
-Compares planned (budgets/analyses) vs real (work_sessions) by activity, group, location.
+Compares planned (budgets/analyses) vs real by activity, group, location.
+
+LAB-01 / R31: the REAL labor ("изхарчено") comes from app.services.labor_cost —
+approved daily-report lines only, salary → approved hours × rate, akord → approved
+quantity × piece rate, no default rate; DOWNTIME is its own row, never inside an SMR.
+(Before LAB-01 it was work_sessions incl. unapproved time — SEC-02-C-D1.)
 """
 from app.db import db
 from app.routes.activity_budgets import compute_avg_daily_wage, DEFAULT_DAILY_WAGE
 from app.services.budget_formula import calculate_budget_formula_sync
+from app.services.labor_cost import project_labor_cost
 from app.tenancy.data_access import TenantData
 
 
@@ -52,22 +58,15 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             r = calculate_budget_formula_sync(lb, coeff, hourly_rate * 8)
             planned_by_type[key]["hours"] += r["planned_man_hours"]
 
-    # ── Actual data (work_sessions) ─────────────────────────────
-    ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
-    if date_from:
-        ws_query.setdefault("started_at", {})["$gte"] = f"{date_from}T00:00:00"
-    if date_to:
-        ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
-
-    sessions = await tenant.work_sessions.find(ws_query, {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
-
+    # ── Actual data (LAB-01: approved report lines, one labor calculation) ──
+    labor = await project_labor_cost(org_id, project_id, date_from, date_to)
     actual_by_type = {}
-    for s in sessions:
-        key = s.get("smr_type_id") or "Общо"
-        if key not in actual_by_type:
-            actual_by_type[key] = {"hours": 0, "cost": 0}
-        actual_by_type[key]["hours"] += s.get("duration_hours", 0)
-        actual_by_type[key]["cost"] += s.get("labor_cost", 0)
+    # R62 / FG-422: ONE figure — labor + downtime per SMR, THE labor cost "total" overall
+    for key, v in labor["by_smr"].items():
+        if v["hours"] or v["labor"] or v["downtime"] or v["downtime_hours"]:
+            actual_by_type[key] = {"hours": v["hours"] + v["downtime_hours"], "cost": v["labor"] + v["downtime"]}
+    total_labor_actual_h = labor["approved_hours"] + labor.get("downtime_hours", 0)
+    total_labor_actual_c = labor["total"]
 
     # ── A. By Activity ──────────────────────────────────────────
     all_types = set(list(planned_by_type.keys()) + list(actual_by_type.keys()))
@@ -85,6 +84,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             "actual_cost": round(ac["cost"], 2),
             "variance_cost": round(ac["cost"] - pl["cost"], 2),
             "status": _status(ac["cost"], pl["cost"]) if pl["cost"] > 0 else _status(ac["hours"], pl["hours"]),
+            "cost_type": "LABOR",
         })
 
     # ── B. By Group ─────────────────────────────────────────────
@@ -117,10 +117,8 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         total_planned = sum(a.get("planned_cost", 0) for a in activities) or 1
         if planned_c > 0:
             ratio = planned_c / total_planned
-            total_actual_h = sum(s.get("duration_hours", 0) for s in sessions)
-            total_actual_c = sum(s.get("labor_cost", 0) for s in sessions)
-            actual_h = round(total_actual_h * ratio, 1)
-            actual_c = round(total_actual_c * ratio, 2)
+            actual_h = round(total_labor_actual_h * ratio, 1)
+            actual_c = round(total_labor_actual_c * ratio, 2)
 
         groups.append({
             "name": g["name"], "group_id": g["id"],
@@ -162,6 +160,18 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             "status": "on_track",
         })
 
+    # ── Downtime: its own row (FLOW-019), never inside an SMR / budget comparison ──
+    downtime = None
+    if labor["downtime_total"] or labor.get("downtime_hours"):
+        downtime = {
+            "name": "Престой (DOWNTIME)",
+            "cost_type": "DOWNTIME",
+            "actual_hours": round(labor.get("downtime_hours", 0), 1),
+            "actual_cost": labor["downtime_total"],
+            "by_smr": {k: {"hours": v["downtime_hours"], "cost": v["downtime"]}
+                       for k, v in labor["by_smr"].items() if v["downtime_hours"] or v["downtime"]},
+        }
+
     # ── D. Summary ──────────────────────────────────────────────
     total_planned_h = round(sum(a["planned_hours"] for a in activities), 1)
     total_actual_h = round(sum(a["actual_hours"] for a in activities), 1)
@@ -186,6 +196,13 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         "over_count": over_count,
         "biggest_overrun_activity": biggest_act["name"] if biggest_act and biggest_act["variance_cost"] > 0 else None,
         "biggest_overrun_group": biggest_grp["name"] if biggest_grp and biggest_grp.get("variance_cost", 0) > 0 else None,
+        # LAB-01: SMR labor and downtime apart; all labor = the sum of both
+        "labor_actual_cost": total_labor_actual_c,
+        "downtime_cost": labor["downtime_total"],
+        "total_labor_cost_incl_downtime": labor["total"],
+        "labor_dq_warning_count": len(labor["dq_warnings"]),
+        "labor_source": "approved_daily_reports (LAB-01)",
     }
 
-    return {"summary": summary, "activities": activities, "groups": groups, "locations": locations}
+    return {"summary": summary, "activities": activities, "groups": groups, "locations": locations,
+            "downtime": downtime, "labor_dq_warnings": labor["dq_warnings"]}

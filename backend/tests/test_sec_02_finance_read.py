@@ -145,6 +145,16 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
     for tkey, t in fx.items():
         org, p1 = t["tenant_id"], t["project_id"]
         tech = t["users"]["technician"]["id"]
+        # FG-592: a sub-project of P1 with money (an issued invoice of 7777), so the parent
+        # aggregate (FG-566) has a child whose money must be stripped as well
+        await op_db.projects.insert_one({
+            "id": sid(tkey, "p1child"), "org_id": org, "code": "SEC02-%s-1A" % tkey,
+            "name": "P1 child", "status": "Active", "parent_project_id": p1, "created_at": now})
+        await op_db.invoices.insert_one({
+            "id": sid(tkey, "inv_child"), "org_id": org, "project_id": sid(tkey, "p1child"),
+            "direction": "Issued", "kind": "Invoice", "status": "Sent", "invoice_no": "SEC02-C-%s" % tkey,
+            "subtotal": 7777.0, "total": 7777.0, "vat_amount": 0, "paid_amount": 0,
+            "due_date": "2026-12-01", "created_at": now})
         await op_db.activity_budgets.insert_one({
             "id": sid(tkey, "ab1"), "org_id": org, "project_id": p1, "type": "Мазилка",
             "labor_budget": 5000, "material_budget": 0, "coefficient": 1,
@@ -251,6 +261,14 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "smr_type_id": "Мазилка", "started_at": "2026-11-04T07:00:00",
             "ended_at": "2026-11-04T15:00:00", "duration_hours": 8, "labor_cost": 3000,
             "created_at": now})
+        # R62 / FG-390 (LAB-01-S): the budget alarm's "spent" is THE labor cost of the
+        # project (approved reports), not the work sessions — so P1 also carries APPROVED
+        # report lines of the same paid technician (hourly 20 in the probe profile) worth the
+        # same 6200 = 310 h × 20: POST /alarms/evaluate still raises the 124 % alarm.
+        await op_db.employee_daily_reports.insert_one({
+            "id": sid(tkey, "r62rep"), "org_id": org, "worker_id": tech, "submitted_by": tech,
+            "date": "2026-11-04", "hours": 310, "project_id": p1, "smr_type": "Мазилка",
+            "status": "APPROVED", "approval_status": "APPROVED", "created_at": now})
 
 
 def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
@@ -265,6 +283,38 @@ def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
             "counterparty_id": sid(tkey, "none"),
             "analysis_id": sid(tkey, "an1"), "version": "1", "offer_id": sid(tkey, "off1"),
             "version_number": "1", "draft_id": sid(tkey, "none"), "module_code": "M2"}
+
+
+_SEED_MONEY = 7777.0
+_ID_OR_TIME_KEY = __import__("re").compile(r"(^id$|_id$|^ids?$|_ids$|_at$|^date$|_date$|token|hash|key$)")
+_UUID_OR_TIME = __import__("re").compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", __import__("re").I)
+
+
+def money_value_leaks(value: Any, needle: float = _SEED_MONEY, path: str = "") -> List[str]:
+    """FG-567: the seeded money value (7777) in a parsed JSON body, FIELD-AWARE — a number
+    equal to it under ANY key, or a text field that shows it ("… 7777 лв", "7777.0") — but
+    never an id, a timestamp or a uuid that merely contains the digits 7777 (the earlier raw
+    substring test flagged those: a false positive). Returns the paths of the leaking fields."""
+    out: List[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(k, str) and _ID_OR_TIME_KEY.search(k) and not isinstance(v, (dict, list)):
+                continue
+            out += money_value_leaks(v, needle, f"{path}.{k}" if path else str(k))
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            out += money_value_leaks(v, needle, f"{path}[{i}]")
+    elif isinstance(value, bool) or value is None:
+        pass
+    elif isinstance(value, (int, float)):
+        if abs(float(value) - needle) < 0.005:
+            out.append(path)
+    elif isinstance(value, str):
+        if not _UUID_OR_TIME.match(value.strip()) and __import__("re").search(
+                r"(?<![0-9a-fA-F-])7[\s.,]?777(?![0-9a-fA-F-])", value):
+            out.append(path)
+    return out
 
 
 def body_money_keys(value: Any, keep=()) -> List[str]:
@@ -493,7 +543,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     row["sites_with_money"] = sorted({
                         sites.get(it.get("site_id"), "other") for it in body.get("items", [])
                         if body_money_keys(it)})
-                row["leaks_7777"] = "7777" in resp.text
+                # FG-567: field-aware — the seeded money value in the parsed body, never a
+                # uuid / timestamp that only contains the digits
+                leak_paths = money_value_leaks(body)
+                row["leaks_7777"] = bool(leak_paths)
+                if leak_paths:
+                    row["leak_fields"] = leak_paths[:10]
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
             if p["rule"] in (R20_2B, R20_5B) and p["action"] != EMPLOYEE_FILE_ACTION \
@@ -508,7 +563,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                           else body.get("top_overruns", {}).get("groups")) or []
                 row["groups"] = len(groups)
                 row["group_price_keys"] = money_keys_in(groups, EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS)
-                row["leaks_7777"] = "7777" in resp.text
+                row["leaks_7777"] = bool(money_value_leaks(body))       # FG-567: field-aware
             return row
 
         rows: List[Dict[str, Any]] = []
@@ -526,11 +581,16 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         # SEC-02-B (FG-15): POST /labor-entries twice with the SAME Idempotency-Key — the
         # replay (#69 SEC-01-C03) must not show the rate / cost either.
         replay = []
+        n_row = 0
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for role in ("technician", "requester", "accountant"):
                 key = "sec02b-%s-%s" % (mode, role)
-                body = {"project_id": fx["A"]["project_id"], "hours": 1, "activity_name": "SEC02B",
+                n_row += 1
+                # R62: FG-461 — a manual row names its SMR package (no free-text SMR);
+                # FG-463 — one live manual row per worker, project and day (own day each)
+                body = {"project_id": fx["A"]["project_id"], "hours": 1,
+                        "execution_package_id": sid("A", "ep2"), "date": "2026-12-%02d" % n_row,
                         "employee_id": fx["A"]["users"]["technician"]["id"]}
                 hdr = {"Authorization": "Bearer " + tokens[("A", role)], "Idempotency-Key": key}
                 r1 = tc.post("/api/labor-entries", json=body, headers=hdr)
@@ -660,11 +720,20 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                   "worker_id": fx["A"]["users"]["driver"]["id"], "site_id": p1,
                   "smr_type_id": "Мазилка", "started_at": "2026-11-05T07:00:00",
                   "ended_at": "2026-11-05T15:00:00", "duration_hours": 8, "labor_cost": 500}
+        # R62 / FG-462: the paid workers are counted on THE labor cost lines — the second paid
+        # worker is the same 500 as an APPROVED manual labor row (the session stays as time)
+        second_row = {"id": sid("A", "le_band"), "org_id": fx["A"]["tenant_id"], "project_id": p1,
+                      "employee_id": fx["A"]["users"]["driver"]["id"],
+                      "execution_package_id": sid("A", "ep2"), "activity_name": "Мазилка",
+                      "date": "2026-11-05", "hours": 8, "hourly_rate": 62.5, "labor_cost": 500,
+                      "source": "manual", "approval_status": "approved", "version": 2,
+                      "created_by": fx["A"]["users"]["admin"]["id"], "reversed_by_entry_id": None}
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for paid in (1, 2):
                 if paid == 2:
                     tc.portal.call(lambda: op_db.work_sessions.insert_one(dict(second)))
+                    tc.portal.call(lambda: op_db.labor_entries.insert_one(dict(second_row)))
                 for role in ("requester", "technician", "viewer", "accountant"):
                     hdr = {"Authorization": "Bearer " + tokens[("A", role)]}
                     cnt = tc.get("/api/alarms/count", headers=hdr)
@@ -707,6 +776,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                                    in str(a.get("type"))]})
                 if paid == 2:
                     tc.portal.call(lambda: op_db.work_sessions.delete_one({"id": second["id"]}))
+                    tc.portal.call(lambda: op_db.labor_entries.delete_one({"id": second_row["id"]}))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -1309,6 +1379,27 @@ def _fake_tenant(collections):
     return t
 
 
+def _canonical_lines_from_sessions(monkeypatch, data):
+    """R62 / FG-462: the paid-worker count of the "sessions" source runs on THE labor cost
+    lines (project_labor_cost), never on raw session money. These DB-free tests keep their
+    session rows as data and hand them over as the equivalent canonical lines (ended rows
+    only, same window, pay = the row's cost, SMR = the row's SMR)."""
+    from app.services import labor_cost
+
+    async def lines(org_id, project_id, date_from=None, date_to=None):
+        out = []
+        for s_ in data.get("work_sessions", []):
+            day = (s_.get("started_at") or "")[:10]
+            if s_.get("org_id") != org_id or s_.get("site_id") != project_id or not s_.get("ended_at"):
+                continue
+            if (date_from and day < date_from) or (date_to and day > date_to):
+                continue
+            out.append({"worker_id": s_.get("worker_id"), "date": day, "amount": s_.get("labor_cost", 0),
+                        "smr_type": s_.get("smr_type_id") or s_.get("smr_type")})
+        return {"lines": out}
+    monkeypatch.setattr(labor_cost, "project_labor_cost", lines)
+
+
 def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
     """SEC-02-E (FLOW Guard FG-63; R31): the 2+ rule uses the workers of the SAME source,
     filter and window as the "spent" figure."""
@@ -1323,6 +1414,7 @@ def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
                               sess("w3", "2026-11-02", ended=False)]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _canonical_lines_from_sessions(monkeypatch, data)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # whole history, ended sessions only: w1 + w2 (w3 not ended, w4 is a draft report)
@@ -1365,6 +1457,7 @@ def test_fg74_only_workers_with_pay_in_the_window_count(monkeypatch):
              "entries": [{"user_id": "u3", "hours": 8}]}]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _canonical_lines_from_sessions(monkeypatch, data)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # sessions: only w1 (Мазилка) and w5 (Шпакловка) are paid

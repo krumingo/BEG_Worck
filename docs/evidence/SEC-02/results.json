@@ -643,6 +643,11 @@
    "finance.money_values.read"
   ],
   [
+   "GET /api/projects/{project_id}/aggregate",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
    "GET /api/subcontractor-performance",
    "R20-5M",
    "finance.money_values.read"
@@ -900,7 +905,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 194.5,
+ "seconds": 215.1,
  "rows": [
   {
    "mode": "off",
@@ -11043,7 +11048,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11070,7 +11079,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11127,7 +11140,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11189,7 +11206,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11210,7 +11230,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11255,7 +11278,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11313,7 +11339,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11340,7 +11370,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11397,7 +11431,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11459,7 +11497,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11480,7 +11521,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11525,7 +11569,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -14868,7 +14915,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -14882,7 +14933,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -14924,7 +14979,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -15464,7 +15523,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15481,7 +15543,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15526,7 +15591,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15585,7 +15653,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15602,7 +15673,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15647,7 +15721,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15904,7 +15981,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -15927,7 +16009,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -15978,7 +16065,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -16042,7 +16134,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -16064,7 +16161,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -16675,9 +16777,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16691,9 +16791,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16735,9 +16833,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16794,7 +16890,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16810,7 +16906,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16854,7 +16950,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16912,9 +17008,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -16930,9 +17024,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -16976,9 +17068,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -17364,6 +17454,293 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -17720,7 +18097,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17738,7 +18118,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17784,7 +18167,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17959,7 +18345,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17980,7 +18371,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -18029,7 +18425,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -18224,7 +18625,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -18262,7 +18664,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -18347,7 +18750,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -18975,6 +19379,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -19012,6 +19419,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -19090,6 +19500,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -20799,9 +21212,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -20811,9 +21229,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -20847,9 +21270,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -21453,7 +21881,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -21481,7 +21914,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -22245,7 +22683,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -22259,7 +22700,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -22297,7 +22741,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -23531,6 +23978,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23543,6 +23991,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23563,6 +24012,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23575,6 +24025,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23636,6 +24087,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23648,6 +24100,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23716,6 +24169,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23727,6 +24181,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23747,6 +24202,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23758,6 +24214,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23802,6 +24259,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23813,6 +24271,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -24892,6 +25351,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -24907,6 +25370,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -24948,6 +25415,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -25502,16 +25973,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -25521,16 +25988,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -25540,10 +26003,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -25556,10 +26018,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -25572,16 +26033,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -25630,16 +26087,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -25649,16 +26102,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -25694,16 +26143,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -35993,7 +36438,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36020,7 +36469,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36077,7 +36530,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36139,7 +36596,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36160,7 +36620,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36205,7 +36668,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36263,7 +36729,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36290,7 +36760,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36347,7 +36821,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36409,7 +36887,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36430,7 +36911,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36475,7 +36959,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -39818,7 +40305,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -39832,7 +40323,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -39874,7 +40369,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -40414,7 +40913,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40431,7 +40933,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40476,7 +40981,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40535,7 +41043,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40552,7 +41063,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40597,7 +41111,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40854,7 +41371,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -40877,7 +41399,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -40928,7 +41455,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -40992,7 +41524,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -41014,7 +41551,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -41625,9 +42167,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41641,9 +42181,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41685,9 +42223,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41744,7 +42280,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41760,7 +42296,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41804,7 +42340,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41862,9 +42398,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -41880,9 +42414,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -41926,9 +42458,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -42314,6 +42844,293 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -42670,7 +43487,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42688,7 +43508,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42734,7 +43557,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42909,7 +43735,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42930,7 +43761,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42979,7 +43815,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -43174,7 +44015,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -43212,7 +44054,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -43297,7 +44140,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -43925,6 +44769,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -43962,6 +44809,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -44040,6 +44890,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -45749,9 +46602,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -45761,9 +46619,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -45797,9 +46660,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -46403,7 +47271,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -46431,7 +47304,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -47195,7 +48073,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -47209,7 +48090,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -47247,7 +48131,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -48481,6 +49368,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -48493,6 +49381,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48513,6 +49402,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -48525,6 +49415,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48586,6 +49477,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -48598,6 +49490,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48666,6 +49559,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -48677,6 +49571,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48697,6 +49592,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -48708,6 +49604,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48752,6 +49649,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -48763,6 +49661,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -49842,6 +50741,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -49857,6 +50760,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -49898,6 +50805,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -50452,16 +51363,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -50471,16 +51378,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -50490,10 +51393,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -50506,10 +51408,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -50522,16 +51423,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -50580,16 +51477,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -50599,16 +51492,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -50644,16 +51533,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "off",
@@ -52254,7 +53139,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -52275,7 +53163,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -52332,7 +53223,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -52353,7 +53247,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -52987,6 +53884,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -53944,6 +54901,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -53955,6 +54913,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -53975,6 +54934,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -53986,6 +54946,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -64329,7 +65290,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64356,7 +65321,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64413,7 +65382,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64475,7 +65448,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64496,7 +65472,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64541,7 +65520,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64599,7 +65581,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64626,7 +65612,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64683,7 +65673,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64745,7 +65739,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64766,7 +65763,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64811,7 +65811,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -68154,7 +69157,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -68168,7 +69175,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -68210,7 +69221,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -68750,7 +69765,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -68767,7 +69785,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -68812,7 +69833,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -68871,7 +69895,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -68888,7 +69915,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -68933,7 +69963,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69190,7 +70223,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69213,7 +70251,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69264,7 +70307,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69328,7 +70376,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69350,7 +70403,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69961,9 +71019,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -69977,9 +71033,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -70021,9 +71075,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -70080,7 +71132,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -70096,7 +71148,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -70140,7 +71192,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -70198,9 +71250,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -70216,9 +71266,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -70262,9 +71310,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -70650,6 +71696,293 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -71006,7 +72339,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71024,7 +72360,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71070,7 +72409,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71245,7 +72587,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71266,7 +72613,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71315,7 +72667,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71510,7 +72867,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -71548,7 +72906,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -71633,7 +72992,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -72261,6 +73621,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -72298,6 +73661,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -72376,6 +73742,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -74085,9 +75454,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -74097,9 +75471,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -74133,9 +75512,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -74739,7 +76123,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -74767,7 +76156,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -75531,7 +76925,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -75545,7 +76942,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -75583,7 +76983,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -76817,6 +78220,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -76829,6 +78233,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -76849,6 +78254,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -76861,6 +78267,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -76922,6 +78329,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -76934,6 +78342,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -77002,6 +78411,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -77013,6 +78423,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -77033,6 +78444,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -77044,6 +78456,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -77088,6 +78501,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -77099,6 +78513,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -78178,6 +79593,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -78193,6 +79612,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -78234,6 +79657,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -78788,16 +80215,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -78807,16 +80230,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -78826,10 +80245,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -78842,10 +80260,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -78858,16 +80275,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -78916,16 +80329,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -78935,16 +80344,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -78980,16 +80385,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -89279,7 +90680,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89306,7 +90711,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89363,7 +90772,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89425,7 +90838,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89446,7 +90862,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89491,7 +90910,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89549,7 +90971,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89576,7 +91002,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89633,7 +91063,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89695,7 +91129,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89716,7 +91153,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -89761,7 +91201,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93104,7 +94547,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -93118,7 +94565,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -93160,7 +94611,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -93700,7 +95155,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -93717,7 +95175,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -93762,7 +95223,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -93821,7 +95285,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -93838,7 +95305,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -93883,7 +95353,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94140,7 +95613,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94163,7 +95641,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94214,7 +95697,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94278,7 +95766,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94300,7 +95793,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94911,9 +96409,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -94927,9 +96423,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -94971,9 +96465,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -95030,7 +96522,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -95046,7 +96538,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -95090,7 +96582,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -95148,9 +96640,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -95166,9 +96656,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -95212,9 +96700,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -95600,6 +97086,293 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -95956,7 +97729,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -95974,7 +97750,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96020,7 +97799,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96195,7 +97977,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96216,7 +98003,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96265,7 +98057,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96460,7 +98257,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -96498,7 +98296,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -96583,7 +98382,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -97211,6 +99011,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -97248,6 +99051,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -97326,6 +99132,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -99035,9 +100844,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -99047,9 +100861,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -99083,9 +100902,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -99689,7 +101513,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -99717,7 +101546,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -100481,7 +102315,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -100495,7 +102332,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -100533,7 +102373,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -101767,6 +103610,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -101779,6 +103623,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -101799,6 +103644,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -101811,6 +103657,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -101872,6 +103719,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -101884,6 +103732,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -101952,6 +103801,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -101963,6 +103813,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -101983,6 +103834,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -101994,6 +103846,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -102038,6 +103891,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -102049,6 +103903,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -103128,6 +104983,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -103143,6 +105002,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -103184,6 +105047,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -103738,16 +105605,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -103757,16 +105620,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -103776,10 +105635,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -103792,10 +105650,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -103808,16 +105665,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -103866,16 +105719,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -103885,16 +105734,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -103930,16 +105775,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "shadow",
@@ -105540,7 +107381,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -105561,7 +107405,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -105618,7 +107465,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -105639,7 +107489,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -106273,6 +108126,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -107230,6 +109143,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -107241,6 +109155,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -107261,6 +109176,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -107272,6 +109188,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -117625,7 +119542,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117652,7 +119573,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117709,7 +119634,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117771,7 +119700,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117792,7 +119724,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117837,7 +119772,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117895,7 +119833,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117922,7 +119864,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -117979,7 +119925,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -118041,7 +119991,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -118062,7 +120015,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -118107,7 +120063,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -121480,7 +123439,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -121494,7 +123457,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -121536,7 +123503,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -122076,7 +124047,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122093,7 +124067,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122138,7 +124115,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122197,7 +124177,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122214,7 +124197,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122259,7 +124245,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122516,7 +124505,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122539,7 +124533,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122590,7 +124589,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122654,7 +124658,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122676,7 +124685,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -123287,9 +125301,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -123303,9 +125315,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -123347,9 +125357,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -123406,7 +125414,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -123422,7 +125430,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -123466,7 +125474,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -123524,9 +125532,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -123542,9 +125548,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -123588,9 +125592,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -123976,6 +125978,293 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -124332,7 +126621,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124350,7 +126642,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124396,7 +126691,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124571,7 +126869,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124592,7 +126895,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124641,7 +126949,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124836,7 +127149,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -124874,7 +127188,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -124959,7 +127274,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -125587,6 +127903,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -125624,6 +127943,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -125702,6 +128024,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -127547,9 +129872,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -127559,9 +129889,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -127599,9 +129934,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -128211,7 +130551,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -128239,7 +130584,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -129003,7 +131353,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -129017,7 +131370,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -129055,7 +131411,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -130299,6 +132658,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -130311,6 +132671,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -130331,6 +132692,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -130343,6 +132705,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -130404,6 +132767,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -130416,6 +132780,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -130484,6 +132849,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -130495,6 +132861,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -130515,6 +132882,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -130526,6 +132894,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -130570,6 +132939,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -130581,6 +132951,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -131664,6 +134035,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -131679,6 +134054,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -131720,6 +134099,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -132274,16 +134657,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -132293,16 +134672,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -132312,10 +134687,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -132328,10 +134702,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -132344,16 +134717,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -132408,16 +134777,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -132427,16 +134792,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -132476,16 +134837,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -142791,7 +145148,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -142818,7 +145179,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -142875,7 +145240,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -142937,7 +145306,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -142958,7 +145330,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143003,7 +145378,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143061,7 +145439,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143088,7 +145470,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143145,7 +145531,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143207,7 +145597,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143228,7 +145621,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -143273,7 +145669,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -146646,7 +149045,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -146660,7 +149063,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -146702,7 +149109,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -147242,7 +149653,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147259,7 +149673,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147304,7 +149721,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147363,7 +149783,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147380,7 +149803,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147425,7 +149851,10 @@
     "final_total",
     "labor_price_per_unit"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147682,7 +150111,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147705,7 +150139,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147756,7 +150195,12 @@
     "vat_amount",
     "vat_percent"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147820,7 +150264,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147842,7 +150291,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148453,9 +150907,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -148469,9 +150921,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -148513,9 +150963,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -148572,7 +151020,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -148588,7 +151036,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -148632,7 +151080,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -148690,9 +151138,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -148708,9 +151154,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -148754,9 +151198,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -149142,6 +151584,293 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -149498,7 +152227,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -149516,7 +152248,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -149562,7 +152297,10 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -149737,7 +152475,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -149758,7 +152501,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -149807,7 +152555,12 @@
     "total_labor",
     "total_material"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150002,7 +152755,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -150040,7 +152794,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -150125,7 +152880,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -150753,6 +153509,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -150790,6 +153549,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -150868,6 +153630,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -152713,9 +155478,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -152725,9 +155495,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -152765,9 +155540,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -153377,7 +156157,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -153405,7 +156190,12 @@
     "unit_price",
     "vat_amount"
    ],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -154169,7 +156959,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -154183,7 +156976,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -154221,7 +157017,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -155465,6 +158264,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -155477,6 +158277,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -155497,6 +158298,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -155509,6 +158311,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -155570,6 +158373,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -155582,6 +158386,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -155650,6 +158455,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -155661,6 +158467,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -155681,6 +158488,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -155692,6 +158500,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -155736,6 +158545,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -155747,6 +158557,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -156830,6 +159641,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -156845,6 +159660,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -156886,6 +159705,10 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_formula",
+    "hourly_rate",
+    "labor_value",
+    "pay_type",
     "total_value"
    ]
   },
@@ -157440,16 +160263,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -157459,16 +160278,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -157478,10 +160293,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -157494,10 +160308,9 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
    "money_keys": []
@@ -157510,16 +160323,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P1",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -157574,16 +160383,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -157593,16 +160398,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -157642,16 +160443,12 @@
    "probe": "labor_create",
    "rule": "R20-5",
    "target": "P2",
-   "status": 201,
+   "status": 422,
    "written": [
-    "op.audit_idempotency",
-    "op.labor_entries"
+    "op.audit_idempotency"
    ],
    "foreign_ids": false,
-   "money_keys": [
-    "hourly_rate",
-    "labor_cost"
-   ]
+   "money_keys": []
   },
   {
    "mode": "enforce",
@@ -159258,7 +162055,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -159279,7 +162079,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -159336,7 +162139,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -159357,7 +162163,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -159991,6 +162800,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -160960,6 +163829,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -160971,6 +163841,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -160991,6 +163862,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -161002,6 +163874,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -161375,7 +164248,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -161384,13 +164257,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "scope_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -161405,8 +164278,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
-     "sequence": 17,
-     "integrity_hash": "3d1fc80f7010a64a75c6aca0154d55746e667de8c32d62862dd59b1d4e0fa8eb"
+     "sequence": 26,
+     "integrity_hash": "535a9d52112ccaf3a09515f5c5eeb6ed8237230d1aa58283f92597a9323a80ea"
     }
    ]
   },
@@ -161417,7 +164290,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -161426,7 +164299,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161450,8 +164323,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
-     "sequence": 18,
-     "integrity_hash": "ed21c044ac99406330f274089ff22a34faea7c288c5a44346807660bc2cc2b79"
+     "sequence": 27,
+     "integrity_hash": "6bfab27c7ecc255acb4dd131f2f4faf0b79dec5f33209fee58c89579c9648baa"
     }
    ]
   },
@@ -161462,7 +164335,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -161474,7 +164347,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -161483,7 +164356,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161508,8 +164381,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
-     "sequence": 19,
-     "integrity_hash": "b720934f9fe5d6d89ce827267561a1c60031d10b0d6b257fd69a5bea15b97714"
+     "sequence": 28,
+     "integrity_hash": "2d7df723a724f1eb8351452a95ef7417ecdbb944c2144cc30c67b5ac41b5603d"
     }
    ]
   },
@@ -161520,7 +164393,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -161532,7 +164405,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -161544,7 +164417,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -161553,13 +164426,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "scope_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -161576,8 +164449,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
-     "sequence": 20,
-     "integrity_hash": "7accda813988d8c84897213c1712ffcfe758940b1c9b9ada67edd735642c8942"
+     "sequence": 29,
+     "integrity_hash": "2e0aa4bb25d7a43ade13618a4c58b9acb55c651791e33c19cb4ff21782116283"
     }
    ]
   },
@@ -161588,7 +164461,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -161597,7 +164470,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161622,8 +164495,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
-     "sequence": 21,
-     "integrity_hash": "780ab448c45ccfdaa3417bbacfc79954119aa9c4e2221cec91163df4579a2c3b"
+     "sequence": 30,
+     "integrity_hash": "f6e13de18484d2bcf18ced39ad6247510ac66c8e63749b3bee0d56e83037cfb8"
     }
    ]
   },
@@ -161634,7 +164507,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -161646,7 +164519,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -161655,7 +164528,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161680,8 +164553,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
-     "sequence": 22,
-     "integrity_hash": "b324cb8b0db6629f99add28dc52253ffcde4a349348c70671d22fc1ad19b1e6c"
+     "sequence": 31,
+     "integrity_hash": "2a3db77656695651290df20b8bc9413581d7beab00470223629d11d321abc891"
     }
    ]
   },
@@ -161692,7 +164565,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -161704,7 +164577,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -161716,7 +164589,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -161725,13 +164598,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "scope_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -161748,8 +164621,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
-     "sequence": 23,
-     "integrity_hash": "00a0fe9b78ea3037743e4b59aaf5324e9721e27addc36a345edf180a6a47393a"
+     "sequence": 32,
+     "integrity_hash": "3bb9c84cd5b8066579d91454a5f4741c3c32e397639eb4fb4f7c91ae20449bc9"
     }
    ]
   },
@@ -161760,7 +164633,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -161769,7 +164642,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161794,8 +164667,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
-     "sequence": 24,
-     "integrity_hash": "e8e27e6beb4a6a491f8818449e25b206740fcc0cf7d9af6a3e3fc9762d55d62c"
+     "sequence": 33,
+     "integrity_hash": "2c0e3501f3ab96316564919c6367dde67fca740a07bb23164e036d49d9038a67"
     }
    ]
   },
@@ -161806,7 +164679,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -161818,7 +164691,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -161827,7 +164700,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+     "tenant_id": "aff841e3-dd68-4069-a879-e47c54ce3d06",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -161852,8 +164725,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
-     "sequence": 26,
-     "integrity_hash": "a820f8a638db4e6cd8d6a193ae21d68bd55ba3ee6d4087378c6fd300e563a034"
+     "sequence": 35,
+     "integrity_hash": "4bfa6da7896214b7740a233a9c0c5b7948621f5e1bd87ab63566d23b36a49b14"
     }
    ]
   },
@@ -161864,7 +164737,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -161876,7 +164749,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e21bd139-86d1-4ab6-a9f8-52184f80b8af",
+   "expected_tenant": "aff841e3-dd68-4069-a879-e47c54ce3d06",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
@@ -162167,8 +165040,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -162198,8 +165071,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -162327,8 +165200,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -162358,8 +165231,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -162487,8 +165360,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -162518,8 +165391,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -163402,8 +166275,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -163583,8 +166456,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },
@@ -163734,8 +166607,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -163915,8 +166788,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },
@@ -164066,8 +166939,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -164247,8 +167120,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },

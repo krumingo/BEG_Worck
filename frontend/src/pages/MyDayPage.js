@@ -335,12 +335,7 @@ export default function MyDayPage() {
                 {sessions.is_overtime && <span className="ml-1 text-[9px]">OT</span>}
               </p>
             </div>
-            {["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role) && (
-            <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
-              <p className="text-muted-foreground">{t("workSessions.totalCost")}</p>
-              <p className="font-mono font-bold text-foreground">{sessions.total_cost.toFixed(2)} €</p>
-            </div>
-            )}
+            {/* R62 / FG-462: a time screen — hours only, no session money */}
             <div className="flex-1 rounded-lg bg-card border border-border p-2 text-center">
               <p className="text-muted-foreground">{t("workSessions.sessions")}</p>
               <p className="font-mono font-bold text-foreground">{sessions.total_sessions}</p>
@@ -362,7 +357,6 @@ export default function MyDayPage() {
                     </div>
                     <div className="flex-1 min-w-0 truncate">{s.site_name}</div>
                     <div className="font-mono text-xs flex-shrink-0">{hours.toFixed(1)}ч</div>
-                    {s.labor_cost > 0 && <div className="font-mono text-xs text-muted-foreground flex-shrink-0">{s.labor_cost.toFixed(0)} €</div>}
                     {s.is_overtime && <Badge variant="outline" className="text-[9px] text-orange-400 border-orange-400/30">OT</Badge>}
                     {s.is_flagged && <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/30">{s.flag_reason}</Badge>}
                     {isOpen && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />}

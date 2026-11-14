@@ -1,0 +1,40 @@
+# LAB-01-G checks (2026-11-07), run from backend/ with PYTHONPATH=.
+# A) branch: parent 25f1d6c + LAB-01-G working tree
+## A2C guard
+W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
+## audit probe probe_lab01b_package_pointer.py
+FAILS: none
+## LAB-01 tests (labor_cost + d + e) --noconftest (mongomock + real mongo:7.0 rs0)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+53 passed, 1 skipped, 1 warning in 4.68s
+## tests/test_r0_0*.py --noconftest (real mongo:7.0 rs0)
+814 passed, 6 warnings in 158.51s (0:02:38)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 69.64s (0:01:09)
+  non-legacy_routes failures: 0
+
+# B) TRIAL MERGE (local only, not pushed): LAB-01-G tree + #72 W0-04-C01 @ 8ac194a → b7322e9
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## FG-85 concurrency test (real), 5 repetitions
+1 passed, 1 warning in 1.00s
+1 passed, 1 warning in 0.80s
+1 passed, 1 warning in 0.77s
+1 passed, 1 warning in 0.78s
+1 passed, 1 warning in 0.74s
+## LAB-01 tests (mongomock + real)
+54 passed, 1 warning in 5.09s
+## #72's test_w0_04_c01_audit_indexes_and_chain.py (real)
+24 passed, 1 warning in 10.57s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 159.76s (0:02:39)
+## W0 DB-free
+15 failed, 1092 passed, 67 skipped, 6 warnings in 73.42s (0:01:13)
+  non-legacy_routes failures: 0
+  (W0 on the trial merge: +7 passed / +17 skipped are #72's own W0 tests; the 15 failures are the same test_w0_03e_legacy_routes ones)

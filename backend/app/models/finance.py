@@ -84,6 +84,9 @@ class InvoiceCreate(BaseModel):
     vat_percent: float = 20.0
     notes: Optional[str] = None
     lines: List[InvoiceLineInput] = []
+    # FG-710 (R90 — final): the proforma advances a FINAL invoice settles — same
+    # project and client, each proforma used once
+    advance_proforma_ids: Optional[List[str]] = None
 
 class InvoiceUpdate(BaseModel):
     invoice_no: Optional[str] = None
@@ -102,6 +105,7 @@ class InvoiceUpdate(BaseModel):
     due_date: Optional[str] = None
     vat_percent: Optional[float] = None
     notes: Optional[str] = None
+    advance_proforma_ids: Optional[List[str]] = None   # FG-710; [] clears
 
 class InvoiceLinesUpdate(BaseModel):
     lines: List[InvoiceLineInput]

@@ -34,6 +34,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.pay_run_idempotency import EVENT_HOOKS
+
 BACKEND = Path(__file__).resolve().parent.parent
 
 ORG_A, ORG_B = "ORG-R005-A", "ORG-R005-B"
@@ -164,7 +166,8 @@ def run(monkeypatch, scenario, backend="mongomock"):
             await _seed(op)
             app = _app(monkeypatch, op)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
-                                         base_url="http://r005") as c:
+                                         base_url="http://r005",
+                                         event_hooks=EVENT_HOOKS) as c:  # R29 key (LAB-01-E)
                 return await scenario(c, op)
     return asyncio.run(body())
 

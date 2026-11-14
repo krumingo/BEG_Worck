@@ -25,6 +25,21 @@ DEFAULT_OT = {"over_8h": 1.5, "after_20": 1.5, "weekend": 2.0}
 DEFAULT_MAX_SESSION = 12
 DEFAULT_WORK_HOURS = 8
 
+# R62 (Krum, canon 6f29205: "Едно число навсякъде") / FG-462: these are TIME screens. They
+# show the hours of the time sessions and — where it applies — THE approved labor cost
+# (project_labor_cost: approved reports + approved manual rows). The money a session row
+# carries (hours × the snapshot rate) is never shown, not even as a labelled estimate.
+SESSION_MONEY_FIELDS = ("labor_cost", "hourly_rate_at_date", "overtime_coefficient_cost")
+
+
+def _hours_only(items):
+    """The session rows of a time screen without their money (R62 / FG-462)."""
+    for it in items or []:
+        if isinstance(it, dict):
+            for k in SESSION_MONEY_FIELDS:
+                it.pop(k, None)
+    return items
+
 
 # ── Pydantic Models ────────────────────────────────────────────────
 
@@ -198,7 +213,7 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
     result = {k: v for k, v in session.items() if k != "_id"}
     if open_session:
         result["auto_closed_session_id"] = open_session["id"]
-    return result
+    return _hours_only([result])[0]        # FG-502: hours only, no session money
 
 
 # ── End Session ────────────────────────────────────────────────────
@@ -238,7 +253,7 @@ async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
             "updated_at": now_iso,
         }},
     )
-    return await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})
+    return _hours_only([await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})])[0]  # FG-502
 
 
 # ── List / Query ───────────────────────────────────────────────────
@@ -276,7 +291,9 @@ async def list_sessions(
         query["is_overtime"] = is_overtime
 
     tenant = _tenant(user)
-    return await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1)
+    page_ = await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1)
+    _hours_only(page_.get("items") if isinstance(page_, dict) else page_)
+    return page_
 
 
 # ── Active Sessions ────────────────────────────────────────────────
@@ -294,7 +311,7 @@ async def get_active_sessions(
     now = datetime.now(timezone.utc).isoformat()
     for s in items:
         s["elapsed_hours"] = round(compute_duration(s["started_at"], now), 2)
-    return {"items": items, "total": len(items)}
+    return {"items": _hours_only(items), "total": len(items)}
 
 
 # ── My Today ───────────────────────────────────────────────────────
@@ -312,12 +329,10 @@ async def get_my_today(user: dict = Depends(get_current_user)):
 
     now_iso = datetime.now(timezone.utc).isoformat()
     total_hours = 0
-    total_cost = 0
     has_open = False
     for s in items:
         if s.get("ended_at"):
             total_hours += s.get("duration_hours", 0)
-            total_cost += s.get("labor_cost", 0)
         else:
             elapsed = compute_duration(s["started_at"], now_iso)
             s["elapsed_hours"] = round(elapsed, 2)
@@ -325,10 +340,9 @@ async def get_my_today(user: dict = Depends(get_current_user)):
             has_open = True
 
     return {
-        "items": items,
+        "items": _hours_only(items),
         "total_sessions": len(items),
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),
         "has_open_session": has_open,
         "is_overtime": total_hours > DEFAULT_WORK_HOURS,
     }
@@ -360,13 +374,20 @@ async def get_summary(
 
     items = await tenant.work_sessions.find(query, {"_id": 0}).to_list(1000)
     total_hours = sum(s.get("duration_hours", 0) for s in items)
-    total_cost = sum(s.get("labor_cost", 0) for s in items)
     overtime_hours = sum(s.get("duration_hours", 0) for s in items if s.get("is_overtime"))
     workers = set(s["worker_id"] for s in items)
 
+    # R62: the one official figure for a site and period is project_labor_cost (approved
+    # reports + approved manual rows); across all sites it is not summed here (None).
+    approved = None
+    if site_id:
+        from app.services.labor_cost import project_labor_cost
+        lc = await project_labor_cost(user["org_id"], site_id,
+                                      date_from=date or date_from, date_to=date or date_to)
+        approved = round(lc["total"], 2)
     return {
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),
+        "approved_labor_cost": approved,             # R62: THE number (one site), else None
         "workers_count": len(workers),
         "overtime_hours": round(overtime_hours, 2),
         "sessions_count": len(items),
@@ -438,7 +459,7 @@ async def split_session(session_id: str, data: SessionSplit, user: dict = Depend
     return {
         "ok": True,
         "original_id": session_id,
-        "new_sessions": [{k: v for k, v in ns.items() if k != "_id"} for ns in new_sessions],
+        "new_sessions": _hours_only([{k: v for k, v in ns.items() if k != "_id"} for ns in new_sessions]),  # FG-502
     }
 
 
@@ -469,13 +490,10 @@ async def get_overtime_report(
     for s in items:
         wid = s["worker_id"]
         if wid not in workers:
-            workers[wid] = {"name": s.get("worker_name", ""), "regular_hours": 0, "overtime_hours": 0, "overtime_cost": 0, "total_cost": 0}
-        cost = s.get("labor_cost", 0)
+            workers[wid] = {"name": s.get("worker_name", ""), "regular_hours": 0, "overtime_hours": 0}
         hours = s.get("duration_hours", 0)
-        workers[wid]["total_cost"] += cost
         if s.get("is_overtime"):
             workers[wid]["overtime_hours"] += hours
-            workers[wid]["overtime_cost"] += cost
         else:
             workers[wid]["regular_hours"] += hours
 
@@ -484,11 +502,9 @@ async def get_overtime_report(
         w["worker_id"] = wid
         w["regular_hours"] = round(w["regular_hours"], 2)
         w["overtime_hours"] = round(w["overtime_hours"], 2)
-        w["overtime_cost"] = round(w["overtime_cost"], 2)
-        w["total_cost"] = round(w["total_cost"], 2)
         result.append(w)
 
-    return {"workers": result, "total": len(result)}
+    return {"workers": result, "total": len(result)}      # R62 / FG-462: hours only
 
 
 # ── Update (Admin/Manager) ────────────────────────────────────────
@@ -529,7 +545,7 @@ async def update_session(session_id: str, data: SessionUpdate, user: dict = Depe
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await tenant.work_sessions.update_one({"id": session_id}, {"$set": update})
-    return await tenant.work_sessions.find_one({"id": session_id}, {"_id": 0})
+    return _hours_only([await tenant.work_sessions.find_one({"id": session_id}, {"_id": 0})])[0]  # FG-502
 
 
 # ── Delete (Admin only, flagged only) ──────────────────────────────

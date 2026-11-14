@@ -154,7 +154,9 @@ def body_for(key: str, t: Dict[str, Any], project_id: Optional[str]) -> Optional
                 "owner_type": "company", "owner_id": t["company1_id"]}
     if key == "project_create_plain":
         return {"code": "C01-" + uuid.uuid4().hex[:8], "name": "C01", "status": "Active"}
-    if key in ("labor_create", "labor_sync"):
+    if key == "labor_create":          # R62 / FG-461: the project's SMR package, no free text
+        return {"project_id": project_id, "hours": 1, "execution_package_id": (project_id or "") + "-r62pkg"}
+    if key == "labor_sync":
         return {"project_id": project_id, "hours": 1, "activity_name": "C01"}
     if key == "labor_recompute":
         return None
@@ -175,6 +177,10 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
     success = {"status": ok, "writes": True}
     if key in WRITES_ONLY_WITH_SOURCE_DATA and target in ("P2", "XA"):
         success = {"status": ok, "writes": False}
+    if key == "labor_recompute" and target == "P2":
+        # R62 / FG-461: P2 now has an SMR package (a manual labor row names one) — the
+        # recompute updates it; A's project seen from B (XA) still writes nothing
+        success = {"status": ok, "writes": True}
     if key in UNCHANGED_RESYNC:
         success = {"status": ok, "writes": False}
     if key == "waste_create":
@@ -458,10 +464,16 @@ def _c02_routes():
 
 def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
     """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30) and
-    SUB-ADV-01's (R39; checked in tests/test_sub_adv_01_subcontractor_advance.py)."""
+    SUB-ADV-01's (R39; checked in tests/test_sub_adv_01_subcontractor_advance.py) and
+    LAB-01-S's (R62; checked in tests/test_lab_01_s_r62_one_labor_cost.py)."""
     c02 = set(_c02_routes()) | {
         ("POST", "/api/subcontractor-packages/{pkg_id}/advances"),
-        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")}
+        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"),
+        # R62 / FG-58 (Owner-only approval of a manual labor row; checked in
+        # tests/test_lab_01_s_r62_one_labor_cost.py)
+        ("POST", "/api/labor-entries/{entry_id}/approve"),
+        ("POST", "/api/labor-entries/{entry_id}/reject"),
+        ("POST", "/api/labor-entries/{entry_id}/reverse")}
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]

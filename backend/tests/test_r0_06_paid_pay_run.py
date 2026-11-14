@@ -45,6 +45,8 @@ import asyncio
 
 import pytest
 
+from tests.pay_run_idempotency import EVENT_HOOKS
+
 from tests.test_r0_05_pay_run_selected_only import (
     H, ORG_A, ORG_B, P_END, P_START, _Db, _app, _real_refusal, _seed, body, row,
 )
@@ -84,7 +86,8 @@ def run(monkeypatch, scenario, backend="mongomock"):
             await _seed_money(op)
             app = _app(monkeypatch, op)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
-                                         base_url="http://r006") as c:
+                                         base_url="http://r006",
+                                         event_hooks=EVENT_HOOKS) as c:  # R29 key (LAB-01-E)
                 return await scenario(c, op)
     return asyncio.run(go())
 
@@ -598,7 +601,8 @@ def run_c02(monkeypatch, scenario, backend="mongomock"):
                 monkeypatch.setattr(module, "db", op)
             app.include_router(settings_routes.router, prefix="/api")
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
-                                         base_url="http://r006") as c:
+                                         base_url="http://r006",
+                                         event_hooks=EVENT_HOOKS) as c:  # R29 key (LAB-01-E)
                 return await scenario(c, op)
     return asyncio.run(go())
 

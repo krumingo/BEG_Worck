@@ -18,6 +18,17 @@ from app.tenancy.data_access import TenantData
 
 NORMAL_DAY = 8
 
+# LAB-01: line-level labor facts (entered quantity, unit, FLOW-019 DOWNTIME, the SMR
+# package the line names). Passed through for display/classification only.
+# LAB-01-B (FG-64): pay_type, piece_rate and approved_quantity are NOT read from the
+# worker-filled line at all — the price comes from the package/contract and the
+# approved quantity from an approval record (app.services.labor_cost).
+LABOR_LINE_FIELDS = ("quantity", "unit", "cost_type", "execution_package_id")
+
+
+def _labor_fields(src: dict) -> dict:
+    return {k: src.get(k) for k in LABOR_LINE_FIELDS}
+
 
 async def fetch_normalized_report_lines(
     org_id: str,
@@ -85,6 +96,11 @@ async def fetch_normalized_report_lines(
             "regular_hours": float(reg) if reg is not None else None,
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
+            **_labor_fields(d),
+            # LAB-01-D (FG-72): what a labor approval binds to
+            "report_doc_id": d.get("id", ""),
+            "entry_id": None,
+            "report_version": int(d.get("report_version") or 0),
         })
 
     # ── B) Old-style (structured with employee_id + day_entries) ───
@@ -140,6 +156,11 @@ async def fetch_normalized_report_lines(
                 "regular_hours": None,
                 "overtime_hours": None,
                 "overtime_coefficient": None,
+                **_labor_fields(entry),
+                # LAB-01-D (FG-72): what a labor approval binds to
+                "report_doc_id": d.get("id", ""),
+                "entry_id": entry.get("id", ""),
+                "report_version": int(d.get("report_version") or 0),
             })
 
     return lines

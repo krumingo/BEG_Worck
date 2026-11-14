@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.services.labor_cost import compute_person_labor, load_smr_terms
 from app.permissions.money_write import money_values_visible, without_keys
 from app.permissions.finance_read import REPORT_LINE_MONEY_FIELDS
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch, NORMAL_DAY
@@ -110,6 +111,25 @@ async def get_all_reports(
             hrs = int(p.get("standard_hours_per_day") or 8)
             return round(ms / max(days * hrs, 1), 2)
 
+    # LAB-01: the labor value of a line is the one labor calculation of the APPROVED
+    # lines of that worker in this list (salary → approved hours × rate, akord → approved
+    # quantity × piece rate, DOWNTIME apart). A non-approved line has no labor value.
+    # The calculation sees ALL approved lines of the worker in the period (not only the
+    # filtered page), so a day-based salary is split between the day's lines exactly as
+    # the Pay Run splits it.
+    full_by_worker = {}
+    for wid in worker_ids:
+        full_by_worker[wid] = await fetch_normalized_report_lines(
+            org_id=org_id, date_from=date_from, date_to=date_to, worker_id=wid,
+            status_filter="APPROVED")
+    smr_terms = await load_smr_terms(
+        tenant, org_id, [ln for ls in full_by_worker.values() for ln in ls])
+    labor_by_id = {}
+    for wid, wlines in full_by_worker.items():
+        lc = compute_person_labor(prof_map.get(wid, {}), wlines, smr_terms)
+        for rec in lc["lines"]:
+            labor_by_id[rec["report_id"]] = rec
+
     for r in rows:
         wid = r["worker_id"]
         if not r["worker_name"]:
@@ -127,26 +147,16 @@ async def get_all_reports(
         ot_h = float(r.get("overtime_hours") or 0)
         coef = float(r.get("overtime_coefficient") or 1.0)
         r["overtime_coefficient"] = coef
-        r["labor_value"] = round(reg_h * rate + ot_h * rate * coef, 2)
+        rec = labor_by_id.get(r.get("id"))
+        r["labor_value"] = round(rec["amount"], 2) if rec else 0.0
+        r["labor_value_status"] = "approved" if rec else "not_approved"
+        r["cost_type"] = rec["cost_type"] if rec else (r.get("cost_type") or "LABOR")
+        r["labor_dq"] = rec["dq"] if rec else []
 
-        pay_type = (prof.get("pay_type") or "Monthly").strip()
-        ot_part = ""
-        if ot_h > 0:
-            if coef and coef != 1.0:
-                ot_part = f" + {ot_h}ч × {rate} × {coef}"
-            else:
-                ot_part = f" + {ot_h}ч × {rate}"
-        if pay_type == "Hourly":
-            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part}"
-        elif pay_type == "Daily":
-            dr = float(prof.get("daily_rate") or 0)
-            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (дн. {dr})"
-        elif pay_type == "Akord":
-            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (акорд)"
+        if rec:
+            r["earned_formula"] = rec["formula"]
         else:
-            ms = float(prof.get("monthly_salary") or 0)
-            wd = int(prof.get("working_days_per_month") or 22)
-            r["earned_formula"] = f"{reg_h}ч × {rate} EUR/ч{ot_part} (мес. {ms}/{wd}д)"
+            r["earned_formula"] = "неодобрен ред — без трудова стойност"
         r["submitted_by_name"] = _user_name(r["submitted_by"]) if r["submitted_by"] else ""
         r["approved_by_name"] = _user_name(r["approved_by"]) if r["approved_by"] else ""
 

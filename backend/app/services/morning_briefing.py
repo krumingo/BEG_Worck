@@ -48,10 +48,10 @@ async def build_morning_briefing(org_id: str, date: str = None, *,
         budgets = await tenant.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
         total_budget = sum(b.get("labor_budget", 0) for b in budgets)
         if total_budget > 0 and pid not in hidden_sites:   # SEC-02-G (SEC71-05): no band
-            sessions_cost = 0
-            async for s in tenant.work_sessions.find({"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}):
-                sessions_cost += s.get("labor_cost", 0)
-            burn = sessions_cost / total_budget * 100
+            # R62 / FG-207: "spent" is THE labor cost of the project, not the work_sessions
+            from app.services.labor_cost import project_labor_cost
+            spent = (await project_labor_cost(org_id, pid))["total"]
+            burn = spent / total_budget * 100
             if burn > 100:
                 reasons.append("Бюджетът е надхвърлен")
                 severity = "critical"

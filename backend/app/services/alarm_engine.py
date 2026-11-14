@@ -63,10 +63,10 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             total_budget = sum(b.get("labor_budget", 0) for b in budgets)
             if total_budget <= 0:
                 continue
-            sessions = await tenant.work_sessions.find(
-                {"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}
-            ).to_list(5000)
-            spent = sum(s.get("labor_cost", 0) for s in sessions)
+            # R62 / FG-390: "spent" is THE labor cost of the project (approved reports +
+            # Owner-approved manual rows), not the raw work sessions
+            from app.services.labor_cost import project_labor_cost
+            spent = (await project_labor_cost(org_id, pid))["total"]
             burn_pct = round(spent / total_budget * 100, 1)
 
             if not _compare(burn_pct, op, threshold):

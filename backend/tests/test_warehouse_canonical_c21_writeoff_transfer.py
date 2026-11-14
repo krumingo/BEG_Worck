@@ -77,7 +77,9 @@ def _patch_dbs(monkeypatch, db):
     for name in ("app.routes.material_smr", "app.routes.full_cost",
                  "app.routes.revenue_expense", "app.routes.labor_smr",
                  "app.routes.subcontractors", "app.routes.procurement",
-                 "app.routes.project_pnl", "app.services.project_pnl"):
+                 "app.routes.project_pnl", "app.services.project_pnl",
+                 # LAB-01: the labor calculation reads through these two
+                 "app.services.labor_cost", "app.services.report_normalizer"):
         monkeypatch.setattr(importlib.import_module(name), "db", db)
 
 

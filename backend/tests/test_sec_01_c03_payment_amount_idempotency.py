@@ -113,7 +113,8 @@ def body_for(key: str, fx_a: Dict[str, Any], c02) -> Dict[str, Any]:
     if key == "subpay_vat":
         return {**c02.body_for("subpay", fx_a, "A", None), "vat_amount": 2}
     if key == "labor":
-        return {"project_id": fx_a["project_id"], "hours": 1, "activity_name": "C03"}
+        return {"project_id": fx_a["project_id"], "hours": 1,           # R62 / FG-461
+                "execution_package_id": fx_a["project_id"] + "-r62pkg"}
     if key == "waste":
         return {"material_name": "C03", "qty": 1}
     raise AssertionError(key)
@@ -590,6 +591,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     body = body_for(key, fx["A"], c02)
                     if key == "labor":
                         body["project_id"] = pid
+                        body["execution_package_id"] = (pid or "") + "-r62pkg"   # FG-461
                     res = post(ukey, key, body, uuid.uuid4().hex, project_id=pid)
                     res.pop("body")
                     r1.append({"mode": mode, "user": ukey, "project": target, "probe": key, **res})
@@ -615,6 +617,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     body = body_for(key, fx["A"], c02)
                     if key == "labor":
                         body["project_id"] = pid
+                        body["execution_package_id"] = (pid or "") + "-r62pkg"   # FG-461
                         if pid is None:
                             body.pop("project_id")
                     res = post("accountant", key, body, uuid.uuid4().hex, project_id=pid)

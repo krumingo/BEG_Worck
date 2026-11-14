@@ -30,29 +30,36 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # Cash in: actual payments received
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-        {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
-    ).to_list(500)
-    cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
+        {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "kind": 1,
+         "due_date": 1, "advance_proforma_ids": 1},
+    ).to_list(5000)
+    # R89 (Krum 14.11.2026, FG-696): the cash card reads the ONE rule of the project report
+    # (FLOW-006 ledger) — "получено" = the money received (with VAT; proforma advances
+    # included, credit-note refunds deducted, R90), "фактурирано" = final invoices − credit
+    # notes (no proforma), "чака плащане" = what is invoiced and not yet received
+    from app.services.project_pnl import CREDIT_NOTE, PROFORMA, _kind, received_revenue
+    rec = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    cash_in = rec["received_gross"]
 
     # Invoice breakdown: invoiced vs paid vs unpaid vs overdue
     today_str = _dt.now(_tz.utc).strftime("%Y-%m-%d")
-    total_invoiced = round(sum(i.get("total", 0) for i in invoices if i.get("status") not in ["Draft", "Cancelled"]), 2)
+    total_invoiced = rec["invoiced_gross"]
     total_paid = cash_in
-    total_unpaid = round(total_invoiced - total_paid, 2)
+    total_unpaid = rec["awaiting_payment_gross"]
     total_overdue = round(sum(
         (i.get("total", 0) - (i.get("paid_amount") or 0))
         for i in invoices
         if i.get("status") not in ["Draft", "Cancelled", "Paid"]
+        and _kind(i) not in (PROFORMA, CREDIT_NOTE)
         and (i.get("due_date") or "9999") < today_str
     ), 2)
 
     # Cash out: actual payments made (payroll paid + supplier paid + contract paid)
-    # Payroll: sum labor_cost from approved work_sessions (reported/operational)
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}, "is_flagged": {"$ne": True}},
-        {"_id": 0, "labor_cost": 1, "duration_hours": 1, "hourly_rate_at_date": 1, "worker_id": 1},
-    ).to_list(5000)
-    reported_labor = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
+    # R62 (FG-421): the reported labor is THE labor cost of the project (approved reports +
+    # Owner-approved manual rows; labor + downtime) — not the work_sessions
+    from app.services.labor_cost import project_labor_cost
+    labor_lc = await project_labor_cost(org_id, project_id)
+    reported_labor = labor_lc["total"]
 
     # ── PAID LABOR LAYER (from v3 paid pay_runs) ──
     # Per-project paid labor, reproduced from paid pay_runs (status == "paid").
@@ -116,6 +123,10 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
             "unpaid": total_unpaid,
             "overdue": total_overdue,
         },
+        # R89: the columns say what they are
+        "labels": {"invoiced": "Фактурирано (с ДДС, без проформа)", "cash_in": "Получено (с ДДС)",
+                   "unpaid": "Фактурирано, чака плащане (с ДДС)"},
+        "revenue_basis": rec["revenue_basis"],
         "breakdown": {
             "paid_labor": effective_cash_labor,
             "paid_materials": paid_materials,
@@ -137,7 +148,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     if unpaid_approved > 0:
         warnings.append(f"Одобрен, но неплатен труд: {unpaid_approved} EUR")
     if paid_labor_expense > 0 and reported_labor == 0:
-        warnings.append("Има платен труд, но няма отчетен труд от work_sessions")
+        warnings.append("Има платен труд, но няма отчетен (одобрен) труд")
     if reported_labor > 0 and paid_labor_expense == 0:
         warnings.append(f"Има отчетен труд ({reported_labor} EUR), който още не е платен — не е включен в cash out")
 
@@ -145,48 +156,21 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # B) OPERATING RESULT
     # ══════════════════════════════════════════════════════════════
 
-    # Invoiced revenue (accrual): total of all non-draft/cancelled invoices
-    invoiced_revenue = round(sum(
-        (i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in invoices
-        if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
-    ), 2)
-
-    # Earned revenue (cash basis): only actual paid amounts
-    earned_revenue = round(sum(
-        (i.get("paid_amount") or 0) for i in invoices
-        if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
-    ), 2)
+    # R89 (Krum 14.11.2026, FG-696 — final): "оперативен приход" = the payments RECEIVED
+    # (FLOW-006 ledger), net — the one shared rule of the project report (R90: paid proforma
+    # advances in, credit-note refunds out); the invoiced amount = final invoices − credit
+    # notes, net, no proforma
+    invoiced_revenue = rec["invoiced_net"]
+    earned_revenue = rec["received_net"]
     revenue_mode = "cash"
     if earned_revenue == 0 and invoiced_revenue > 0:
         warnings.append("Има фактурирани суми, но няма реални плащания — оперативен приход = 0")
 
-    # Direct labor: clean labor (hours × rate) from approved sessions
-    # Resolve rates for workers with 0 stored rate
-    rate_cache = {}
-    direct_labor = 0
-    direct_labor_insurance = 0
-    missing_rate_workers = []
-
-    for s in sessions:
-        wid = s.get("worker_id", "")
-        hours = s.get("duration_hours", 0)
-        rate = s.get("hourly_rate_at_date", 0)
-
-        if rate == 0 and wid:
-            if wid not in rate_cache:
-                rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
-            resolved = rate_cache[wid]
-            rate = resolved["rate"]
-            if resolved["missing_rate"]:
-                missing_rate_workers.append(wid)
-
-        clean = round(hours * rate, 2)
-        ins = round(clean * insurance_rate, 2)
-        direct_labor += clean
-        direct_labor_insurance += ins
-
-    direct_labor = round(direct_labor, 2)
-    direct_labor_insurance = round(direct_labor_insurance, 2)
+    # Direct labor — R62 (FG-421): THE labor cost (the same number as every other reader);
+    # a line without a rate is a DQ warning with 0, never a resolved / default rate
+    direct_labor = reported_labor
+    direct_labor_insurance = round(direct_labor * insurance_rate, 2)
+    missing_rate_workers = [r.get("worker_id") for r in labor_lc["lines"] if "MISSING_RATE" in (r.get("dq") or [])]
 
     operating_cost = round(direct_labor + paid_materials + subcontractor_cost + paid_contracts, 2)
     operating_result_val = round(earned_revenue - operating_cost, 2)

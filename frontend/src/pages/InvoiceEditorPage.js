@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
-import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
+import { apiErrorText, createIdempotencyHolder, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,10 @@ const METHOD_LABELS = {
 
 export default function InvoiceEditorPage() {
   const payKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  // F-73-01 (R29): the invoice writes that link / unlink a proforma advance (create, edit,
+  // cancel, delete) carry a key — the same key while the request is the same (a retry is a
+  // replay), a new one once it succeeded or the payload changed
+  const writeKey = useRef(createIdempotencyHolder()).current;
   const { t } = useTranslation();
   const { invoiceId } = useParams();
   const [searchParams] = useSearchParams();
@@ -117,6 +121,9 @@ export default function InvoiceEditorPage() {
   const [currency, setCurrency] = useState("EUR");
   const [vatPercent, setVatPercent] = useState(20);
   const [notes, setNotes] = useState("");
+  // FG-710 (R86): the proforma advances this final invoice settles
+  const [advanceIds, setAdvanceIds] = useState([]);
+  const [proformas, setProformas] = useState([]);
   const [lines, setLines] = useState([]);
   
   // Auto-fill state
@@ -202,6 +209,7 @@ export default function InvoiceEditorPage() {
         setCurrency(inv.currency);
         setVatPercent(inv.vat_percent);
         setNotes(inv.notes || "");
+        setAdvanceIds(inv.advance_proforma_ids || []);
         setLines(inv.lines || []);
         
         // Load invoice payments
@@ -297,23 +305,30 @@ export default function InvoiceEditorPage() {
         counterparty_mol: counterpartyMol || null, counterparty_email: counterpartyEmail || null,
         counterparty_phone: counterpartyPhone || null, issue_date: issueDate, due_date: dueDate,
         currency, vat_percent: vatPercent, notes: notes || null,
+        ...(direction === "Issued" && kind === "Invoice" ? { advance_proforma_ids: advanceIds } : {}),
         lines: lines.map((l) => ({
           description: l.description || "", unit: l.unit || "pcs",
           qty: parseFloat(l.qty) || 0, unit_price: parseFloat(l.unit_price) || 0,
         })),
       };
       if (isNew) {
-        const res = await API.post("/finance/invoices", payload);
+        const res = await API.post("/finance/invoices", payload,
+          idempotencyHeaders(writeKey.keyFor("POST /finance/invoices", payload)));
+        writeKey.done();
         navigate(`/finance/invoices/${res.data.id}`, { replace: true });
       } else {
-        await API.put(`/finance/invoices/${invoiceId}`, {
+        const header = {
           invoice_no: invoiceNo, kind, counterparty_name: counterpartyName || null,
           counterparty_eik: counterpartyEik || null, counterparty_vat_no: counterpartyVatNo || null,
           counterparty_address: counterpartyAddress || null, counterparty_mol: counterpartyMol || null,
           counterparty_email: counterpartyEmail || null, counterparty_phone: counterpartyPhone || null,
           project_id: projectId || null, issue_date: issueDate, due_date: dueDate,
           vat_percent: vatPercent, notes: notes || null,
-        });
+          ...(direction === "Issued" && kind === "Invoice" ? { advance_proforma_ids: advanceIds } : {}),
+        };
+        await API.put(`/finance/invoices/${invoiceId}`, header,
+          idempotencyHeaders(writeKey.keyFor(`PUT /finance/invoices/${invoiceId}`, header)));
+        writeKey.done();
         await API.put(`/finance/invoices/${invoiceId}/lines`, {
           lines: lines.map((l) => ({
             description: l.description || "", unit: l.unit || "pcs",
@@ -343,7 +358,9 @@ export default function InvoiceEditorPage() {
     if (!window.confirm(t("finance.confirmCancel"))) return;
     setSaving(true);
     try {
-      await API.post(`/finance/invoices/${invoiceId}/cancel`);
+      await API.post(`/finance/invoices/${invoiceId}/cancel`, null,
+        idempotencyHeaders(writeKey.keyFor(`POST /finance/invoices/${invoiceId}/cancel`, null)));
+      writeKey.done();
       await fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.saveFailed"));
@@ -353,7 +370,9 @@ export default function InvoiceEditorPage() {
   const handleDelete = async () => {
     if (!window.confirm(t("finance.confirmDeleteInvoice"))) return;
     try {
-      await API.delete(`/finance/invoices/${invoiceId}`);
+      await API.delete(`/finance/invoices/${invoiceId}`,
+        idempotencyHeaders(writeKey.keyFor(`DELETE /finance/invoices/${invoiceId}`, null)));
+      writeKey.done();
       navigate("/finance/invoices");
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.deleteFailed"));
@@ -771,6 +790,13 @@ export default function InvoiceEditorPage() {
             </div>
           </div>
 
+          {/* FG-710 (R86): proforma advances settled by this final invoice */}
+          {direction === "Issued" && kind === "Invoice" && projectId && (
+            <AdvanceProformasField projectId={projectId} invoiceId={isNew ? null : invoiceId}
+              value={advanceIds} onChange={setAdvanceIds} disabled={locked}
+              proformas={proformas} setProformas={setProformas} />
+          )}
+
           {/* Notes */}
           <div className="rounded-xl border border-border bg-card p-5">
             <Label className="mb-2 block">{t("common.notes")}</Label>
@@ -1034,6 +1060,45 @@ export default function InvoiceEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+/**
+ * FG-710 (R90, Krum 14.11.2026 — final): the proforma advances a final
+ * invoice settles. Only issued proformas of the same project, not used by another invoice;
+ * the server checks the project, the client and the single use.
+ */
+export function AdvanceProformasField({ projectId, invoiceId, value, onChange, disabled, proformas, setProformas }) {
+  useEffect(() => {
+    let alive = true;
+    API.get("/finance/invoices", { params: { direction: "Issued", project_id: projectId } })
+      .then((res) => {
+        if (!alive) return;
+        const rows = (res.data || []).filter((i) => (i.kind || "Invoice") === "Proforma"
+          && !["Draft", "Cancelled"].includes(i.status)
+          && (!i.advance_used_by_invoice_id || i.advance_used_by_invoice_id === invoiceId));
+        setProformas(rows);
+      })
+      .catch(() => alive && setProformas([]));
+    return () => { alive = false; };
+  }, [projectId, invoiceId, setProformas]);
+  const toggle = (id) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  return (
+    <div className="rounded-xl border border-border bg-card p-5" data-testid="advance-proformas">
+      <Label className="mb-2 block">Аванс по проформа (приспада се от „чака плащане“)</Label>
+      {proformas.length === 0 && <p className="text-xs text-muted-foreground">Няма издадени проформи към този обект</p>}
+      {proformas.map((p) => (
+        <label key={p.id} className="flex items-center gap-2 text-sm py-1">
+          <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)}
+            disabled={disabled} data-testid={`advance-proforma-${p.id}`} />
+          <span className="font-mono">{p.invoice_no}</span>
+          <span className="text-muted-foreground">{p.counterparty_name}</span>
+          <span className="font-mono ml-auto">{(p.total || 0).toFixed(2)} {p.currency || "EUR"}</span>
+          <span className="text-emerald-400 font-mono">платено {(p.paid_amount || 0).toFixed(2)}</span>
+        </label>
+      ))}
     </div>
   );
 }
