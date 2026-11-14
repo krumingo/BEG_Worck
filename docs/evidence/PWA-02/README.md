@@ -163,6 +163,13 @@ A2C нарушение `A2C-DYNAMIC getattr(db, ...)` в лога на FG-636: �
 обикновен параметър (`ensure_sync_indexes(database, database_name)`), не се чете от обекта на базата.
 `scripts/w0_03e_a2c_tenant_boundary_guard.py` → 247 модула, 0 нарушения; A1 → 498, 0.
 
+## AUDIT-2 PWA92-M3 (db8a7e3) — поправено
+W0 18 срещу 16 на main, двете в `test_w0_03e_a2b_static_guard.py`: (1) `ops_alarms` (системната база,
+FG-642) е класифицирана в `ownership.TECHNICAL` (само имена на бази/индекси, без бизнес запис);
+(2) `W0-03E-A2B_INVENTORY.md` е регенериран от `scripts/w0_03e_a2b_inventory.py` (само редът на
+`data_access.py` се мени). След това W0 на реален Mongo: 16 failed / 1176 passed = точно наборът на
+main; A2B guard + two-tenant gate 46 passed; A2C 247/0, A1 498/0.
+
 ## Дългове и отворени точки (не са решавани — за Крум / следваща задача)
 - **D1 — migration runner** няма в main; индексите се създават идемпотентно при старт/onboarding.
 - **D2 — Background Sync без отворена страница:** ключът е неекспортируем и е при страницата; service

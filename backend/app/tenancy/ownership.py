@@ -184,9 +184,13 @@ TENANT_ROOT = "organizations"
 #: rate-limit counters and security events — an unknown email or a throttled IP
 #: belongs to no tenant, and neither collection holds a business record, a raw
 #: email, a token or a password.
+#:
+#: ``ops_alarms`` (PWA-02 FG-636/642): installation-level operational alarms in the SYSTEM
+#: database (a unique index skipped at startup) — database + index names only, no business
+#: record, never read into a tenant's view.
 TECHNICAL: FrozenSet[str] = frozenset({
     "md_uniqueness_runs", "billing_webhook_rejections",
-    "auth_rate_limits", "auth_security_events"})
+    "auth_rate_limits", "auth_security_events", "ops_alarms"})
 
 #: Collections a PLATFORM principal (not a tenant) legitimately writes rows to:
 #: the platform administrator's own user record and its security log
