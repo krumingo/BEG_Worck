@@ -117,7 +117,7 @@ UNIQUE_INDEXES = (
 )
 
 
-async def ensure_sync_indexes(database) -> List[str]:
+async def ensure_sync_indexes(database, database_name: str = "?") -> List[str]:
     """Idempotent; at startup and for every tenant database (no request creates a
     collection). There is no migration runner in main — same pattern as OH-01.
     Returns the names of unique indexes that could NOT be created (duplicates)."""
@@ -136,7 +136,7 @@ async def ensure_sync_indexes(database) -> List[str]:
             skipped.append(name)
             logger.critical("ALARM PWA-02: unique index %s on %s.%s NOT created — duplicate rows "
                             "exist; run scripts/pwa02_unique_index_dryrun.py (read-only) and decide",
-                            name, getattr(database, "name", "?"), coll)
+                            name, database_name, coll)
     await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
                                                  name="pwa02_receipt_device")
     for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
@@ -204,7 +204,7 @@ async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:
         if name and r.get("id"):
             tenants_of.setdefault(name, []).append(r["id"])
     for name in names:
-        skipped = await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name])
+        skipped = await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name], name)
         for index in skipped:
             await _raise_index_alarm(system_db, name, index)
             await _audit_index_alarm(tenants_of.get(name, []), name, index)
