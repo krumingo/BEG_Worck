@@ -286,6 +286,51 @@ def _clean_day_entries(entries) -> list:
     return clean
 
 
+PRESENCE_STATUSES = ("Present", "Late")
+LEAVE_CALENDAR = ("leave", "sick", "vacation")
+
+
+async def _presence_refusal(tenant: TenantData, org_id: str, worker_id: str, day: str,
+                            project_id: str, session=None):
+    """FG-728 (FLOW-013 L89: „не може да създаде отчет за човек, който не е присъстващ на
+    съответния обект"): None when the worker is present ON ``project_id`` that day (an
+    attendance entry Present / Late of that object — a legacy entry without an object counts
+    for the day — and no leave in the calendar), else the refusal message."""
+    cal = await tenant.worker_calendar.find_one(
+        {"org_id": org_id, "date": day, "worker_id": worker_id, "status": {"$in": list(LEAVE_CALENDAR)}},
+        {"_id": 0, "status": 1}, session=session)
+    if cal:
+        return f"Работникът е в {cal['status']} на {day} — не може да бъде отчетен на обекта."
+    att = await tenant.attendance_entries.find_one(
+        {"org_id": org_id, "date": day, "user_id": worker_id}, {"_id": 0, "status": 1, "project_id": 1},
+        session=session)
+    if not att or att.get("status") not in PRESENCE_STATUSES \
+            or att.get("project_id") not in (project_id, None, ""):
+        return f"Работникът не е отбелязан като присъстващ на обекта на {day}. Първо потвърдете присъствието в Хора."
+    return None
+
+
+async def _require_presence_on_moved_entries(tenant: TenantData, org_id: str, report: dict, new_entries,
+                                             session=None) -> None:
+    """FG-728: a correction that moves a day entry to ANOTHER object (one the report did not
+    have) needs the worker's presence on that object that day — else 400
+    PRESENCE_REQUIRED_ON_OBJECT, nothing written. (The person of a report cannot be changed
+    by this PUT.)"""
+    if new_entries is None:
+        return
+    old = {e.get("project_id") for e in (report.get("day_entries") or []) if isinstance(e, dict)}
+    if report.get("project_id"):
+        old.add(report["project_id"])
+    worker = report.get("employee_id") or report.get("worker_id")
+    day = report.get("report_date") or report.get("date")
+    for target in sorted({e.get("project_id") for e in new_entries if e.get("project_id")} - old):
+        msg = await _presence_refusal(tenant, org_id, worker, day, target, session=session)
+        if msg:
+            raise HTTPException(status_code=400, detail={
+                "code": "PRESENCE_REQUIRED_ON_OBJECT", "project_id": target, "worker_id": worker,
+                "date": day, "message": msg})
+
+
 @router.put("/daily-reports/{report_id}")
 async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
     tenant = _tenant(user)
@@ -310,6 +355,8 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
         user, report, projects=projects,
         author_ids=(report.get("employee_id"), report.get("created_by")),
         author_statuses=("DRAFT", "REJECTED"), tenant=tenant)
+    # FG-728: an entry moved to another object needs presence there — before any write
+    await _require_presence_on_moved_entries(tenant, org_id, report, update.get("day_entries"))
 
     now = datetime.now(timezone.utc).isoformat()
     update["updated_at"] = now
@@ -317,11 +364,19 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     set_fields, add = correction_fields(report, user, mode, now)
     update.update(set_fields)
     before = {k: report.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at", "reopened_by_correction")}
-    # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
-    await void_labor_approvals(tenant, org_id, report_id, user["id"],
-                               "report_corrected" if mode == CORRECTOR else "report_edited")
-    await tenant.employee_daily_reports.update_one(
-        {"id": report_id}, {"$set": update, **({"$addToSet": add} if add else {})})
+    # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write.
+    # FG-728: the presence is checked again in the SAME transaction as these two writes
+    from app.services.invoice_line_lock import run_transaction
+
+    async def _write(session):
+        await _require_presence_on_moved_entries(tenant, org_id, report, update.get("day_entries"),
+                                                 session=session)
+        await void_labor_approvals(tenant, org_id, report_id, user["id"],
+                                   "report_corrected" if mode == CORRECTOR else "report_edited",
+                                   session=session)
+        await tenant.employee_daily_reports.update_one(
+            {"id": report_id}, {"$set": update, **({"$addToSet": add} if add else {})}, session=session)
+    await run_transaction(tenant, _write)
     await reopen_effects(tenant, org_id, report, user, now)
     await audit_report_correction(db, user=user, mode=mode, report=report, before=before,
                                   after={k: update[k] for k in before}, endpoint="PUT /daily-reports/{id}")
