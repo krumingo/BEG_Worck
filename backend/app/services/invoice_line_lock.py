@@ -67,11 +67,31 @@ async def bump_line_lock(tenant, line_id: str, *, session=None) -> None:
 
 
 async def first_linked_movement(tenant, line_id: str, *, session=None) -> Optional[str]:
-    """The movement id of a canonical ledger row that links the line, or None."""
-    row = await tenant.warehouse_transactions.find_one(
+    """The movement id of a canonical ledger row that links the line, or None.
+
+    WH-REV-01: a reversed supplier receipt no longer links the line (its
+    reversal row carries ``reversed_invoice_line_id``, never
+    ``invoice_line_id``) — so reversing every linked receipt unlocks the
+    allocation, which can then be corrected."""
+    from app.services.warehouse_movements.reversal import without_reversed
+    rows = [row async for row in tenant.warehouse_transactions.find(
         {"action": {"$exists": True}, "invoice_line_id": line_id},
-        {"_id": 0, "movement_id": 1}, session=session)
-    return (row.get("movement_id") or "linked") if row else None
+        {"_id": 0, "movement_id": 1, "action": 1}, session=session)]
+    rows = await without_reversed(tenant.warehouse_transactions, rows, session=session)
+    return (rows[0].get("movement_id") or "linked") if rows else None
+
+
+async def reversed_receipts(tenant, line_id: str, *, session=None) -> list:
+    """WH-REV-01 / FG-195 — the line's linked supplier receipts that were
+    REVERSED. Non-empty means the line was linked (its allocation had been
+    locked, FG-109) and the lock was released by a reversal: changing the
+    allocation now is a CORRECTION of an official record (CLAUDE §7) — it
+    needs a reason, a version and an AuditEvent, never a silent move."""
+    from app.services.warehouse_movements.reversal import reversed_ids
+    ids = [row["movement_id"] async for row in tenant.warehouse_transactions.find(
+        {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)}, "invoice_line_id": line_id},
+        {"_id": 0, "movement_id": 1}, session=session)]
+    return sorted(await reversed_ids(tenant.warehouse_transactions, ids, session=session))
 
 
 def _transactions_unsupported(exc: Exception) -> bool:

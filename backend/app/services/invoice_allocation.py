@@ -358,7 +358,7 @@ def _escalation(opened_at: Optional[str], days: int, now: datetime) -> Dict[str,
 
 
 async def _dq_event(tenant, actor: Optional[dict], action: str, invoice_id: str,
-                    diff: dict, *, session=None) -> None:
+                    diff: dict, *, session=None, entity_id: Optional[str] = None) -> None:
     from app.audit.envelope import (
         ACTOR_HUMAN, ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event,
     )
@@ -369,7 +369,7 @@ async def _dq_event(tenant, actor: Optional[dict], action: str, invoice_id: str,
         actor_type=ACTOR_HUMAN if actor.get("id") else ACTOR_SYSTEM,
         actor_id=actor.get("id") or "system", action=action, source_flow="FLOW-033",
         retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="dq_issue",
-        entity_id=f"dq-invoice-allocation-{invoice_id}", structured_diff=diff,
+        entity_id=entity_id or f"dq-invoice-allocation-{invoice_id}", structured_diff=diff,
         effective_role_assignments=[actor.get("role") or ""], source_channel="api")
     await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
 
@@ -482,7 +482,8 @@ async def invoices_to_allocate(tenant, org_id: str, *, now: Optional[datetime] =
 
 
 async def audit_allocation_change(tenant, user: dict, line_id: str, before: list, after: list,
-                                  *, session=None, reason: Optional[str] = None) -> None:
+                                  *, session=None, reason: Optional[str] = None,
+                                  extra: Optional[dict] = None) -> None:
     """A2 #4 — an allocation change is a correction in the source with a
     canonical AuditEvent (in the caller's transaction when it has one)."""
     from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
@@ -491,7 +492,8 @@ async def audit_allocation_change(tenant, user: dict, line_id: str, before: list
         tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
         action="finance.invoice_line.allocation_corrected", source_flow="FLOW-020",
         retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="invoice_line",
-        entity_id=line_id, structured_diff={"allocations": {"before": before, "after": after}},
+        entity_id=line_id,
+        structured_diff={"allocations": {"before": before, "after": after}, **(extra or {})},
         reason=reason,
         effective_role_assignments=[user.get("role") or ""], source_channel="api")
     await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
@@ -594,3 +596,73 @@ async def received_result(tenant, org_id: str, invoices: List[dict], *, basis: s
     parts = await received_line_allocations(tenant, org_id, invoices)
     return {iid: allocated_amount(p, basis=basis, dest_type=dest_type, ref_id=ref_id)
             for iid, p in parts.items()}
+
+
+
+# ─────────── WH-REV-01 — Р47 / FG-214: the credit note an invoice awaits ───────────
+CREDIT_DQ_TYPE = "INVOICE_AWAITS_CREDIT_NOTE"
+CREDIT_DQ_TITLE = "очаква кредитно известие"
+
+
+async def sync_credit_note_issue(tenant, invoice_id: str, *, actor: Optional[dict] = None,
+                                 session=None, now: Optional[datetime] = None) -> Optional[dict]:
+    """WH-REV-01 — Р47 (Крум 08.11.2026), FG-214: the Accountant's DQ issue
+    „очаква кредитно известие" of a supplier invoice whose linked receipt was
+    reversed — in THIS module's ``dq_issues`` / ``alarm_events`` (one open
+    issue + alarm per invoice, deterministic ids, nothing deleted, an
+    AuditEvent in the caller's transaction). The awaited amount comes from
+    the open ``expected_credit_notes`` (the expectation only). With none open
+    the issue resolves. The full credit note is debt (t26)."""
+    now = now or datetime.now(timezone.utc)
+    rows = await tenant.expected_credit_notes.find(
+        {"invoice_id": invoice_id, "status": "open"}, {"_id": 0}, session=session).to_list(1000)
+    issue_id = f"dq-credit-note-{invoice_id}"
+    alarm_id = f"alarm-credit-note-{invoice_id}"
+    existing = await tenant.dq_issues.find_one({"id": issue_id}, {"_id": 0}, session=session)
+    is_open = bool(existing) and existing.get("status") == "open"
+    credit = round(sum(float(r.get("amount") or 0) for r in rows), 2)
+    reversals = sorted(r.get("reversal_movement_id") for r in rows if r.get("reversal_movement_id"))
+    if not rows:
+        if is_open:
+            await tenant.dq_issues.update_one(
+                {"id": issue_id}, {"$set": {"status": "resolved", "resolved_at": _iso(now)}},
+                session=session)
+            await tenant.alarm_events.update_one(
+                {"id": alarm_id}, {"$set": {"status": "resolved", "resolved_at": _iso(now),
+                                            "resolve_notes": "credit note registered"}},
+                session=session)
+            await _dq_event(tenant, actor, "dq.credit_note.resolved", invoice_id,
+                            {"status": {"before": "open", "after": "resolved"}},
+                            session=session, entity_id=issue_id)
+        return None
+    if is_open:
+        if (existing.get("awaited_credit"), existing.get("reversals")) != (credit, reversals):
+            await tenant.dq_issues.update_one(
+                {"id": issue_id}, {"$set": {"awaited_credit": credit, "reversals": reversals,
+                                            "updated_at": _iso(now)}}, session=session)
+        return {**existing, "awaited_credit": credit, "reversals": reversals}
+    inv = await tenant.invoices.find_one({"id": invoice_id}, {"_id": 0, "id": 1, "invoice_no": 1},
+                                         session=session) or {"id": invoice_id}
+    issue = {
+        "id": issue_id, "org_id": tenant.org_id, "type": CREDIT_DQ_TYPE, "title": CREDIT_DQ_TITLE,
+        "entity_type": "invoice", "entity_id": invoice_id, "invoice_no": inv.get("invoice_no"),
+        "status": "open", "owner_role": DQ_OWNER_ROLE, "opened_at": _iso(now),
+        "awaited_credit": credit, "reversals": reversals, "updated_at": _iso(now),
+    }
+    await tenant.dq_issues.update_one({"id": issue_id}, {"$set": issue}, upsert=True,
+                                      session=session)
+    await tenant.alarm_events.update_one({"id": alarm_id}, {"$set": {
+        "id": alarm_id, "org_id": tenant.org_id, "rule_id": CREDIT_DQ_TYPE,
+        "rule_name": CREDIT_DQ_TITLE, "type": "data_quality", "severity": "warning",
+        "status": "active", "triggered_at": _iso(now),
+        "message": f"{CREDIT_DQ_TITLE}: {inv.get('invoice_no') or invoice_id}",
+        "context": {"entity_id": invoice_id, "entity_type": "invoice", "dq_issue_id": issue_id,
+                    "details": {"awaited_credit": credit, "reversals": reversals}},
+        "acknowledged_by": None, "acknowledged_at": None, "resolved_by": None,
+        "resolved_at": None, "resolve_notes": None}}, upsert=True, session=session)
+    await _dq_event(tenant, actor, "dq.credit_note.opened", invoice_id,
+                    {"status": {"before": existing.get("status") if existing else None,
+                                "after": "open"},
+                     "owner_role": DQ_OWNER_ROLE, "awaited_credit": credit,
+                     "reversals": reversals}, session=session, entity_id=issue_id)
+    return issue

@@ -196,5 +196,6 @@ def test_every_canonical_action_maps_to_a_distinct_permission():
         p = permission_action_for(a)
         assert p.startswith("warehouse.")
         seen.add(p)
-    # 15 actions = 15 distinct permission strings
-    assert len(seen) == 15
+    # one distinct permission string per action (15 + WH-REV-01's two
+    # reversal actions, each with its own Р46 right)
+    assert len(seen) == len(list(CanonicalAction)) == 17

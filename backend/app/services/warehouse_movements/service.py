@@ -69,6 +69,8 @@ from app.services.warehouse_movements.actions import (
     permission_action_for,
     RULE_B_COSTING_ACTIONS,
     RULE_B_ZERO_COST_ACTIONS,
+    REVERSAL_ACTIONS,
+    REVERSAL_OF,
 )
 from app.services.warehouse_movements.envelope import (
     MovementEnvelope,
@@ -197,6 +199,9 @@ class CommandInput:
     corrects_movement_id: Optional[str] = None
     revision_evidence: Optional[Dict[str, Any]] = None
     occurred_at: Optional[str] = None
+    # WH-REV-01 — the supplier receipt a reverse_supplier_receipt[_to_project]
+    # reverses (everything else of the reversal is derived from that row).
+    reverses_movement_id: Optional[str] = None
     # 5C-C21 F-13 (Р11) — the warehouse a TRANSFER_WAREHOUSE_TO_WAREHOUSE
     # is FOR. The transfer itself goes to in_transit; this warehouse is
     # credited only by an ACCEPT_PROJECT_DELIVERY against the transfer.
@@ -804,6 +809,19 @@ class CommandService:
             for si in await supplier_invoices_of_receipt(
                     tenant_collection.tenant, inp.invoice_id, inp.invoice_line_id):
                 await ensure_supplier_invoice_lock(tenant_collection.tenant, si)
+        # WH-REV-01 — a reversal of a LINKED receipt takes the same line lock.
+        if inp.action in REVERSAL_ACTIONS and inp.reverses_movement_id:
+            original = await tenant_collection.find_one(
+                {"movement_id": inp.reverses_movement_id}, {"_id": 0, "invoice_line_id": 1})
+            if original and original.get("invoice_line_id"):
+                from app.services.invoice_line_lock import (
+                    ensure_line_lock, ensure_supplier_invoice_lock, supplier_invoices_of_receipt,
+                )
+                await ensure_line_lock(tenant_collection.tenant, original["invoice_line_id"])
+                # #81 (WHFIX81-01): the same supplier-invoice lock the receipt took.
+                for si in await supplier_invoices_of_receipt(
+                        tenant_collection.tenant, None, original["invoice_line_id"]):
+                    await ensure_supplier_invoice_lock(tenant_collection.tenant, si)
 
         # CODEX C14.1 — audit serialization under concurrent writes.
         # The previous service-level `_MAX_RETRIES=5` manual retry
@@ -1036,6 +1054,7 @@ class CommandService:
             corrects_movement_id=inp.corrects_movement_id,
             revision_evidence=inp.revision_evidence,
             occurred_at=inp.occurred_at,
+            reverses_movement_id=inp.reverses_movement_id,
         )
 
         # Fingerprint ignores server-derived fields (envelope.py already
@@ -1104,6 +1123,16 @@ class CommandService:
         unresolved_mv_id: Optional[str] = None
         acceptance_line_id: Optional[str] = None
         unit_value: Any = base_env.unit_value
+
+        # WH-REV-01 — a receipt reversal takes EXACTLY the receipt's own layer
+        # back out of the bucket it opened, at the receipt's value (no FIFO
+        # choice), and only while that whole layer is still there.
+        reversed_invoice_line_id: Optional[str] = None
+        if action in REVERSAL_ACTIONS:
+            allocations, outbound_value, reversed_invoice_line_id = \
+                await self._plan_receipt_reversal(tenant_collection, session=session,
+                                                  tenant_id=tenant_id, inp=inp,
+                                                  item_id=identity["item_id"])
 
         if action in OUTBOUND_ACTIONS:
             if inp.source is None:
@@ -1219,7 +1248,8 @@ class CommandService:
                     context={"source": None if inp.source is None else inp.source.to_dict()})
 
         # Server-side value: weighted-average unit_value for outbound.
-        if (action in OUTBOUND_ACTIONS or action in QUARANTINE_ACTIONS) and allocations:
+        if (action in OUTBOUND_ACTIONS or action in QUARANTINE_ACTIONS
+                or action in REVERSAL_ACTIONS) and allocations:
             qty = sum((a.quantity for a in allocations), Decimal("0"))
             unit_value = (outbound_value / qty).quantize(Decimal("0.0001")) if qty > 0 else Decimal("0")
 
@@ -1260,6 +1290,7 @@ class CommandService:
             corrects_movement_id=inp.corrects_movement_id,
             revision_evidence=inp.revision_evidence,
             occurred_at=inp.occurred_at,
+            reverses_movement_id=inp.reverses_movement_id,
         )
         validate_envelope(env)
 
@@ -1276,6 +1307,10 @@ class CommandService:
         # Append ledger row (append-only). ledger_sequence pins order.
         ledger_row = env.to_dict()
         ledger_row["ledger_sequence"] = ledger_sequence
+        if reversed_invoice_line_id:
+            # WH-REV-01 — trace only; deliberately NOT `invoice_line_id`, so a
+            # reversal is never read as a link of the line.
+            ledger_row["reversed_invoice_line_id"] = reversed_invoice_line_id
         if acceptance_line_id:
             ledger_row["acceptance_line_id"] = acceptance_line_id
         if inp.transfer_target is not None:
@@ -1292,6 +1327,12 @@ class CommandService:
                 dispatch_movement_id=inp.dispatch_movement_id)
             ledger_row["transit_origin"] = transit_origin
         await tenant_collection.insert_one(ledger_row, session=session)
+
+        # WH-REV-01 — Р47: a reversed LINKED receipt makes its supplier invoice
+        # await a credit note (same transaction).
+        if action in REVERSAL_ACTIONS and reversed_invoice_line_id:
+            await self._expect_credit_note(tenant_collection, session=session, env=env,
+                                           invoice_line_id=reversed_invoice_line_id)
 
         # If this is a dispatch, open a mirrored IN_TRANSIT inbound row
         # that carries the SAME layer_allocations — so a later acceptance
@@ -1379,6 +1420,9 @@ class CommandService:
             related_file_ids=list(inp.file_ids or []),
             structured_diff={
                 "action": action.value,
+                # WH-REV-01: a reversal names the receipt it reverses.
+                **({"reverses_movement_id": inp.reverses_movement_id}
+                   if inp.reverses_movement_id else {}),
                 "item_id": identity["item_id"],
                 "quantity": str(env.quantity),
                 "accepted_quantity": None if env.accepted_quantity is None else str(env.accepted_quantity),
@@ -1862,10 +1906,14 @@ class CommandService:
             return            # quantity not comparable — the allocation check stands
         allocated = Decimal(str(sum(a["qty"] for a in mine)))
         delivered = Decimal("0")
-        async for row in tenant_collection.find(
-                {"action": CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value,
-                 "invoice_line_id": inp.invoice_line_id, "project_id": inp.project_id},
-                {"_id": 0, "quantity": 1, "idempotency_key": 1}, session=session):
+        from app.services.warehouse_movements.reversal import without_reversed
+        rows = [row async for row in tenant_collection.find(
+            {"action": CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value,
+             "invoice_line_id": inp.invoice_line_id, "project_id": inp.project_id},
+            {"_id": 0, "movement_id": 1, "action": 1, "quantity": 1, "idempotency_key": 1},
+            session=session)]
+        # WH-REV-01: a reversed delivery no longer covers the line.
+        for row in await without_reversed(tenant_collection, rows, session=session):
             if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
                 return        # a replay of this very delivery — idempotency answers
             delivered += Decimal(str(row.get("quantity") or "0"))
@@ -1875,6 +1923,241 @@ class CommandService:
                 context={"invoice_line_id": inp.invoice_line_id,
                          "allocated": str(allocated), "delivered": str(delivered),
                          "quantity": str(inp.quantity)})
+
+    @staticmethod
+    async def _plan_receipt_reversal(tenant_collection, *, session, tenant_id: str,
+                                     inp: CommandInput, item_id: str):
+        """WH-REV-01 — decided IN the movement transaction (every canonical
+        write of the tenant is serialized by the ledger-sequence counter and
+        the audit chain head, so a concurrent issue of the same lot cannot
+        slip between this check and the write):
+
+          * the receipt exists in this tenant and is the receipt kind this
+            reversal reverses; the request matches it (item, quantity,
+            bucket) — else 422 RECEIPT_NOT_REVERSIBLE;
+          * it is not already reversed — else 409 (RECEIPT_ALREADY_REVERSED);
+          * its own FIFO layer ``(receipt, 1)`` is still WHOLE in the bucket
+            the receipt opened — else 409 (RECEIPT_ALREADY_ISSUED) naming the
+            movements that took it (they are reversed / returned first);
+          * a linked receipt (``invoice_line_id``) takes the invoice line's
+            lock (Addendum K), so its covered quantity — and the FG-109
+            allocation lock — drop atomically with this write.
+
+        Returns (allocations, value, the receipt's invoice line id)."""
+        from app.services.warehouse_movements.errors import (
+            ReceiptNotReversibleError, ReceiptReversalConflictError,
+        )
+        from app.services.warehouse_movements.fifo import layers_at
+        from app.services.warehouse_movements.reversal import REVERSAL_ACTION_VALUES
+        from app.services.warehouse_movements.errors import ReasonRequiredError
+        if not (inp.reason or "").strip():
+            raise ReasonRequiredError("a receipt reversal needs a reason",
+                                      context={"reverses_movement_id": inp.reverses_movement_id})
+        receipt_id = inp.reverses_movement_id
+        original = await tenant_collection.find_one({"movement_id": receipt_id}, {"_id": 0},
+                                                    session=session)
+        expected = REVERSAL_OF[inp.action].value
+        if not original or original.get("action") != expected:
+            raise ReceiptNotReversibleError(
+                "not a supplier receipt this reversal can reverse",
+                context={"reverses_movement_id": receipt_id, "expected_action": expected,
+                         "action": (original or {}).get("action")})
+        qty = Decimal(str(original.get("quantity")))
+        bucket = original.get("destination") or {}
+        if (original.get("item_id") != item_id or Decimal(str(inp.quantity)) != qty
+                or inp.source is None or inp.source.to_dict() != bucket):
+            raise ReceiptNotReversibleError(
+                "the reversal must take the receipt's whole lot from its bucket",
+                context={"reverses_movement_id": receipt_id})
+        done = await tenant_collection.find_one(
+            {"action": {"$in": list(REVERSAL_ACTION_VALUES)},
+             "reverses_movement_id": receipt_id},
+            {"_id": 0, "movement_id": 1}, session=session)
+        if done:
+            raise ReceiptReversalConflictError(
+                "the receipt is already reversed",
+                context={"code": "RECEIPT_ALREADY_REVERSED",
+                         "reverses_movement_id": receipt_id,
+                         "reversal_movement_id": done.get("movement_id")})
+        open_layers = await layers_at(tenant_collection, tenant_id=tenant_id, item_id=item_id,
+                                      location=inp.source, session=session)
+        own = [l for l in open_layers
+               if l.source_movement_id == receipt_id and l.layer_sequence == 1]
+        if not own or own[0].quantity != qty:
+            takers = []
+            async for row in tenant_collection.find(
+                    {"layer_allocations.source_movement_id": receipt_id,
+                     "movement_id": {"$ne": receipt_id}},
+                    {"_id": 0, "movement_id": 1, "action": 1, "quantity": 1},
+                    session=session).sort([("ledger_sequence", 1)]):
+                takers.append({"movement_id": row.get("movement_id"),
+                               "action": row.get("action"),
+                               "quantity": str(row.get("quantity"))})
+            raise ReceiptReversalConflictError(
+                "the received lot was already issued or moved — reverse / return those "
+                "movements first",
+                context={"code": "RECEIPT_ALREADY_ISSUED", "reverses_movement_id": receipt_id,
+                         "received": str(qty),
+                         "still_in_bucket": str(own[0].quantity if own else Decimal("0")),
+                         "taken_by": takers})
+        layer = own[0]
+        line_id = original.get("invoice_line_id")
+        if line_id:
+            await CommandService._lock_invoice_line(tenant_collection, session=session,
+                                                    invoice_line_id=line_id)
+            # #81 (WHFIX81-01): and the supplier-invoice lock(s) the receipt took.
+            from app.services.invoice_line_lock import (
+                bump_supplier_invoice_lock, supplier_invoices_of_receipt,
+            )
+            for si in sorted(await supplier_invoices_of_receipt(
+                    tenant_collection.tenant, None, line_id, session=session)):
+                await bump_supplier_invoice_lock(tenant_collection.tenant, si, session=session)
+        allocations = [LayerAllocation(
+            source_movement_id=receipt_id, layer_sequence=1, quantity=qty,
+            unit_value=layer.unit_value, currency=layer.currency)]
+        return allocations, (qty * layer.unit_value).quantize(Decimal("0.0001")), line_id
+
+    @staticmethod
+    async def _open_supplier_claim(tenant, *, session, env, claim_id: str, ecn_id: str,
+                                   invoice_id: str, invoice_line_id: str, amount: Decimal,
+                                   paid: Decimal, total, credit: Decimal) -> None:
+        """WH-REV-01 — Р84 (Крум 14.11.2026, FG-570), as Р49(6): the overpaid part
+        of a return on an already-paid supplier invoice is a RECEIVABLE (claim)
+        against the supplier — one ``supplier_claims`` record per reversal
+        (deterministic id: a replay never adds a second), linked to the invoice,
+        the reversal movement and its expectation (``expected_credit_notes``),
+        written in the movement's transaction with an AuditEvent (first insert
+        only). It is never netted automatically: the Accountant decides a refund
+        (FLOW-006) or an explicit offset (Р49(6)); both are debt (t26 / #84)."""
+        from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+        from app.audit.store import record_event
+        doc = {
+            "id": claim_id, "org_id": tenant.org_id, "kind": "supplier_overpayment",
+            "invoice_id": invoice_id, "invoice_line_id": invoice_line_id,
+            "reversal_movement_id": env.movement_id,
+            "receipt_movement_id": env.reverses_movement_id,
+            "expected_credit_note_id": ecn_id, "amount": float(amount),
+            "currency": env.currency, "status": "open", "reason": env.reason,
+            "basis": {"invoice_total": float(Decimal(str(total or 0))),
+                      "paid": float(paid), "awaited_credit": float(credit)},
+            "created_at": env.recorded_at, "created_by": env.actor_id,
+        }
+        res = await tenant.supplier_claims.update_one(
+            {"id": claim_id}, {"$setOnInsert": doc}, upsert=True, session=session)
+        if res.upserted_id is None:
+            return                                   # replay: the claim already exists
+        event = build_event(
+            tenant_id=tenant.org_id, actor_type=ACTOR_HUMAN, actor_id=env.actor_id,
+            action="finance.supplier_claim.opened", source_flow="FLOW-006",
+            retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="supplier_claim",
+            entity_id=claim_id, reason=env.reason,
+            structured_diff={"status": {"before": None, "after": "open"},
+                             "amount": float(amount), "invoice_id": invoice_id,
+                             "reversal_movement_id": env.movement_id,
+                             "basis": doc["basis"]},
+            effective_role_assignments=[], source_channel="api")
+        await record_event(tenant._db, event, session=session)  # pylint: disable=protected-access
+
+    @staticmethod
+    async def _expect_credit_note(tenant_collection, *, session, env,
+                                  invoice_line_id: str) -> None:
+        """WH-REV-01 — Р47 (Крум 08.11.2026, FG-196): after a reversal the
+        supplier invoice AWAITS A CREDIT NOTE. No credit-note model exists, so
+        a minimal record (``expected_credit_notes``, deterministic id per
+        reversal — a replay never adds a second) carries the expected credit
+        (the reversed share of the line, VAT included) — the expectation only;
+        the Accountant's DQ issue „очаква кредитно известие“ is #81's
+        ``dq_issues`` / ``alarm_events`` (FG-214, ``sync_credit_note_issue``).
+        The full credit note is debt (t26).
+        Payments above the net received value are refused by FLOW-006
+        (``finance._awaited_credit``).
+
+        The invoice document is written too (``awaiting_credit_note``), as a
+        CAS that respects the PAY-01 row lock: while a payment holds the
+        invoice the reversal is refused (409 INVOICE_BUSY, nothing written),
+        and a payment that starts later sees the expected credit."""
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        from app.services.invoice_state import PAYMENT_LOCK_STALE_SECONDS, ROW_LOCK_FIELD
+        from app.services.warehouse_movements.errors import InvoiceBusyError
+        tenant = tenant_collection.tenant
+        line = await tenant.invoice_lines.find_one({"id": invoice_line_id}, {"_id": 0},
+                                                   session=session)
+        if not line or not line.get("invoice_id"):
+            return
+        invoice_id = line["invoice_id"]
+        invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                                 {"_id": 0, "id": 1, "total": 1},
+                                                 session=session)
+        if not invoice:
+            return
+        stale = (_dt.now(_tz.utc) - _td(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
+        res = await tenant.invoices.update_one(
+            {"id": invoice_id, "$or": [{ROW_LOCK_FIELD: {"$exists": False}},
+                                       {ROW_LOCK_FIELD + ".at": {"$lt": stale}}]},
+            {"$inc": {"edit_seq": 1}, "$set": {"awaiting_credit_note": True}},
+            session=session)
+        if res.matched_count == 0:
+            raise InvoiceBusyError(
+                "the supplier invoice is being paid — retry the reversal",
+                context={"invoice_id": invoice_id})
+        qty = Decimal(str(env.quantity))
+        line_qty = Decimal(str(line.get("qty") or "0"))
+        gross = line.get("line_total_inc_vat")
+        if gross is None:
+            gross = (Decimal(str(line.get("line_total_ex_vat") or "0"))
+                     + Decimal(str(line.get("vat_amount") or "0")))
+        gross = Decimal(str(gross))
+        share = (qty / line_qty) if line_qty > 0 else Decimal("1")
+        amount = (gross * min(share, Decimal("1"))).quantize(Decimal("0.01"))
+        # Р47 / Р84 (Крум 14.11.2026, FG-570) — decided AFTER the invoice CAS in
+        # this transaction: the CAS write conflicts with any payment that takes
+        # or releases the PAY-01 row lock meanwhile, so the active allocations
+        # read here are those of the committed payments. The return is ALWAYS
+        # recorded. If the invoice is already paid above the net value this
+        # reversal leaves (total − awaited credits), the overpaid part of THIS
+        # reversal becomes one supplier claim (Р49(6) open balance) — nothing is
+        # netted, no payment is changed or cancelled.
+        from app.services.credit_note_rule import cents, overpaid_cents
+        from app.services.payment_state import active_allocations
+        ecn_id = f"ecn_{env.movement_id}"
+        allocs = await tenant.payment_allocations.find(
+            active_allocations({"invoice_id": invoice_id}),
+            {"_id": 0, "amount_allocated": 1}, session=session).to_list(None)
+        paid = sum(Decimal(str(a.get("amount_allocated") or 0)) for a in allocs)
+        open_credits = await tenant.expected_credit_notes.find(
+            {"invoice_id": invoice_id, "status": "open", "id": {"$ne": ecn_id}},
+            {"_id": 0, "amount": 1}, session=session).to_list(None)
+        others = sum(Decimal(str(r.get("amount") or 0)) for r in open_credits)
+        total = invoice.get("total") or 0
+        claim_id = f"claim_{env.movement_id}"
+        open_claims = await tenant.supplier_claims.find(
+            {"invoice_id": invoice_id, "status": "open", "id": {"$ne": claim_id}},
+            {"_id": 0, "amount": 1}, session=session).to_list(None)
+        claimed = sum(cents(c.get("amount")) for c in open_claims)
+        claim_cents = min(cents(amount),
+                          max(overpaid_cents(total, paid, others + amount) - claimed, 0))
+        if claim_cents > 0:
+            await CommandService._open_supplier_claim(
+                tenant, session=session, env=env, claim_id=claim_id, ecn_id=ecn_id,
+                invoice_id=invoice_id, invoice_line_id=invoice_line_id,
+                amount=Decimal(claim_cents) / 100, paid=paid, total=total,
+                credit=others + amount)
+        await tenant.expected_credit_notes.update_one(
+            {"id": ecn_id},
+            {"$setOnInsert": {
+                "invoice_id": invoice_id, "invoice_line_id": invoice_line_id,
+                "reversal_movement_id": env.movement_id,
+                "receipt_movement_id": env.reverses_movement_id,
+                "quantity": str(qty), "unit": env.unit, "amount": float(amount),
+                "currency": env.currency, "status": "open", "reason": env.reason,
+                "created_at": env.recorded_at, "created_by": env.actor_id,
+            }},
+            upsert=True, session=session)
+        # FG-214: the Accountant's DQ issue lives in #81's dq_issues / alarm_events
+        # (one open issue per invoice), not inside the expectation record.
+        from app.services.invoice_allocation import sync_credit_note_issue
+        await sync_credit_note_issue(tenant, invoice_id, actor={"id": env.actor_id},
+                                     session=session)
 
     @staticmethod
     async def _bind_invoice_line_price(tenant_db, inp: CommandInput, *, session) -> None:
@@ -1966,11 +2249,15 @@ class CommandService:
             line_qty = None
         unit = _norm_unit(line.get("unit"))
         linked = Decimal("0")
-        async for row in tenant_collection.find(
-                {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)},
-                 "invoice_line_id": inp.invoice_line_id},
-                {"_id": 0, "quantity": 1, "unit": 1, "idempotency_key": 1},
-                session=session):
+        from app.services.warehouse_movements.reversal import without_reversed
+        rows = [row async for row in tenant_collection.find(
+            {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)},
+             "invoice_line_id": inp.invoice_line_id},
+            {"_id": 0, "movement_id": 1, "action": 1, "quantity": 1, "unit": 1,
+             "idempotency_key": 1},
+            session=session)]
+        # WH-REV-01: a reversed receipt no longer covers the line.
+        for row in await without_reversed(tenant_collection, rows, session=session):
             if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
                 return        # a replay of this very receipt — idempotency answers
             if unit == "" or _norm_unit(row.get("unit")) in ("", unit):

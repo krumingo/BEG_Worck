@@ -117,6 +117,10 @@ ACTIONS: Set[str] = {
     "warehouse.write_command",                      # coarse route gate (outer)
     "warehouse.receive_from_supplier",
     "warehouse.receive_from_supplier_to_project",
+    # WH-REV-01 — Р46 (Крум 08.11.2026, FG-194): reversal (сторно) of a
+    # supplier receipt; its own route gate and per-action right.
+    "warehouse.reverse_supplier_receipt",
+    "warehouse.reverse_supplier_receipt_to_project",
     "warehouse.reserve",
     "warehouse.release_reservation",
     "warehouse.dispatch_to_project",
@@ -328,6 +332,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # TASK 5C: accounting reads only, no stock writes —
                                                                       # except Р27: project write-off („фира") everywhere.
                                                                       "warehouse.project_writeoff",
+                                                                      # Р46: reversal of a supplier receipt.
+                                                                      "warehouse.reverse_supplier_receipt",
+                                                                      "warehouse.reverse_supplier_receipt_to_project",
                                                                       # Р35: central warehouse + price history.
                                                                       "warehouse.read_central_stock",
                                                                       "warehouse.read_price_history",
@@ -349,6 +356,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",
                                                                       # TASK 5C: warehouse operator — stock-floor commands only.
+                                                                      # Р46: + reversal of a supplier receipt.
+                                                                      "warehouse.reverse_supplier_receipt",
+                                                                      "warehouse.reverse_supplier_receipt_to_project",
                                                                       # Not permitted: receive-to-project (procurement decision),
                                                                       # return-to-supplier (procurement decision),
                                                                       # revision (owner/admin), migration (admin).

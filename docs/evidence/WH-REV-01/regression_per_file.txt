@@ -1,0 +1,69 @@
+tests/test_wh_rev_01_receipt_reversal.py :: 76 passed, 4 warnings in 23.35s
+tests/test_r0_01_billing_p0.py :: 83 passed in 12.62s
+tests/test_r0_02_items_tenant_filter.py :: 69 passed in 6.26s
+tests/test_r0_03_roles_email.py :: 388 passed, 9 warnings in 100.92s (0:01:40)
+tests/test_r0_05_pay_run_selected_only.py :: 145 passed in 14.44s
+tests/test_r0_06_paid_pay_run.py :: 56 passed in 12.79s
+tests/test_r0_07_dev_reset.py :: 73 passed in 6.66s
+tests/test_warehouse_canonical_actions.py :: 1 failed, 6 passed in 1.26s
+FAILED tests/test_warehouse_canonical_actions.py::test_vocabulary_covers_every_flow_009_movement
+tests/test_warehouse_canonical_c12_regressions.py :: 14 passed in 2.45s
+tests/test_warehouse_canonical_c13_mongo.py :: 6 passed in 3.09s
+tests/test_warehouse_canonical_c13_regressions.py :: 22 passed in 1.78s
+tests/test_warehouse_canonical_c14_regressions.py :: 8 passed in 1.15s
+tests/test_warehouse_canonical_c15_regressions.py :: 7 passed in 1.26s
+tests/test_warehouse_canonical_c16_regressions.py :: 5 passed in 1.21s
+tests/test_warehouse_canonical_c18_corrections.py :: 10 passed in 1.99s
+tests/test_warehouse_canonical_c19_bot_findings.py :: 1 failed, 24 passed, 9 warnings in 7.49s
+FAILED tests/test_warehouse_canonical_c19_bot_findings.py::test_f6_frontend_copy_of_the_warehouse_rights_is_the_catalog
+tests/test_warehouse_canonical_c20_finance_reads.py :: 11 passed in 4.09s
+tests/test_warehouse_canonical_c21_writeoff_transfer.py :: 16 passed, 4 warnings in 5.88s
+tests/test_warehouse_canonical_c22_all_reports_cutover.py :: 10 passed in 6.15s
+tests/test_warehouse_canonical_c23_profit_period_waste.py :: 10 passed in 4.39s
+tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py :: 10 passed in 5.79s
+tests/test_warehouse_canonical_c25_cost_at_accept_transit.py :: 16 passed, 4 warnings in 10.37s
+tests/test_warehouse_canonical_c26_one_path_per_lot.py :: 12 passed in 6.49s
+tests/test_warehouse_canonical_c26a_writeoff_rights_values.py :: 38 passed in 10.90s
+tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py :: 22 passed, 4 warnings in 5.92s
+tests/test_warehouse_canonical_c26b_value_leak.py :: 4 passed, 12 warnings in 2.53s
+tests/test_warehouse_canonical_c26c_r27_all_modes.py :: 40 passed, 4 warnings in 12.73s
+tests/test_warehouse_canonical_c26d_subproject_parent.py :: 24 passed, 4 warnings in 6.98s
+tests/test_warehouse_canonical_c26e_r28_all_modes.py :: 272 passed in 83.37s (0:01:23)
+tests/test_warehouse_canonical_c26f_reads_all_modes.py :: 61 passed in 18.04s
+tests/test_warehouse_canonical_c26h_scope_from_locations.py :: 21 passed in 8.04s
+tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py :: 15 passed, 4 warnings in 6.22s
+tests/test_warehouse_canonical_c26j_r34_r35_prices.py :: 58 passed, 4 warnings in 21.41s
+tests/test_warehouse_canonical_c26k_subproject_link.py :: 6 passed in 8.91s
+tests/test_warehouse_canonical_c26l_cross_project_link.py :: 11 passed in 4.15s
+tests/test_warehouse_canonical_c26l_k_line_race.py :: 63 passed in 34.76s
+tests/test_warehouse_canonical_c26l_l_all_paths_lock.py :: 153 passed, 4 warnings in 306.67s (0:05:06)
+tests/test_warehouse_canonical_c26l_n_invoice_status.py :: 72 passed in 17.84s
+tests/test_warehouse_canonical_concurrency.py :: 2 passed in 1.59s
+tests/test_warehouse_canonical_envelope.py :: 8 passed in 1.18s
+tests/test_warehouse_canonical_legacy_fail_close.py :: 10 passed in 1.18s
+tests/test_warehouse_canonical_migration_readiness.py :: 2 passed in 1.88s
+tests/test_warehouse_canonical_mongo.py :: 11 passed in 3.46s
+tests/test_warehouse_canonical_mongo_c10.py :: 4 passed in 2.36s
+tests/test_warehouse_canonical_mongo_full.py :: 6 passed in 2.52s
+tests/test_warehouse_canonical_overflow.py :: 1 passed in 24.67s
+tests/test_warehouse_canonical_permissions_catalog.py :: 9 passed in 1.24s
+tests/test_warehouse_canonical_projection_shim.py :: 3 passed in 1.20s
+tests/test_warehouse_canonical_rule_b_split.py :: 2 passed in 1.19s
+tests/test_warehouse_canonical_shape.py :: 12 passed, 5 warnings in 1.23s
+tests/test_warehouse_canonical_static_writer_inventory.py :: 2 passed in 1.73s
+tests/test_codex_c23_independent.py :: 3 passed in 2.66s
+tests/test_pay_01_c01_amounts_reason.py :: 153 passed in 35.06s
+tests/test_pay_01_c01_e_serialisation.py :: 108 passed in 28.47s
+tests/test_pay_01_c01_idempotency.py :: 198 passed in 45.75s
+tests/test_pay_01_c01_source_module.py :: 80 passed in 19.40s
+tests/test_pay_01_payment_reversal.py :: 91 passed in 22.62s
+tests/test_auth_01_c01_corrections.py :: 26 passed, 9 warnings in 44.67s
+tests/test_auth_01_password_recovery.py :: 33 passed, 9 warnings in 55.08s
+tests/test_auth_01_r0_04_merge.py :: 8 passed, 9 warnings in 18.73s
+tests/test_auth_01_rc_corrections.py :: 27 passed, 9 warnings in 14.60s
+tests/test_auth_02_break_glass.py :: 28 passed, 9 warnings in 32.64s
+tests/test_r0_03_roles_email.py :: 388 passed, 9 warnings in 104.40s (0:01:44)
+tests/test_st_02_staging_stack.py :: 162 passed in 5.27s
+tests/test_pm_01_permission_matrix.py :: 6 passed, 9 warnings in 220.01s (0:03:40)
+tests/test_w0_02_permission_core.py :: 48 passed in 2.45s
+re-run after the vocabulary / frontend-mirror update: tests/test_warehouse_canonical_actions.py tests/test_warehouse_canonical_c19_bot_findings.py :: 32 passed, 9 warnings in 7.95s

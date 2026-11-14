@@ -163,3 +163,29 @@ class UnknownActionError(WarehouseMovementError):
 class MigrationExecutionRefusedError(WarehouseMovementError):
     """Migration tooling is DRY-RUN ONLY (TASK 5C hard boundary)."""
     error_code = "MIGRATION_EXECUTION_REFUSED"
+
+
+class ReceiptNotReversibleError(InvariantViolationError):
+    """WH-REV-01: the movement is not a supplier receipt of this kind (or the
+    request does not match it) — 422, nothing written."""
+    error_code = "RECEIPT_NOT_REVERSIBLE"
+
+
+class ReceiptReversalConflictError(WarehouseMovementError):
+    """WH-REV-01: the receipt cannot be reversed in its current state — its
+    lot was already issued / moved (reverse those first) or it is already
+    reversed. 409, nothing written. ``context["code"]`` says which."""
+    error_code = "RECEIPT_REVERSAL_CONFLICT"
+
+
+class ReasonRequiredError(InvariantViolationError):
+    """WH-REV-01: a receipt reversal needs a non-blank reason — 422."""
+    error_code = "REASON_REQUIRED"
+
+
+class InvoiceBusyError(WarehouseMovementError):
+    """WH-REV-01 / Р47: the supplier invoice is held by a payment (PAY-01 row
+    lock) — the reversal that would make it await a credit note is refused,
+    nothing written; retry. 409."""
+    error_code = "INVOICE_BUSY"
+

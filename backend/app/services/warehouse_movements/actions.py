@@ -7,7 +7,7 @@ retired, and the compatibility layer in `legacy_inventory.py` maps the
 historical rows to their closest canonical reading for read-only views.
 """
 from enum import Enum
-from typing import FrozenSet
+from typing import Dict, FrozenSet
 
 
 class CanonicalAction(str, Enum):
@@ -35,6 +35,11 @@ class CanonicalAction(str, Enum):
 
     # Reverse / disposition dispositions
     RETURN_TO_SUPPLIER = "return_to_supplier"
+    # WH-REV-01 — canonical reversal (сторно) of ONE supplier receipt: the
+    # exact lot back to the supplier, from the bucket the receipt opened, at
+    # the receipt's own value; the original row stays (FLOW-009, CLAUDE §7).
+    REVERSE_SUPPLIER_RECEIPT = "reverse_supplier_receipt"
+    REVERSE_SUPPLIER_RECEIPT_TO_PROJECT = "reverse_supplier_receipt_to_project"
     WRITE_OFF = "write_off"                       # loss / theft / scrap
 
     # Revision = authorized correction (FLOW-009 §"Ревизия")
@@ -102,6 +107,14 @@ REVISION_ACTIONS: FrozenSet[CanonicalAction] = frozenset({
     CanonicalAction.REVISION_ADJUSTMENT,
 })
 
+# WH-REV-01 — a reversal and the receipt action it reverses.
+REVERSAL_OF: Dict[CanonicalAction, CanonicalAction] = {
+    CanonicalAction.REVERSE_SUPPLIER_RECEIPT: CanonicalAction.RECEIVE_FROM_SUPPLIER,
+    CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT:
+        CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT,
+}
+REVERSAL_ACTIONS: FrozenSet[CanonicalAction] = frozenset(REVERSAL_OF)
+
 # Permission action string per canonical action — the string handed to
 # `evaluate_permission`. Catalog in `permissions/catalog.py` must list each
 # of these; a missing listing fails closed (deny-by-default).
@@ -121,6 +134,11 @@ PERMISSION_ACTION = {
     CanonicalAction.REVISION_ADJUSTMENT: "warehouse.revision_adjustment",
     CanonicalAction.QUARANTINE_ENTRY: "warehouse.quarantine_entry",
     CanonicalAction.QUARANTINE_RELEASE: "warehouse.quarantine_release",
+    # WH-REV-01 — Р46 (Крум 08.11.2026, FG-194): Warehousekeeper, Accountant,
+    # Owner, Admin reverse a supplier receipt (both kinds); nobody else.
+    CanonicalAction.REVERSE_SUPPLIER_RECEIPT: "warehouse.reverse_supplier_receipt",
+    CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT:
+        "warehouse.reverse_supplier_receipt_to_project",
 }
 
 # Actions whose dispositions require evidence (file_id). Fail CLOSED when

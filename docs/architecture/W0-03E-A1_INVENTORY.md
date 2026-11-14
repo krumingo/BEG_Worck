@@ -79,6 +79,7 @@
 | app/routes/finance.py:_payment_lock | (helper) | finance_payments | get(id = payment_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_invoice_lock | (helper) | invoices | update_one(flt) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_invoice_lock | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_awaited_credit | (helper) | expected_credit_notes | find(invoice_id, status) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_invoice_remaining | (helper) | payment_allocations | find(active_allocations(flt)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_reverse_one | (helper) | finance_payments | find_one_and_update(active_payments({'id': payment_id})) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_reverse_one | (helper) | finance_payments | get(id = payment_id) | TenantData org_id (session) | new read | SAFE |
@@ -117,6 +118,7 @@
 | app/routes/finance.py:export_invoice_pdf | GET /finance/invoices/{invoice_id}/pdf | projects | get(id = invoice['project_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:aging_report | GET /finance/aging-report | invoices | find(direction, status) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:upcoming_payments | GET /finance/upcoming-payments | invoices | find(direction, status, due_date) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/finance.py:list_expected_credit_notes | GET /finance/expected-credit-notes | expected_credit_notes | find(flt) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:can_access_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:can_manage_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:get_next_offer_no | (helper) | offers | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -393,4 +395,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 392 accesses — FIXED 131, SAFE 261
+Totals: 394 accesses — FIXED 131, SAFE 263

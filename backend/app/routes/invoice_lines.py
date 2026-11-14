@@ -75,6 +75,28 @@ async def _unless_linked(tenant: TenantData, line_id: str, write, *,
         raise HTTPException(status_code=409, detail=exc.detail())
 
 
+async def _reversal_correction(tenant: TenantData, line_id: str, reason: Optional[str],
+                               session) -> list:
+    """WH-REV-01 / FG-195 / FG-213 — in the write's transaction: if the line
+    was linked and its receipts were reversed (the FG-109 lock was released
+    by a reversal), changing its allocation / qty / unit / price is a
+    CORRECTION of an official record (CLAUDE §7) on any invoice status. It
+    uses #81's correction mechanism — the one ``correction_reason`` field
+    (else 409 ALLOCATION_CORRECTION_REQUIRED, nothing written), the one
+    version store ``invoice_line_allocation_versions`` and the one AuditEvent
+    ``finance.invoice_line.allocation_corrected``. Returns the reversed
+    receipts ([] = a line never reversed keeps the plain rule)."""
+    from app.services.invoice_line_lock import reversed_receipts
+    reversed_ = await reversed_receipts(tenant, line_id, session=session)
+    if reversed_ and not (reason or "").strip():
+        raise HTTPException(status_code=409, detail={
+            "error_code": ALLOCATION_CORRECTION_REQUIRED,
+            "message": "Редът е бил свързан със сторнирано получаване — промяната е "
+                       "корекция и изисква причина",
+            "reversed_receipts": reversed_})
+    return reversed_
+
+
 def finance_permission(user: dict) -> bool:
     """Check if user has finance access"""
     return user["role"] in ["Admin", "Owner", "Accountant"]
@@ -635,6 +657,11 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         raise HTTPException(status_code=400, detail="Can only edit lines of Draft invoices")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    # WH-REV-01 / FG-213: #81's one correction field — not a line field.
+    correction_reason = (update.pop("correction_reason", None) or "").strip()
+    if correction_reason:
+        from app.services.money_amount import check_reason
+        check_reason(correction_reason)
 
     # Handle scan_line_ref
     if "scan_line_ref" in update and update["scan_line_ref"]:
@@ -678,14 +705,40 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
                     raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
                 if require_full and abs(total_allocated - qty) > 0.0001:
                     raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
-            if "allocations" in update:
+            reversed_ = []
+            if any(k in update for k in LOCKED_WHEN_LINKED):
+                # WH-REV-01 / FG-195 / FG-213: after a reversal this is a correction.
+                reversed_ = await _reversal_correction(tenant, line_id, correction_reason,
+                                                       session)
+            version_patch = {}
+            if reversed_:
+                version = int(current.get("allocation_version") or 0) + 1
+                await tenant.invoice_line_allocation_versions.insert_one({
+                    "id": f"{line_id}:v{version - 1}", "org_id": user["org_id"],
+                    "invoice_id": line["invoice_id"], "invoice_line_id": line_id,
+                    "version": version - 1, "allocations": current.get("allocations") or [],
+                    "line": {k: current.get(k) for k in LOCKED_WHEN_LINKED},
+                    "superseded_at": update["updated_at"], "superseded_by": user["id"],
+                    "reason": correction_reason, "reversed_receipts": reversed_},
+                    session=session)
+                version_patch = {"allocation_version": version}
+            if "allocations" in update or reversed_:
                 from app.services.invoice_allocation import audit_allocation_change
-                await audit_allocation_change(tenant, user, line_id,
-                                              current.get("allocations") or [],
-                                              update["allocations"] or [], session=session)
+                extra = None
+                if reversed_:
+                    extra = {"reversed_receipts": reversed_,
+                             "line": {k: {"before": current.get(k), "after": update.get(k)}
+                                      for k in LOCKED_WHEN_LINKED
+                                      if k in update and update.get(k) != current.get(k)}}
+                await audit_allocation_change(
+                    tenant, user, line_id, current.get("allocations") or [],
+                    (update["allocations"] if "allocations" in update
+                     else current.get("allocations")) or [],
+                    session=session, reason=correction_reason or None, extra=extra)
             merged = compute_allocation_stats(compute_line_totals({**current, **update}))
             patch = {
                 **update,
+                **version_patch,
                 "line_total_ex_vat": merged["line_total_ex_vat"],
                 "vat_amount": merged["vat_amount"],
                 "line_total_inc_vat": merged["line_total_inc_vat"],
@@ -779,7 +832,7 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
                            "(посочете причина)."})
         # Codex F-55-C26-04: the purchased qty is read in the lock
         # transaction, not from the row read before it.
-        current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "qty": 1},
+        current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0},
                                                       session=session)
         if not current:
             raise HTTPException(status_code=404, detail="Invoice line not found")
@@ -794,6 +847,9 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
                 status_code=400,
                 detail=f"Full allocation required by organization settings. Allocated: {total_allocated}, Required: {qty_purchased}. Unallocated: {qty_purchased - total_allocated}"
             )
+        # WH-REV-01 / FG-195 / FG-213: after a reversal this is a correction
+        # through #81's mechanism (reason → version → one AuditEvent).
+        reversed_ = await _reversal_correction(tenant, line_id, reason, session)
         # WH-FIX-01 A2 #4 — the allocation change is a correction with a
         # canonical AuditEvent in the same transaction.
         before = await tenant.invoice_lines.find_one(
@@ -801,18 +857,20 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
             session=session)
         from app.services.invoice_allocation import audit_allocation_change
         version = int((before or {}).get("allocation_version") or 0) + 1
-        if paid:
+        if paid or reversed_:
             # WHFIX81-06: a correction keeps the previous version READABLE
             # (append-only `invoice_line_allocation_versions`).
             await tenant.invoice_line_allocation_versions.insert_one({
                 "id": f"{line_id}:v{version - 1}", "org_id": user["org_id"],
                 "invoice_id": line["invoice_id"], "invoice_line_id": line_id,
                 "version": version - 1, "allocations": (before or {}).get("allocations") or [],
-                "superseded_at": now, "superseded_by": user["id"], "reason": reason},
+                "superseded_at": now, "superseded_by": user["id"], "reason": reason,
+                **({"reversed_receipts": reversed_} if reversed_ else {})},
                 session=session)
         await audit_allocation_change(tenant, user, line_id, (before or {}).get("allocations") or [],
                                       allocs, session=session,
-                                      reason=reason or None)
+                                      reason=reason or None,
+                                      extra={"reversed_receipts": reversed_} if reversed_ else None)
         await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
             "allocation_version": version,
             "allocations": allocs,

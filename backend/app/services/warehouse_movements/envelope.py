@@ -199,6 +199,10 @@ class MovementEnvelope:
     # Reversal / correction linkage (FLOW-040 §2 corrections create new events)
     corrects_movement_id: Optional[str] = None
     revision_evidence: Optional[Dict[str, Any]] = None
+    # WH-REV-01 — the supplier receipt a reversal reverses (only on a
+    # reverse_supplier_receipt[_to_project] row; omitted otherwise so every
+    # other row and fingerprint is byte-identical to before).
+    reverses_movement_id: Optional[str] = None
 
     # Legacy source trace (migration-readiness tooling only — never set
     # by the canonical writer; present so projections can inspect it on
@@ -206,7 +210,10 @@ class MovementEnvelope:
     legacy_source: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return _normalize_decimals(asdict(self))
+        out = _normalize_decimals(asdict(self))
+        if out.get("reverses_movement_id") is None:
+            out.pop("reverses_movement_id", None)
+        return out
 
 
 # -----------------------------------------------------------------------
@@ -283,6 +290,7 @@ def build_envelope(
     revision_evidence: Optional[Dict[str, Any]] = None,
     occurred_at: Optional[str] = None,
     movement_id: Optional[str] = None,
+    reverses_movement_id: Optional[str] = None,
 ) -> MovementEnvelope:
     env = MovementEnvelope(
         movement_id=movement_id or f"mv_{uuid.uuid4().hex}",
@@ -323,6 +331,7 @@ def build_envelope(
         notes=notes,
         corrects_movement_id=corrects_movement_id,
         revision_evidence=revision_evidence,
+        reverses_movement_id=reverses_movement_id,
     )
     return env
 
@@ -375,6 +384,14 @@ def validate_envelope(env: MovementEnvelope) -> None:
     # Correction references its original row.
     if env.corrects_movement_id and env.action != "revision_adjustment":
         raise ValueError("only revision_adjustment may set corrects_movement_id")
+
+    # WH-REV-01 — a receipt reversal names its receipt; nothing else may.
+    reversal = env.action in {"reverse_supplier_receipt",
+                              "reverse_supplier_receipt_to_project"}
+    if reversal and not env.reverses_movement_id:
+        raise ValueError(f"{env.action} requires reverses_movement_id")
+    if env.reverses_movement_id and not reversal:
+        raise ValueError("only a receipt reversal may set reverses_movement_id")
 
 
 def envelope_fingerprint(

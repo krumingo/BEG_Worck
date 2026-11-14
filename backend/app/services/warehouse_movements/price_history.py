@@ -62,11 +62,14 @@ async def project_purchases(tenant, org_id: str, project_id: str) -> List[dict]:
             "invoice_line_id": row.get("invoice_line_id"),
         }
 
-    async for row in ledger.find(
-            {"action": "receive_from_supplier_to_project",
-             "destination.location_id": {"$in": buckets},
-             "destination.location_type": {"$in": list(PROJECT_TYPES)}},
-            {"_id": 0}):
+    # WH-REV-01: a reversed receipt is no purchase.
+    from app.services.warehouse_movements.reversal import without_reversed
+    direct = [r async for r in ledger.find(
+        {"action": "receive_from_supplier_to_project",
+         "destination.location_id": {"$in": buckets},
+         "destination.location_type": {"$in": list(PROJECT_TYPES)}},
+        {"_id": 0})]
+    for row in await without_reversed(ledger, direct):
         seen_receipts.add(row.get("movement_id"))
         purchases.append(_canon(row, "direct_delivery"))
 
@@ -80,10 +83,11 @@ async def project_purchases(tenant, org_id: str, project_id: str) -> List[dict]:
             if layer.get("source_movement_id"):
                 lot_ids.add(layer["source_movement_id"])
     if lot_ids:
-        async for row in ledger.find(
-                {"action": "receive_from_supplier",
-                 "movement_id": {"$in": sorted(lot_ids - seen_receipts)}},
-                {"_id": 0}):
+        lots = [r async for r in ledger.find(
+            {"action": "receive_from_supplier",
+             "movement_id": {"$in": sorted(lot_ids - seen_receipts)}},
+            {"_id": 0})]
+        for row in await without_reversed(ledger, lots):
             seen_receipts.add(row.get("movement_id"))
             purchases.append(_canon(row, "warehouse_receipt"))
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, validator
 
 from app.db import db, client as mongo_client
@@ -110,6 +110,11 @@ class MovementCommandBody(BaseModel):
     def _known_action(cls, v: str) -> str:
         if v not in {a.value for a in CanonicalAction}:
             raise ValueError(f"unknown canonical action: {v!r}")
+        # WH-REV-01: a receipt reversal is derived from the stored receipt —
+        # only POST /receipts/{movement_id}/reverse writes it.
+        if v in {CanonicalAction.REVERSE_SUPPLIER_RECEIPT.value,
+                 CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT.value}:
+            raise ValueError("use POST /api/warehouse/canonical/receipts/{movement_id}/reverse")
         return v
 
 
@@ -158,6 +163,11 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "INVARIANT_VIOLATION": 422,
         "INVOICE_LINE_PROJECT_MISMATCH": 422,
         "INVOICE_LINE_QTY_EXCEEDED": 422,
+        # WH-REV-01
+        "RECEIPT_NOT_REVERSIBLE": 422,
+        "RECEIPT_REVERSAL_CONFLICT": 409,
+        "REASON_REQUIRED": 422,
+        "INVOICE_BUSY": 409,
         "INVOICE_LINE_FULLY_LINKED": 409,
         "INVOICE_LINE_UNIT_MISMATCH": 422,
         "INVOICE_LINE_PRICE_MISMATCH": 422,      # WH-FIX-01 FG-191
@@ -433,6 +443,96 @@ async def post_project_writeoff(
                 idempotency_key=body.idempotency_key,
                 file_ids=body.file_ids, reason=body.reason, notes=body.notes,
                 occurred_at=body.occurred_at,
+            ),
+        )
+    except WarehouseMovementError as exc:
+        raise _render_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error_code": "BAD_REQUEST",
+                                                     "message": str(exc)})
+    return await _response(ctx, result)
+
+
+
+# -----------------------------------------------------------------------
+# WH-REV-01 — reversal (сторно) of ONE supplier receipt.
+# -----------------------------------------------------------------------
+class ReceiptReversalBody(BaseModel):
+    reason: str = Field(..., min_length=1)
+    notes: Optional[str] = None
+
+
+@router.post("/receipts/{movement_id}/reverse", response_model=MovementCommandResponse,
+             status_code=201)
+async def post_receipt_reversal(
+    movement_id: str,
+    body: ReceiptReversalBody,
+    request: Request,
+    user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_permission(
+        "warehouse.reverse_supplier_receipt", module="warehouse",
+        legacy_check=catalog_legacy_check("warehouse.reverse_supplier_receipt"))),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+) -> MovementCommandResponse:
+    """WH-REV-01 (FLOW-009 correction by a reverse movement, CLAUDE §2.9 /
+    §7): the receipt's whole lot goes back to its supplier from the bucket
+    the receipt opened, at the receipt's own value, with a reason; the
+    receipt row stays. Everything except the reason / notes is derived from
+    the stored receipt — the client names only WHICH receipt.
+
+    Rights: Р46 (Крум 08.11.2026) — ``warehouse.reverse_supplier_receipt``
+    (Warehousekeeper, Accountant, Owner, Admin), at the route and in the
+    canonical service, in every Permission Service mode (R28); values in the answer
+    follow the value policy (Р20 / Р32). R29: no Idempotency-Key → 428,
+    nothing read or written. The AuditEvent is written in the movement's
+    transaction."""
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) else ""
+    if not key:
+        raise HTTPException(status_code=428, detail={
+            "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+            "message": "Липсва Idempotency-Key — заявката не е записана"})
+    reason = (body.reason or "").strip()
+    if not reason:
+        # A reversal is an official correction: a blank reason is no reason.
+        raise HTTPException(status_code=422, detail={
+            "error_code": "REASON_REQUIRED",
+            "message": "Причината за сторното е задължителна"})
+    tenant = _tenant_for(user)
+    original = await tenant.warehouse_transactions.find_one(
+        {"movement_id": movement_id}, {"_id": 0})
+    if not original:
+        raise HTTPException(status_code=404, detail={"error_code": "RECEIPT_NOT_FOUND",
+                                                     "message": "Movement not found"})
+    reversal = {
+        CanonicalAction.RECEIVE_FROM_SUPPLIER.value: CanonicalAction.REVERSE_SUPPLIER_RECEIPT,
+        CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value:
+            CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT,
+    }.get(original.get("action"))
+    if reversal is None or not original.get("destination") or not original.get("source"):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "RECEIPT_NOT_REVERSIBLE",
+            "message": "Само получаване от доставчик се сторнира по този път",
+            "context": {"action": original.get("action")}})
+    service = _service()
+    try:
+        result = await service.execute(
+            ctx=ctx,
+            tenant_db=tenant._db,            # pylint: disable=protected-access
+            tenant_collection=tenant.warehouse_transactions,
+            inp=CommandInput(
+                action=reversal,
+                tenant_id=tenant.org_id,
+                actor_id=str(user.get("id") or user.get("_id") or "unknown"),
+                item_id=original["item_id"], unit=original["unit"],
+                quantity=Decimal(str(original["quantity"])),
+                source=LocationKey.from_dict(original["destination"]),
+                destination=LocationKey.from_dict(original["source"]),
+                currency=original.get("currency") or "BGN",
+                project_id=original.get("project_id"),
+                subproject_id=original.get("subproject_id"),
+                idempotency_key=key,
+                reason=reason, notes=body.notes,
+                reverses_movement_id=movement_id,
             ),
         )
     except WarehouseMovementError as exc:

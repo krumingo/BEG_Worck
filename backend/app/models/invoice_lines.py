@@ -85,6 +85,9 @@ class InvoiceLineUpdate(BaseModel):
     cost_category: Optional[str] = None
     scan_line_ref: Optional[ScanLineRefInput] = None
     notes: Optional[str] = None
+    # WH-REV-01 / FG-195 + WHFIX81-06: the reason of a correction — the ONE
+    # correction field of the allocate route (InvoiceLineAllocationsUpdate).
+    correction_reason: Optional[str] = None
 
 
 class InvoiceLineBulkCreate(BaseModel):
