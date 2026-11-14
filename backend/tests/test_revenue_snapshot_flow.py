@@ -169,30 +169,24 @@ class TestCashVsEarnedPhase3:
         data = resp.json()
         assert "earned_revenue" in data, "Should have earned_revenue"
         assert "billed_revenue" in data, "Should have billed_revenue"
-        assert "collected_cash" in data, "Should have collected_cash"
+        assert "received_net" in data, "Should have received_net (FG-711)"
         
         # Values should be numeric
         assert isinstance(data["earned_revenue"], (int, float)), "earned_revenue should be numeric"
         assert isinstance(data["billed_revenue"], (int, float)), "billed_revenue should be numeric"
-        assert isinstance(data["collected_cash"], (int, float)), "collected_cash should be numeric"
+        assert isinstance(data["received_net"], (int, float)), "received_net should be numeric"
         
-        print(f"PASS: earned={data['earned_revenue']}, billed={data['billed_revenue']}, collected={data['collected_cash']}")
+        print(f"PASS: earned={data['earned_revenue']}, billed={data['billed_revenue']}, received={data['received_net']}")
     
     def test_cash_position_field(self, api_session):
-        """Cash position = collected - costs_paid"""
+        """FG-711: "cash_position" is dropped — net received minus gross payments is not cash"""
         resp = api_session.get(f"{BASE_URL}/api/cash-vs-earned/{TEST_PROJECT_ID}")
         assert resp.status_code == 200
-        
+
         data = resp.json()
-        assert "cash_position" in data, "Should have cash_position"
+        assert "cash_position" not in data and "collected_cash" not in data
         assert "costs_paid_cash" in data, "Should have costs_paid_cash"
-        
-        expected_cash_position = round(data["collected_cash"] - data["costs_paid_cash"], 2)
-        assert abs(data["cash_position"] - expected_cash_position) < 0.1, \
-            f"Cash position mismatch: {data['cash_position']} != {expected_cash_position}"
-        
-        print(f"PASS: cash_position={data['cash_position']}")
-    
+
     def test_gaps_structure(self, api_session):
         """Response has gaps analysis"""
         resp = api_session.get(f"{BASE_URL}/api/cash-vs-earned/{TEST_PROJECT_ID}")
@@ -202,27 +196,27 @@ class TestCashVsEarnedPhase3:
         assert "gaps" in data, "Should have gaps object"
         gaps = data["gaps"]
         
-        assert "collected_vs_earned" in gaps, "Gaps should have collected_vs_earned"
-        assert "collected_vs_billed" in gaps, "Gaps should have collected_vs_billed"
+        assert "received_vs_earned" in gaps, "Gaps should have received_vs_earned"
+        assert "received_vs_billed" in gaps, "Gaps should have received_vs_billed"
         assert "earned_vs_billed" in gaps, "Gaps should have earned_vs_billed"
         
         print(f"PASS: Gaps structure complete")
     
-    def test_collection_percent_field(self, api_session):
-        """collection_percent = collected / billed * 100"""
+    def test_received_percent_field(self, api_session):
+        """received_percent = collected / billed * 100"""
         resp = api_session.get(f"{BASE_URL}/api/cash-vs-earned/{TEST_PROJECT_ID}")
         assert resp.status_code == 200
         
         data = resp.json()
-        assert "collection_percent" in data, "Should have collection_percent"
+        assert "received_percent" in data, "Should have received_percent"
         
         if data["billed_revenue"] > 0:
-            expected_pct = round(data["collected_cash"] / data["billed_revenue"] * 100, 1)
-            assert data["collection_percent"] is not None, "collection_percent should be calculated when billed > 0"
-            print(f"PASS: collection_percent={data['collection_percent']}%")
+            expected_pct = round(data["received_net"] / data["billed_revenue"] * 100, 1)
+            assert data["received_percent"] is not None, "received_percent should be calculated when billed > 0"
+            print(f"PASS: received_percent={data['received_percent']}%")
         else:
-            assert data["collection_percent"] is None, "collection_percent should be None when no billed revenue"
-            print("PASS: collection_percent is None (no billed revenue)")
+            assert data["received_percent"] is None, "received_percent should be None when no billed revenue"
+            print("PASS: received_percent is None (no billed revenue)")
     
     def test_basis_labels_present(self, api_session):
         """Response has basis_labels for clarity"""

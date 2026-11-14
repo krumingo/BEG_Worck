@@ -117,6 +117,9 @@ export default function InvoiceEditorPage() {
   const [currency, setCurrency] = useState("EUR");
   const [vatPercent, setVatPercent] = useState(20);
   const [notes, setNotes] = useState("");
+  // FG-710 (R86): the proforma advances this final invoice settles
+  const [advanceIds, setAdvanceIds] = useState([]);
+  const [proformas, setProformas] = useState([]);
   const [lines, setLines] = useState([]);
   
   // Auto-fill state
@@ -202,6 +205,7 @@ export default function InvoiceEditorPage() {
         setCurrency(inv.currency);
         setVatPercent(inv.vat_percent);
         setNotes(inv.notes || "");
+        setAdvanceIds(inv.advance_proforma_ids || []);
         setLines(inv.lines || []);
         
         // Load invoice payments
@@ -297,6 +301,7 @@ export default function InvoiceEditorPage() {
         counterparty_mol: counterpartyMol || null, counterparty_email: counterpartyEmail || null,
         counterparty_phone: counterpartyPhone || null, issue_date: issueDate, due_date: dueDate,
         currency, vat_percent: vatPercent, notes: notes || null,
+        ...(direction === "Issued" && kind === "Invoice" ? { advance_proforma_ids: advanceIds } : {}),
         lines: lines.map((l) => ({
           description: l.description || "", unit: l.unit || "pcs",
           qty: parseFloat(l.qty) || 0, unit_price: parseFloat(l.unit_price) || 0,
@@ -313,6 +318,7 @@ export default function InvoiceEditorPage() {
           counterparty_email: counterpartyEmail || null, counterparty_phone: counterpartyPhone || null,
           project_id: projectId || null, issue_date: issueDate, due_date: dueDate,
           vat_percent: vatPercent, notes: notes || null,
+          ...(direction === "Issued" && kind === "Invoice" ? { advance_proforma_ids: advanceIds } : {}),
         });
         await API.put(`/finance/invoices/${invoiceId}/lines`, {
           lines: lines.map((l) => ({
@@ -771,6 +777,13 @@ export default function InvoiceEditorPage() {
             </div>
           </div>
 
+          {/* FG-710 (R86): proforma advances settled by this final invoice */}
+          {direction === "Issued" && kind === "Invoice" && projectId && (
+            <AdvanceProformasField projectId={projectId} invoiceId={isNew ? null : invoiceId}
+              value={advanceIds} onChange={setAdvanceIds} disabled={locked}
+              proformas={proformas} setProformas={setProformas} />
+          )}
+
           {/* Notes */}
           <div className="rounded-xl border border-border bg-card p-5">
             <Label className="mb-2 block">{t("common.notes")}</Label>
@@ -1034,6 +1047,45 @@ export default function InvoiceEditorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+/**
+ * FG-710 (FG-698a, R86 interim default — Krum to confirm): the proforma advances a final
+ * invoice settles. Only issued proformas of the same project, not used by another invoice;
+ * the server checks the project, the client and the single use.
+ */
+export function AdvanceProformasField({ projectId, invoiceId, value, onChange, disabled, proformas, setProformas }) {
+  useEffect(() => {
+    let alive = true;
+    API.get("/finance/invoices", { params: { direction: "Issued", project_id: projectId } })
+      .then((res) => {
+        if (!alive) return;
+        const rows = (res.data || []).filter((i) => (i.kind || "Invoice") === "Proforma"
+          && !["Draft", "Cancelled"].includes(i.status)
+          && (!i.advance_used_by_invoice_id || i.advance_used_by_invoice_id === invoiceId));
+        setProformas(rows);
+      })
+      .catch(() => alive && setProformas([]));
+    return () => { alive = false; };
+  }, [projectId, invoiceId, setProformas]);
+  const toggle = (id) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  return (
+    <div className="rounded-xl border border-border bg-card p-5" data-testid="advance-proformas">
+      <Label className="mb-2 block">Аванс по проформа (приспада се от „чака плащане“)</Label>
+      {proformas.length === 0 && <p className="text-xs text-muted-foreground">Няма издадени проформи към този обект</p>}
+      {proformas.map((p) => (
+        <label key={p.id} className="flex items-center gap-2 text-sm py-1">
+          <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)}
+            disabled={disabled} data-testid={`advance-proforma-${p.id}`} />
+          <span className="font-mono">{p.invoice_no}</span>
+          <span className="text-muted-foreground">{p.counterparty_name}</span>
+          <span className="font-mono ml-auto">{(p.total || 0).toFixed(2)} {p.currency || "EUR"}</span>
+          <span className="text-emerald-400 font-mono">платено {(p.paid_amount || 0).toFixed(2)}</span>
+        </label>
+      ))}
     </div>
   );
 }

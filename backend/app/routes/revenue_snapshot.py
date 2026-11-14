@@ -285,24 +285,24 @@ async def get_cash_vs_earned(
     ).to_list(200)
     costs_paid = sum(p.get("amount", 0) for p in sub_payments)
 
-    collected_vs_earned = round(collected - earned, 2) if earned > 0 else None
-    collected_vs_billed = round(collected - billed, 2) if billed > 0 else None
-    cash_position = round(collected - costs_paid, 2)
+    received_vs_earned = round(collected - earned, 2) if earned > 0 else None
+    received_vs_billed = round(collected - billed, 2) if billed > 0 else None
 
     return {
         "project_id": project_id,
         "currency": "EUR",
         "earned_revenue": round(earned, 2),
         "billed_revenue": round(billed, 2),
-        "collected_cash": round(collected, 2),
+        # FG-711: the received revenue is net of VAT and not cash — named as what it is; the
+        # former "cash_position" (net received − gross subcontractor payments) is dropped
+        "received_net": round(collected, 2),
         "costs_paid_cash": round(costs_paid, 2),
-        "cash_position": cash_position,
         "gaps": {
-            "collected_vs_earned": collected_vs_earned,
-            "collected_vs_billed": collected_vs_billed,
+            "received_vs_earned": received_vs_earned,      # FG-711: named after received_net
+            "received_vs_billed": received_vs_billed,
             "earned_vs_billed": round(earned - billed, 2) if earned > 0 else None,
         },
-        "collection_percent": round(collected / billed * 100, 1) if billed > 0 else None,
+        "received_percent": round(collected / billed * 100, 1) if billed > 0 else None,
         "labels": {"billed": "Фактурирано (без ДДС, без проформа)",
                    "collected": "Получено (без ДДС, без проформа)"},
         "basis_labels": {
