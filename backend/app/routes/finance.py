@@ -892,11 +892,34 @@ async def _check_advance_proformas(tenant: TenantData, target: dict, ids, sessio
     return ids
 
 
+ADVANCE_LINKED = "finance.invoice.advance_linked"
+ADVANCE_UNLINKED = "finance.invoice.advance_unlinked"
+# FG-719: the invoice fields the advance link depends on
+ADVANCE_LINK_FIELDS = ("direction", "kind", "project_id", "counterparty_eik", "counterparty_name")
+
+
+async def _audit_advance_link(tenant: TenantData, user: dict, action: str, invoice_id: str,
+                              proforma_id: str, reason: str, session=None) -> None:
+    """FG-720: canonical W0-04 AuditEvent of one link / unlink, in the caller's transaction."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    linked = action == ADVANCE_LINKED
+    event = build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"], action=action,
+        source_flow="FLOW-021", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type="finance.invoice", entity_id=invoice_id, reason=reason,
+        structured_diff={"proforma_id": proforma_id, ADVANCE_USED_BY: {
+            "before": None if linked else invoice_id, "after": invoice_id if linked else None}},
+        effective_role_assignments=[user.get("role") or ""], source_channel="api")
+    await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
+
+
 async def _claim_advance_proformas(tenant: TenantData, invoice_id: str, ids: list, previous: list,
-                                   session=None) -> None:
+                                   session=None, *, user: dict, reason: str) -> None:
     """Mark each named proforma as used by ``invoice_id`` (a write on the proforma, so two
     invoices claiming it concurrently conflict — one wins, the other gets 409); release the
-    proformas the invoice no longer names."""
+    proformas the invoice no longer names. FG-720: every real link / unlink (a changed
+    proforma) gets its canonical AuditEvent in the same transaction."""
     for pid in ids:
         res = await tenant.invoices.update_one(
             {"id": pid, "kind": "Proforma", "$or": [{ADVANCE_USED_BY: None}, {ADVANCE_USED_BY: invoice_id}]},
@@ -905,9 +928,28 @@ async def _claim_advance_proformas(tenant: TenantData, invoice_id: str, ids: lis
             raise HTTPException(status_code=409, detail={
                 "code": "ADVANCE_PROFORMA_IN_USE", "proforma_id": pid,
                 "message": "Авансът по тази проформа вече е посочен в друга фактура"})
-    for pid in set(previous or []) - set(ids):
-        await tenant.invoices.update_one({"id": pid, ADVANCE_USED_BY: invoice_id},
-                                         {"$set": {ADVANCE_USED_BY: None}}, session=session)
+        if res.modified_count:
+            await _audit_advance_link(tenant, user, ADVANCE_LINKED, invoice_id, pid, reason, session)
+    for pid in sorted(set(previous or []) - set(ids)):
+        res = await tenant.invoices.update_one({"id": pid, ADVANCE_USED_BY: invoice_id},
+                                               {"$set": {ADVANCE_USED_BY: None}}, session=session)
+        if res.modified_count:
+            await _audit_advance_link(tenant, user, ADVANCE_UNLINKED, invoice_id, pid, reason, session)
+
+
+async def _revalidate_advance_link(tenant: TenantData, target: dict, ids: list, session=None) -> None:
+    """FG-719: a PUT that changes what the link depends on (project, kind, direction,
+    client) keeps the link only while it is still valid — else 409 ADVANCE_LINK_INVALID,
+    and nothing is written (never a stale link)."""
+    try:
+        await _check_advance_proformas(tenant, target, ids, session=session)
+    except HTTPException as e:
+        inner = e.detail if isinstance(e.detail, dict) else {"message": str(e.detail)}
+        raise HTTPException(status_code=409, detail={
+            "code": "ADVANCE_LINK_INVALID", "reason_code": inner.get("code"),
+            "proforma_id": inner.get("proforma_id"),
+            "message": "Промяната прави връзката с авансовата проформа невалидна — "
+                       "премахнете аванса или върнете обекта/клиента"}) from e
 
 
 @router.post("/finance/invoices", status_code=201)
@@ -1005,7 +1047,8 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     async def _create(session):
         if advance_ids:                            # FG-710: re-checked and claimed in the transaction
             await _check_advance_proformas(tenant, invoice, advance_ids, session=session)
-            await _claim_advance_proformas(tenant, invoice["id"], advance_ids, [], session=session)
+            await _claim_advance_proformas(tenant, invoice["id"], advance_ids, [], session=session,
+                                           user=user, reason="FG-710: аванс по проформа при създаване")
         await tenant.invoices.insert_one(dict(invoice), session=session)
         for ch in stamped:
             await audit_allocation_change(tenant, user, ch["line_id"], ch["before"], ch["after"],
@@ -1113,6 +1156,10 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         update["advance_proforma_ids"] = await _check_advance_proformas(
             tenant, {**invoice, **{k: v for k, v in update.items() if k != "advance_proforma_ids"}},
             update["advance_proforma_ids"])
+    # FG-719: a change of what the kept link depends on re-validates it (409, never stale)
+    link_fields_changed = any(f in update and update[f] != invoice.get(f) for f in ADVANCE_LINK_FIELDS)
+    if link_fields_changed and not advance_change and invoice.get("advance_proforma_ids"):
+        await _revalidate_advance_link(tenant, {**invoice, **update}, invoice["advance_proforma_ids"])
 
     async def _body(session):
         # FG-140: the editable status is decided in the transaction (CAS on
@@ -1137,7 +1184,13 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             target = {**current, **{k: v for k, v in update.items() if k != "advance_proforma_ids"}}
             await _check_advance_proformas(tenant, target, update["advance_proforma_ids"], session=session)
             await _claim_advance_proformas(tenant, invoice_id, update["advance_proforma_ids"],
-                                           current.get("advance_proforma_ids") or [], session=session)
+                                           current.get("advance_proforma_ids") or [], session=session,
+                                           user=user, reason="FG-710: авансите по проформа са променени")
+        elif current.get("advance_proforma_ids") and any(
+                f in update and update[f] != current.get(f) for f in ADVANCE_LINK_FIELDS):
+            # FG-719: the kept link re-validated against the CURRENT document
+            await _revalidate_advance_link(tenant, {**current, **update},
+                                           current["advance_proforma_ids"], session=session)
         await tenant.invoices.update_one({"id": invoice_id}, {"$set": update}, session=session)
 
         # Recompute if vat changed
@@ -1343,8 +1396,8 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     async def _body(session):
         # FG-140: status + allocations decided in the transaction; a payment
         # racing the cancel writes the same invoice document → serialized.
-        await claim_invoice(tenant, invoice_id, session=session,
-                            forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED)
+        current = await claim_invoice(tenant, invoice_id, session=session,
+                                      forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED) or invoice
         # Check for allocations
         alloc_count = await tenant.payment_allocations.count(
             active_allocations({"invoice_id": invoice_id}), session=session)
@@ -1355,8 +1408,11 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
             "updated_at": now,
         }}, session=session)
         # FG-710: a cancelled final invoice releases its proforma advances
-        await _claim_advance_proformas(tenant, invoice_id, [], invoice.get("advance_proforma_ids") or [],
-                                       session=session)
+        await _claim_advance_proformas(tenant, invoice_id, [], current.get("advance_proforma_ids") or [],
+                                       session=session, user=user,
+                                       reason="FG-718: анулирана фактура освобождава аванса")
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
@@ -1382,9 +1438,19 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=409, detail="Invoice has payment allocations — cancel it instead")
     
     # FG-140: only while still Draft (CAS) — a concurrent send wins → 409.
-    res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft"})
-    if res.deleted_count == 0:
-        raise status_conflict(NOT_DRAFT, invoice_id, (await tenant.invoices.get(invoice_id) or {}).get("status"))
+    # FG-718: the delete and the release of its proforma advances (with their AuditEvent)
+    # are one transaction, so a deleted draft never keeps a proforma claimed.
+    async def _body(session):
+        current = await tenant.invoices.get(invoice_id, session=session) or {}
+        res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft"}, session=session)
+        if res.deleted_count == 0:
+            raise status_conflict(NOT_DRAFT, invoice_id, current.get("status"))
+        await _claim_advance_proformas(tenant, invoice_id, [], current.get("advance_proforma_ids") or [],
+                                       session=session, user=user,
+                                       reason="FG-718: изтрита чернова освобождава аванса")
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
+    await run_transaction(tenant, _body)
     return {"ok": True}
 
 
