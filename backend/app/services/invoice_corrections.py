@@ -50,6 +50,13 @@ ACT_NOT_APPROVED = "ACT_NOT_APPROVED"
 OFFSET_ACROSS_CONTRACTS = "OFFSET_ACROSS_CONTRACTS"
 OFFSET_EXCEEDS_BALANCE = "OFFSET_EXCEEDS_BALANCE"
 REFUND_EXCEEDS_BALANCE = "REFUND_EXCEEDS_BALANCE"
+# R84 (refund before the credit note): a supplier refund registered against NAMED open
+# expected_credit_notes rows (FLOW-006 Inflow); D20-D23 interim defaults
+REFUND_EXCEEDS_EXPECTED_CREDIT = "REFUND_EXCEEDS_EXPECTED_CREDIT"
+REFUND_EXCEEDS_PAID = "REFUND_EXCEEDS_PAID"
+DIFFERENCE_AFTER_REFUND = "DIFFERENCE_AFTER_REFUND_UNSUPPORTED"
+SETTLEMENT_REFUND = "refund"
+SETTLEMENT_CREDIT_NOTE = "credit_note"
 DUPLICATE_CREDIT_NOTE = "DUPLICATE_CREDIT_NOTE"
 NOTE_INVALID = "NOTE_INVALID"
 INVOICE_NOT_CORRECTABLE = "INVOICE_NOT_CORRECTABLE"
@@ -522,9 +529,17 @@ async def derived_sums(tenant, invoice_id: str, *, session=None) -> Dict[str, fl
         if o.get("source_invoice_id") == invoice_id:
             off_out += cents(o.get("amount"))
     refunded = Decimal(0)
+    linked = False
     async for p in tenant.finance_payments.find(active_payments({"refund_invoice_id": invoice_id}),
-                                                {"_id": 0, "amount": 1}, session=session):
-        refunded += cents(p.get("amount"))
+                                                {"_id": 0, "amount": 1, "expected_credit_rows": 1},
+                                                session=session):
+        if p.get("expected_credit_rows"):
+            linked = True                     # R84: counted below, only the part a note covers
+        else:
+            refunded += cents(p.get("amount"))
+    if linked:
+        for row in (await expected_coverage(tenant, invoice_id, session=session)).values():
+            refunded += row["covered_refund"]
     return {"credited_amount": money(credited), "debited_amount": money(debited),
             "offset_in_amount": money(off_in), "offset_out_amount": money(off_out),
             "refunded_amount": money(refunded)}
@@ -941,12 +956,51 @@ INVOICE_AWAITS_CREDIT_NOTE = "INVOICE_AWAITS_CREDIT_NOTE"     # the code #82 (Р
 
 async def awaited_credit(tenant, invoice_id: str, *, session=None) -> Decimal:
     """Р47 / Р74 (FG-453): the credit a supplier invoice still awaits — Σ of its OPEN
-    expected_credit_notes (the same reading as #82's ``finance._awaited_credit``)."""
-    total = Decimal(0)
-    async for r in tenant.expected_credit_notes.find(
-            {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "amount": 1}, session=session):
-        total += cents(r.get("amount"))
-    return total
+    expected_credit_notes, each less what a refund (R84) or a matched note already
+    settled. With no settlement this is #82's reading (Σ open ``amount``); #82's
+    ``finance._awaited_credit`` must call this at merge (whichever merges second)."""
+    return sum((r["open"] for r in (await expected_coverage(tenant, invoice_id, session=session)).values()),
+               Decimal(0))
+
+
+async def expected_coverage(tenant, invoice_id: str, *, session=None) -> Dict[str, dict]:
+    """R84 — per expected_credit_notes row of the invoice, from the source rows read in
+    ``session`` (never stored as a running sum):
+
+      * ``refunded`` — Σ ACTIVE supplier refunds linked to the row (FLOW-006
+        ``finance_payments`` Inflow, ``expected_credit_rows``; a reversed refund drops out);
+      * ``noted`` — Σ the row's append-only ``credit_note`` settlements (matched notes);
+      * ``uncovered`` — refunded money no note documents yet (D22: a later note must
+        equal it exactly);
+      * ``open`` — what the invoice still awaits on the row (Р47 cap):
+        amount − max(refunded, noted), 0 for a closed row;
+      * ``covered_refund`` — the part of the refunds that counts in the invoice's
+        ``refunded_amount``: only what a note documents, so a refund before the note
+        never makes a credit balance and the note after it never makes a second one."""
+    from app.services.payment_state import active_payments
+    rows: Dict[str, dict] = {}
+    async for r in tenant.expected_credit_notes.find({"invoice_id": invoice_id}, {"_id": 0},
+                                                     session=session):
+        noted = sum((cents(x.get("amount")) for x in (r.get("settlements") or [])
+                     if x.get("type") == SETTLEMENT_CREDIT_NOTE), Decimal(0))
+        rows[r["id"]] = {"amount": cents(r.get("amount")), "status": r.get("status"),
+                         "refunded": Decimal(0), "noted": noted}
+    async for p in tenant.finance_payments.find(
+            active_payments({"refund_invoice_id": invoice_id, "expected_credit_rows": {"$exists": True}}),
+            {"_id": 0, "expected_credit_rows": 1}, session=session):
+        for link in p.get("expected_credit_rows") or []:
+            if link.get("id") in rows:
+                rows[link["id"]]["refunded"] += cents(link.get("amount"))
+    for v in rows.values():
+        is_open = v["status"] == "open"
+        v["uncovered"] = max(v["refunded"] - v["noted"], Decimal(0))
+        v["open"] = max(v["amount"] - max(v["refunded"], v["noted"]), Decimal(0)) if is_open else Decimal(0)
+        v["covered_refund"] = min(v["refunded"], v["noted"]) if is_open else v["refunded"]
+    return rows
+
+
+def coverage_view(row: dict) -> Dict[str, float]:
+    return {k: money(row[k]) for k in ("refunded", "noted", "uncovered", "open")}
 
 
 EXPECTED_LINK_REQUIRED = "EXPECTED_CREDIT_LINK_REQUIRED"
@@ -990,16 +1044,30 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
         DQ „разлика в кредитно известие“; the note is registered but NOT applied."""
     if not rows:
         return {"applied": True, "expected": None, "matched": None}
-    expected = sum((cents(r.get("amount")) for r in rows), Decimal(0))
+    # R84 / D22: on a row a refund settled before the note, the note must document
+    # exactly the refunded money not yet documented; otherwise (FG-219) the row's
+    # amount not yet documented. No tolerance either way.
+    coverage = await expected_coverage(tenant, invoice_id, session=session)
+    per_row = {}
+    for r in rows:
+        cov = coverage[r["id"]]
+        per_row[r["id"]] = cov["uncovered"] if cov["uncovered"] > 0 else cov["amount"] - cov["noted"]
+    expected = sum(per_row.values(), Decimal(0))
+    refunded = sum((coverage[r["id"]]["refunded"] for r in rows), Decimal(0))
     at = now_iso()
     ids = [r["id"] for r in rows]
     if expected - cents(gross) == MATCH_TOLERANCE:
-        res = await tenant.expected_credit_notes.update_many(
-            {"id": {"$in": ids}, "invoice_id": invoice_id, "status": "open"},
-            {"$set": {"status": "fulfilled", "credit_note_id": note_id, "fulfilled_at": at}},
-            session=session)
-        if res.modified_count != len(ids):
-            raise conflict(EXPECTED_LINK_INVALID, "Очакваното известие вече е покрито")
+        for rid in ids:
+            cov = coverage[rid]
+            upd = {"$push": {"settlements": {"type": SETTLEMENT_CREDIT_NOTE, "credit_note_id": note_id,
+                                             "amount": money(per_row[rid]), "at": at,
+                                             "by": (actor or {}).get("id")}}}
+            if cov["noted"] + per_row[rid] >= cov["amount"]:
+                upd["$set"] = {"status": "fulfilled", "credit_note_id": note_id, "fulfilled_at": at}
+            res = await tenant.expected_credit_notes.update_one(
+                {"id": rid, "invoice_id": invoice_id, "status": "open"}, upd, session=session)
+            if res.modified_count != 1:
+                raise conflict(EXPECTED_LINK_INVALID, "Очакваното известие вече е покрито")
         # Р52(2a): a corrected note resolves the earlier mismatch issue(s); the mismatched
         # note stays registered (never applied) and is marked superseded by this one.
         async for old in tenant.credit_debit_notes.find(
@@ -1018,12 +1086,15 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
                                              {"$set": {"awaiting_credit_note": False}}, session=session)
         # FG-465: the Р47 issue „очаква кредитно известие“ (#82) follows the open rows
         await sync_awaited_credit_issue(tenant, invoice_id, actor=actor, session=session)
-        return {"applied": True, "expected": money(expected), "matched": True, "rows": ids}
+        return {"applied": True, "expected": money(expected), "matched": True, "rows": ids,
+                "covered": [{"id": rid, "amount": money(per_row[rid])} for rid in ids],
+                "refunded_before": money(refunded)}
     await open_dq_issue(tenant, dq_type=DQ_CREDIT_NOTE_DIFFERENCE, entity_type="finance.credit_note",
                         entity_id=note_id, actor=actor, session=session,
                         details={"invoice_id": invoice_id, "rows": ids, "expected": money(expected),
-                                 "registered": money(cents(gross))})
+                                 "registered": money(cents(gross)), "refunded_before": money(refunded)})
     return {"applied": False, "expected": money(expected), "matched": False, "rows": ids,
+            "refunded_before": money(refunded),
             "dq": DQ_TITLES[DQ_CREDIT_NOTE_DIFFERENCE],
             "dq_issue_id": dq_issue_id(DQ_CREDIT_NOTE_DIFFERENCE, note_id)}
 

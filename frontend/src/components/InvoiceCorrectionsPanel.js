@@ -108,6 +108,18 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
   };
 
   const approve = (note) => post(`/finance/credit-notes/${note.id}/approve`, { version: note.version });
+  // R84 / D20: the Accountant registers a supplier refund received BEFORE its credit note,
+  // against the named awaited row (money IN, FLOW-006); the note later must equal it (D22)
+  const refundBeforeNote = (row) => {
+    const open = row.coverage ? row.coverage.open : row.amount;
+    const amount = num(window.prompt(`Получена сума от доставчика (до ${open}):`, String(open)));
+    if (!(amount > 0)) return;
+    const reason = (window.prompt("Причина / банково основание:") || "").trim();
+    if (!reason) return;
+    post(`/finance/invoices/${invoiceId}/refund`, {
+      amount, reason, method: "BankTransfer", expected_credit_rows: [{ id: row.id, amount }],
+    });
+  };
   // Р52(2) / D7: the Owner accepts a supplier note's difference (reason + AuditEvent)
   const acceptDifference = (note) => {
     const reason = (window.prompt("Причина за приемане на разликата:") || "").trim();
@@ -234,9 +246,18 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
         </div>
       ))}
       {(data?.expected_credit_notes || []).filter((e) => e.status === "open").map((e) => (
-        <p key={e.id} className="text-xs text-amber-400">
+        <p key={e.id} className="text-xs text-amber-400" data-testid={`expected-credit-${e.id}`}>
           Очаква кредитно известие: {e.amount}
+          {e.coverage && e.coverage.refunded > 0
+            ? ` — върнати ${e.coverage.refunded}, остава ${e.coverage.open}, без известие ${e.coverage.uncovered}`
+            : ""}
           {e.escalate_to_owner ? " — срокът от 14 дни е изтекъл, ескалирано към Собственика" : ""}
+          {canIssue && !outgoing && (!e.coverage || e.coverage.open > 0) && (
+            <Button size="sm" variant="outline" className="ml-2" disabled={busy} onClick={() => refundBeforeNote(e)}
+                    data-testid={`refund-before-note-${e.id}`}>
+              Получено връщане
+            </Button>
+          )}
         </p>
       ))}
     </div>

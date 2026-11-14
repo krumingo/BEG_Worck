@@ -15,7 +15,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
@@ -418,6 +418,13 @@ async def accept_difference(note_id: str, body: dict = Body(...), _sec: dict = D
                                   "Регистрирал известието не може да приеме разликата — нужен е друг човек")
             rows = link.get("rows") or []
             await _claim(tenant, note["original_invoice_id"], session)
+            coverage = await ic.expected_coverage(tenant, note["original_invoice_id"], session=session)
+            if any(coverage.get(r, {}).get("refunded") or coverage.get(r, {}).get("noted") for r in rows):
+                # D23 (debt): a difference on rows a refund already settled is not booked
+                # as a company / project cost here; a corrected note resolves it (Р52(2a))
+                raise ic.conflict(ic.DIFFERENCE_AFTER_REFUND,
+                                  "Разлика по очаквано известие с получено връщане не се приема — "
+                                  "нужно е коригиращо известие")
             open_rows = await tenant.expected_credit_notes.count_documents(
                 {"id": {"$in": rows}, "status": "open"}, session=session)
             if open_rows != len(rows):
@@ -774,8 +781,11 @@ async def invoice_corrections(invoice_id: str, _sec: dict = Depends(require_fina
     expected = await tenant.expected_credit_notes.find({"invoice_id": invoice_id},
                                                        {"_id": 0}).to_list(500)
     now = datetime.now(timezone.utc)
+    coverage = await ic.expected_coverage(tenant, invoice_id) if expected else {}
     for row in expected:
         row.update(ic.expected_escalation(row, now))
+        if row.get("id") in coverage:
+            row["coverage"] = ic.coverage_view(coverage[row["id"]])     # R84
     open_ = await ic.current_open(tenant, invoice)
     return {
         "invoice_id": invoice_id, "status": invoice.get("status"),
@@ -808,12 +818,29 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
         user: dict = Depends(require_m5),
                                 idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р49.6 (а): the Accountant returns a credit balance — a real payment in the ONE
-    Payment ledger (FLOW-006 ``finance_payments``), never above the balance."""
+    Payment ledger (FLOW-006 ``finance_payments``), never above the balance.
+
+    R84 — a supplier refund received BEFORE the credit note: with
+    ``expected_credit_rows`` = [{id, amount}] the Accountant registers money IN
+    (Inflow) against NAMED open ``expected_credit_notes`` rows of a supplier invoice
+    (FG-220: never linked by amount). Σ the rows = the amount; each row at most what it
+    still awaits; all linked refunds at most what was paid on the invoice. The rows'
+    open expectation drops (Р47 cap), an append-only ``refund`` settlement is logged on
+    each row, and the refund counts in the invoice only once a note documents it — so
+    no credit balance now and no second one when the note arrives (D22: the note must
+    equal the refunded money). D20: registered by the Accountant, no second approval,
+    an AuditEvent always."""
     _guard(user)
     key = fin._require_key(idempotency_key)
     body = body if isinstance(body, dict) else {}
     amount = positive_amount(body.get("amount"))
     reason = _reason(body)
+    links = _refund_links(body.get("expected_credit_rows"), amount)
+    if links is not None and user.get("role") != "Accountant":
+        # D20 (interim): a received supplier refund is registered by the Accountant
+        raise HTTPException(status_code=403, detail={
+            "error_code": "REGISTRAR_ROLE_REQUIRED",
+            "message": "Получено връщане от доставчик регистрира Счетоводителят"})
 
     async def work():
         from app.services.auth_tx import run_in_transaction
@@ -827,6 +854,9 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
 
         async def tx_body(session):
             current = await _claim(tenant, invoice_id, session)
+            if links is not None:
+                return await _register_expected_refund(tenant, user, current, links, amount, reason,
+                                                       body, method, account_id, payment_id, key, session)
             balance = -(await ic.current_open(tenant, current, session=session))
             if ic.cents(amount) > balance:
                 raise ic.conflict(ic.REFUND_EXCEEDS_BALANCE, "Сумата надвишава кредитното салдо",
@@ -854,6 +884,82 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
 
     return await fin._once(user, key, "finance.invoice.refund", {"invoice_id": invoice_id, "body": body},
                            work)
+
+
+def _refund_links(raw, amount) -> Optional[List[dict]]:
+    """R84: ``expected_credit_rows`` = [{"id", "amount"}], distinct ids, positive amounts,
+    Σ = the refund amount (whole cents). None → an ordinary credit-balance refund."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or not raw:
+        raise ic.unprocessable(ic.EXPECTED_LINK_INVALID, "expected_credit_rows: списък от {id, amount}")
+    out, seen = [], set()
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] \
+                or item["id"] in seen:
+            raise ic.unprocessable(ic.EXPECTED_LINK_INVALID, "expected_credit_rows: {id, amount}, без повторения")
+        seen.add(item["id"])
+        out.append({"id": item["id"], "amount": ic.money(ic.cents(positive_amount(item.get("amount"))))})
+    if sum((ic.cents(x["amount"]) for x in out), Decimal(0)) != ic.cents(amount):
+        raise ic.unprocessable(ic.EXPECTED_LINK_INVALID,
+                               "Сумата по очакваните известия трябва да е равна на връщането")
+    return out
+
+
+async def _register_expected_refund(tenant, user, current, links, amount, reason, body, method,
+                                    account_id, payment_id, key, session):
+    """R84, inside the invoice's transaction (the claim serialises it with a note, an
+    offset or another refund of the same invoice)."""
+    from app.services.payment_state import active_allocations, active_payments
+    invoice_id = current["id"]
+    if current.get("direction") != "Received":
+        raise ic.unprocessable(ic.EXPECTED_LINK_INVALID, "Връщане срещу очаквано известие е само по входяща фактура")
+    coverage = await ic.expected_coverage(tenant, invoice_id, session=session)
+    for link in links:
+        row = coverage.get(link["id"])
+        if row is None or row["status"] != "open":
+            raise ic.unprocessable(ic.EXPECTED_LINK_INVALID,
+                                   "Очакваното известие не е отворено за тази фактура", ids=[link["id"]])
+        if ic.cents(link["amount"]) > row["open"]:
+            raise ic.conflict(ic.REFUND_EXCEEDS_EXPECTED_CREDIT,
+                              "Сумата надвишава очакваното кредитно известие",
+                              expected_credit_note_id=link["id"], open=ic.money(row["open"]))
+    paid = Decimal(0)
+    async for a in tenant.payment_allocations.find(active_allocations({"invoice_id": invoice_id}),
+                                                   {"_id": 0, "amount_allocated": 1}, session=session):
+        paid += ic.cents(a.get("amount_allocated"))
+    linked = Decimal(0)
+    async for p in tenant.finance_payments.find(
+            active_payments({"refund_invoice_id": invoice_id, "expected_credit_rows": {"$exists": True}}),
+            {"_id": 0, "amount": 1}, session=session):
+        linked += ic.cents(p.get("amount"))
+    if linked + ic.cents(amount) > paid:
+        raise ic.conflict(ic.REFUND_EXCEEDS_PAID, "Връщането надвишава платеното по фактурата",
+                          paid=ic.money(paid), refunded_before=ic.money(linked))
+    at = ic.now_iso()
+    res = await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": {
+        "id": payment_id, "org_id": user["org_id"], "direction": "Inflow",
+        "amount": ic.money(ic.cents(amount)), "currency": current.get("currency", "EUR"),
+        "date": body.get("date") if isinstance(body.get("date"), str) else at[:10],
+        "method": method, "account_id": account_id,
+        "counterparty_name": current.get("counterparty_name", ""),
+        "reference": current.get("invoice_no"), "project_id": current.get("project_id"),
+        "note": "Връщане от доставчик преди кредитно известие по ф-ра %s: %s"
+                % (current.get("invoice_no"), reason),
+        "refund_invoice_id": invoice_id, "expected_credit_rows": links,
+        "created_by": user["id"], "created_at": at, "updated_at": at}}, upsert=True, session=session)
+    if res.upserted_id is not None:
+        for link in links:                                    # append-only log on the row
+            await tenant.expected_credit_notes.update_one(
+                {"id": link["id"], "invoice_id": invoice_id, "status": "open"},
+                {"$push": {"settlements": {"type": ic.SETTLEMENT_REFUND, "payment_id": payment_id,
+                                           "amount": link["amount"], "at": at, "by": user["id"]}}},
+                session=session)
+    await fin.update_invoice_status(tenant, invoice_id, session=session)
+    await fin._audit_tx(user, "finance.invoice.expected_credit_refund_registered", "finance.payment",
+                        payment_id, reason, {"invoice_id": invoice_id, "amount": ic.money(ic.cents(amount)),
+                                             "expected_credit_rows": links, "paid": ic.money(paid)},
+                        key, session)
 
 
 # ═════════════════════════════════════════════════════════════ offset (Р49.6 б)

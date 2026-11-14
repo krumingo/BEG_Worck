@@ -1,0 +1,25 @@
+# R84 red proof: tests/test_inv_cn_01_credit_notes.py -k r84 with app/ at 38d3244b, real Mongo rs0
+E       AssertionError: {"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}
+E       assert 409 == 201
+E       AssertionError: {"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}
+E       assert 409 == 201
+E       AssertionError: {"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}
+E       assert 409 == 201
+E       assert 409 == 201
+E       assert 409 == 201
+E       assert 409 == 201
+E           AssertionError: ('owner-a', '{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}')
+E           assert (409 == 403)
+E           AssertionError: ('owner-a', '{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}')
+E           assert (409 == 403)
+E           AssertionError: ('owner-a', '{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}')
+E           assert (409 == 403)
+E       AssertionError: ['{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}...{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}']
+E       assert [409, 409, 409, 409, 409, 409] == [201, 201, 201, 409, 409, 409]
+E       AssertionError: ['{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}...{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}']
+E       assert [409, 409, 409, 409, 409, 409] == [201, 201, 201, 409, 409, 409]
+E       AssertionError: ['{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}...{"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}']
+E       assert [409, 409, 409, 409, 409, 409] == [201, 201, 201, 409, 409, 409]
+E       AssertionError: {"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}
+E       assert 409 == 201
+E       AssertionError: {"detail":{"error_code":"REFUND_EXCEEDS_BALANCE","message":"Сумата надвишава кредитното салдо","credit_balance":0.0}}
