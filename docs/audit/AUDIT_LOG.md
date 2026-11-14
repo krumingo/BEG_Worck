@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
-| #84 INV-CN-01 | `38d3244` | **PASS** (F-84-01, FG-571 / 572 / 599; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells; R47 wiring notes for the 2nd merger) | 2026-11-13 |
+| #84 INV-CN-01 | `0081be0` | **PASS** (code `b48a034`; R84 refund-before-credit-note, D22, FG-708; SEC-02 intermittent = pulse uuid probe flake, no leak; warehouse 44/1121; PM-01 regen 0) | 2026-11-14 |
 | #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
@@ -7129,3 +7129,46 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | jest | 29 / 283 |
 
 - **Not re-run:** warehouse / PAY / R0. The delta touches only `media.py` list routes, the backfill script and the frontend; the `900dc9c3` runs stand (44 / 1121, 630, 814).
+
+## 2026-11-14 — #84 INV-CN-01 `0081be0d` (code `b48a0341`) — PASS (delta over `38d3244b`)
+
+- **Delta:**
+  - R84 refund before the credit note (`905a6f10`): a supplier refund against NAMED open `expected_credit_notes` rows, as a FLOW-006 Inflow; append-only `settlements`.
+  - D22: the R52(2) Owner-acceptance path (`3d3f8b2b`).
+  - FG-708: refund date validation (`b48a0341`).
+- **Merge check:** clean onto main `3863610`; role-union 0.
+
+### Static review
+
+- `expected_coverage` derives per-row `refunded` / `noted` / `uncovered` / `open` / `covered_refund` from the source rows on each read; no running sum is stored.
+- A refund counts in `refunded_amount` only where a note documents it (`covered_refund`). So a refund before the note makes no credit balance, and the later note makes no second one.
+- `awaited_credit` = Σ `open`, which is #82's reading when nothing is settled.
+- Match: `per_row` = uncovered refund, else amount − noted; no tolerance.
+
+### SEC-02 intermittent failure (the owner's unexplained 1×)
+
+- **Looped** `test_a_fresh_real_mongo_run_on_two_tenants…` **31×** on real Mongo:
+  - three independent loops (11 + 10 + 10), `-rfs --tb=long -vv`, `results.json` kept per run;
+  - **2 failures, 29 passes**.
+- **Both failures are the same row:** `GET /api/sites/{site_id}/pulse` for a non-finance role (driver / off / B and technician / enforce / B), with `money_keys` [] and `hidden_budget_keys` [] and `leaks_7777` True. That is assertion `:812`.
+- **Cause:** main's substring probe, `"7777" in resp.text`, matches the random uuid4 `id` (or the microsecond `generated_at`) of the on-demand pulse. Already closed on main 2026-11-13; FG-567's field-aware check lives on #73.
+- **Deterministic proof on `0081be0d`** (pulse uuid4 forced to `…7777`):
+  - 99 non-finance rows flagged;
+  - all 129 occurrences are inside `"id"`, 0 elsewhere.
+- **Instrumented random loop (10 runs):** 1680 captured "7777" occurrences, all in finance-role responses.
+- **Conclusion:** no money leak.
+
+### Gates (real Mongo, warehouse in enforce)
+
+| Gate | Result |
+|---|---|
+| inv_cn_01 | 219 |
+| probe invcn01 | 99 |
+| probe R64 | 9 |
+| SEC-01 | 30 |
+| PM-01 | 6 / 0 skipped; **regen 0 cells** |
+| PAY | 630 |
+| A2C / A1 | 0/246, 0/496 |
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| **warehouse** | **44 / 1121** |
