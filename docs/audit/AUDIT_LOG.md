@@ -17,7 +17,7 @@
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `2de0f85` | **PASS** (code `900dc9c`; R88 Owner-only restore + review screen + paging; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
-| #82 WH-REV-01 | `558dfdf` | **PASS** (code `642227b`; R84 supplier claim replaces 409 PAID_ABOVE_NET; warehouse 44/1121; PM-01 regen 0; FLOW Guard single-source pending) | 2026-11-14 |
+| #82 WH-REV-01 | `558dfdf` | **PASS** (code `642227b`; R84 supplier claim replaces 409 PAID_ABOVE_NET; warehouse 44/1121; PM-01 regen 0; for the record — superseded by FG-690: after #84 merges, the overpaid part becomes an open expected credit in #84 expected_credit_notes) | 2026-11-14 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
@@ -7097,3 +7097,5 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 
 - **Pending:** FLOW Guard's single-source question (`supplier_claims` vs the #84 ledgers).
 - **Note:** a claim no longer `open` (settled later) is not subtracted by a later return's `claimed`. Correct as long as settling also changes `paid` / credit. Check when t26 lands.
+
+- **2026-11-14 update:** FG-690 decision — #82 will drop `supplier_claims` after #84 merges; the overpaid part becomes an open expected supplier credit in #84's `expected_credit_notes`. The `558dfdff` PASS stands for the record only; the union trial with `supplier_claims` was skipped on the orchestrator's instruction.
