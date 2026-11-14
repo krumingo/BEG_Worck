@@ -2538,11 +2538,13 @@ async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, u
     async def count_invoices(pids):
         invs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": pids}, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-            {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
-        ).to_list(500)
-        # FG-530: the revenue of the P&L — issued invoices, net, by the P&L report's own rule
-        from app.services.project_pnl import issued_revenue_net
-        issued_net = issued_revenue_net(invs)
+            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
+        ).to_list(5000)
+        # R86 (FG-565): revenue = the payments RECEIVED (FLOW-006 ledger), net — the P&L
+        # report's own rule; the issued (invoiced) amount is a separate field
+        from app.services.project_pnl import received_revenue
+        rec = await received_revenue(tenant, org_id, pids, invoices=invs)
+        issued_net = rec["invoiced_net"]
         # Proformas are future receivables, not P&L revenue — kept out of invoiced/paid
         real = [i for i in invs if (i.get("kind") or "Invoice") != "Proforma"]
         profs = [i for i in invs if (i.get("kind") or "Invoice") == "Proforma"]
@@ -2561,10 +2563,14 @@ async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, u
             for i in profs if i.get("status") != "Cancelled"
         ), 2)
         return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue,
-                "proforma_future": proforma_future, "issued_net": issued_net}
+                "proforma_future": proforma_future, "issued_net": issued_net,
+                "received_net": rec["received_net"], "awaiting_payment_net": rec["awaiting_payment_net"]}
 
+    from app.services.project_pnl import REVENUE_BASIS as rev_basis
     own_inv = await count_invoices([project_id])
-    child_inv = await count_invoices(subtree_ids) if subtree_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0, "issued_net": 0}
+    child_inv = await count_invoices(subtree_ids) if subtree_ids else {
+        "count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0, "issued_net": 0,
+        "received_net": 0, "awaiting_payment_net": 0}
     for c in children:
         per_child[c["id"]]["invoices"] = await count_invoices(group[c["id"]])
 
@@ -2685,20 +2691,22 @@ async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, u
         },
         # FG-505 (R62): the P&L labor is THE approved labor cost (project_labor_cost, the
         # "work" block) — not the PAID labor (a cash fact, shown apart as paid_labor)
-        # FG-530 (Krum): revenue = ISSUED invoices, net — the same rule as the P&L report;
-        # the PAID invoices are shown apart, labelled (a cash fact)
+        # R86 (Krum 14.11.2026, FG-565; changes R80): revenue = only the payments RECEIVED
+        # against issued documents (FLOW-006 ledger), net — the same rule as the P&L report.
+        # The issued amount and "фактурирано, чака плащане" are shown apart.
         "pnl": {
-            "revenue": round(own_inv["issued_net"] + child_inv["issued_net"], 2),
-            "revenue_basis": "issued invoices, net (as the P&L report)",
-            "paid_invoices": round(own_inv["paid"] + child_inv["paid"], 2),
-            "paid_invoices_label": "Платени фактури (касово, отделно от прихода)",
+            "revenue": round(own_inv["received_net"] + child_inv["received_net"], 2),
+            "revenue_basis": rev_basis,
+            "invoiced_net": round(own_inv["issued_net"] + child_inv["issued_net"], 2),
+            "awaiting_payment_net": round(own_inv["awaiting_payment_net"] + child_inv["awaiting_payment_net"], 2),
+            "awaiting_payment_label": "Фактурирано, чака плащане",
             "labor": round(own_work["labor_cost"] + child_work["labor_cost"], 2),
             "labor_basis": "approved (project_labor_cost)",
             "expenses": round(
                 own_work["labor_cost"] + child_work["labor_cost"] +
                 own_mat["ex_vat"] + child_mat["ex_vat"], 2),
             "profit": round(
-                (own_inv["issued_net"] + child_inv["issued_net"]) -
+                (own_inv["received_net"] + child_inv["received_net"]) -
                 (own_work["labor_cost"] + child_work["labor_cost"] +
                  own_mat["ex_vat"] + child_mat["ex_vat"]), 2),
         },

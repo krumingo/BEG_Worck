@@ -132,7 +132,7 @@ def _app(monkeypatch, op):
     from app.master_data.deps import ENV_MODE
     from app.routes import full_cost, labor_smr, revenue_expense  # noqa: F401 — loaded, then patched
     from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions  # noqa: F401
-    from app.routes import daily_reports  # noqa: F401
+    from app.routes import daily_reports, finance  # noqa: F401
     from app.services import morning_briefing, project_financial_results, pulse_generator  # noqa: F401
     from app.services import project_pnl  # noqa: F401 — FG-530 isolation: loaded before the db patch
     monkeypatch.setenv(ENV_MODE, "off")
@@ -145,13 +145,14 @@ def _app(monkeypatch, op):
     from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions
     for r in (labor_smr.router, revenue_expense.router, full_cost.router, activity_budgets.router,
               centralized_reports.router, projects.router, revenue_snapshot.router,
-              work_sessions.router, daily_reports.router):
+              work_sessions.router, daily_reports.router, finance.router):
         app.include_router(r, prefix="/api")
 
     async def m2(user: dict = Depends(get_current_user)):      # the module gate is not under test
         return user
     app.dependency_overrides[modules.require_m2] = m2
     app.dependency_overrides[modules.require_m4] = m2
+    app.dependency_overrides[modules.require_m5] = m2   # R86: payments through the real FLOW-006 quick-pay
     return app
 
 
@@ -983,26 +984,8 @@ def test_fg506_the_cash_balance_reads_paid_salaries_from_the_pay_run_ledger_only
     run(monkeypatch, scenario, backend)
 
 
-def test_fg530_the_aggregate_revenue_is_issued_invoices_like_the_pnl_report(monkeypatch, backend):
-    """FG-530 (Krum): the aggregate P&L revenue = ISSUED invoices, net — the P&L report's
-    own rule; the PAID invoices are shown apart, labelled."""
-    from app.services.project_pnl import compute_project_pnl
-
-    async def scenario(c, op):
-        await op.invoices.insert_many([
-            {"id": "inv-1", "org_id": ORG, "project_id": P, "direction": "Issued", "kind": "Invoice",
-             "status": "PartiallyPaid", "subtotal": 1000.0, "total": 1200.0, "paid_amount": 300.0},
-            {"id": "inv-d", "org_id": ORG, "project_id": P, "direction": "Issued", "kind": "Invoice",
-             "status": "Draft", "subtotal": 50.0, "total": 60.0, "paid_amount": 0},
-            {"id": "inv-s", "org_id": ORG, "project_id": P, "direction": "Received", "kind": "Invoice",
-             "status": "Paid", "subtotal": 70.0, "total": 84.0, "paid_amount": 84.0}])
-        a = (await c.get(f"/api/projects/{P}/aggregate", headers=_token("owner"))).json()
-        pnl = (await compute_project_pnl(ORG, P))["revenue"]["total_revenue"]
-        assert a["pnl"]["revenue"] == 1000.0 == pnl, (a["pnl"], pnl)    # issued, net — not paid
-        assert a["pnl"]["paid_invoices"] == 300.0 and a["pnl"]["paid_invoices_label"]
-        mat = a["materials"]["total"]["ex_vat"]
-        assert a["pnl"]["profit"] == round(1000.0 - 180.0 - mat, 2)
-    run(monkeypatch, scenario, backend)
+# FG-530 (issued invoices = revenue, R80) is superseded by R86 (Krum 14.11.2026, FG-565):
+# revenue = received payments — tests/test_lab_01_r86_received_revenue.py
 
 
 # ═══════════════════════════════════════════════ FLOW Guard pass 46 (FG-566)
@@ -1039,7 +1022,9 @@ def test_fg566_the_project_aggregate_needs_the_finance_right_or_membership(monke
         assert a["has_children"] is True and a["team"]["total"]["count"] >= 0
         child = a["children"][0]
         if expect == "money":
-            assert a["pnl"]["revenue"] == 900.0 and a["work"]["total"]["labor_cost"] == 180.0
+            # R86: an issued, unpaid invoice is invoiced (900), not revenue (0)
+            assert a["pnl"]["invoiced_net"] == 900.0 and a["pnl"]["revenue"] == 0.0
+            assert a["work"]["total"]["labor_cost"] == 180.0
             assert {"invoices", "pnl"} <= set(child) or {"invoices"} <= set(child)
         else:
             assert not AGG_MONEY & set(a) and not AGG_MONEY & set(child), (set(a), set(child))

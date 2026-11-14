@@ -1012,7 +1012,7 @@ export function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               {cd && (
                 <div className="grid grid-cols-3 gap-1 text-[10px]">
                   <div><span className="text-gray-500">Часове: </span><span className="text-white font-mono">{cd.work?.hours || cd.team?.count || 0}</span></div>
-                  {cd.invoices && <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices.issued_net || 0)}</span></div>}{/* FG-530: issued, net */}
+                  {cd.invoices && <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices.received_net || 0)}</span></div>}{/* R86: received payments, net */}
                   {cd.work?.labor_cost !== undefined && <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.work.labor_cost || 0)}</span></div>}{/* FG-505 (R62); FG-591 */}
                 </div>
               )}
@@ -1042,7 +1042,9 @@ export function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               <AggRowMulti label="Фактури" childrenData={childrenData} field={c => c?.invoices?.count} total={agg.invoices?.total?.count} />
               <AggRowMulti label="Фактурирано" childrenData={childrenData} field={c => c?.invoices?.invoiced} total={agg.invoices?.total?.invoiced} suffix=" €" color="text-primary" />
               <AggRowMulti label="Платено" childrenData={childrenData} field={c => c?.invoices?.paid} total={agg.invoices?.total?.paid} suffix=" €" color="text-emerald-400" />
-              <AggRowMulti label="Неплатено" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" €" color="text-amber-400" />
+              <AggRowMulti label="Фактурирано, чака плащане" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" €" color="text-amber-400" />
+              {/* R86 (FG-565): revenue = only the payments received, net of VAT */}
+              <AggRowMulti label="Приход (получени, без ДДС)" childrenData={childrenData} field={c => c?.invoices?.received_net} total={agg.pnl?.revenue} suffix=" €" color="text-emerald-400" />
               </>}
               {hasMoney && (agg.invoices?.total?.overdue || 0) > 0 && (
                 <AggRowMulti label="Просрочено" childrenData={childrenData} field={c => c?.invoices?.overdue} total={agg.invoices?.total?.overdue} suffix=" €" color="text-red-400" />
@@ -1068,15 +1070,15 @@ export function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={childrenData.map(c => ({
                 name: c.code?.split("-").pop() || c.name,
-                "Приходи (издадени)": c.invoices?.issued_net || 0,   // FG-530: issued invoices, net
-                "Платено (касово)": c.invoices?.paid || 0,
+                "Приход (получени)": c.invoices?.received_net || 0,   // R86: received payments, net
+                "Фактурирано, чака плащане": c.invoices?.awaiting_payment_net || 0,
                 Разходи: (c.work?.labor_cost || 0) + (c.materials?.ex_vat || 0),   // FG-505 (R62): approved labor
               }))} barGap={2}>
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#666" }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} />
-                <Bar dataKey="Приходи (издадени)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Платено (касово)" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Приход (получени)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Фактурирано, чака плащане" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Разходи" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
