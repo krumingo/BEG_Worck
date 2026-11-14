@@ -4,6 +4,9 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 
 jest.mock("react-i18next", () => ({ __esModule: true, useTranslation: () => ({ t: (k, d) => (typeof d === "string" ? d : k) }) }));
 
+const mockQueue = { enabled: false };
+jest.mock("@/lib/offline", () => ({ __esModule: true, useOfflineQueue: () => mockQueue }));
+
 import PwaBanners from "@/components/pwa/PwaBanners";
 import InstallAppButton from "@/components/pwa/InstallAppButton";
 import { connectivityStore } from "@/lib/pwa/connectivity";
@@ -80,4 +83,13 @@ test("iOS: install button opens the Share → Add to Home Screen steps", () => {
   render(<InstallAppButton />);
   fireEvent.click(screen.getByTestId("pwa-install-button"));
   expect(screen.getByTestId("pwa-ios-steps")).toBeTruthy();
+});
+
+test("PWA-02: with the offline queue on, the bar says records stay on the phone", () => {
+  mockQueue.enabled = true;
+  try {
+    render(<PwaBanners />);
+    act(() => { connectivityStore.set({ browserOnline: false, networkFailed: false }); });
+    expect(screen.getByTestId("pwa-offline-queue-on").textContent).toMatch(/се пазят на телефона/);
+  } finally { mockQueue.enabled = false; }
 });

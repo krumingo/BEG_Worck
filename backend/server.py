@@ -338,6 +338,10 @@ api_router.include_router(master_data_router)
 from app.routes.all_reports import router as all_reports_router
 api_router.include_router(all_reports_router)
 
+# PWA-02 (R61): offline queue sync + Owner/Admin console, behind the offline_queue flag.
+from app.routes.sync import router as offline_sync_router
+api_router.include_router(offline_sync_router)
+
 from app.routes.weekly_matrix import router as weekly_matrix_router
 api_router.include_router(weekly_matrix_router)
 
@@ -438,6 +442,9 @@ async def startup():
     from app.services.overhead_lifecycle import ensure_overhead_indexes_for_installation
     from app.tenancy import registry as _oh01_registry
     await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)
+    # PWA-02: the offline sync ledger indexes (unique receipt key, device register).
+    from app.services.offline_sync import ensure_sync_indexes_for_installation
+    await ensure_sync_indexes_for_installation(db, _oh01_registry.system_db)
     # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
     # shared rate-limit counters and durable auth security events (both TTL).
     from app.services import auth_events, password_reset, rate_limit

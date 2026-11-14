@@ -78,7 +78,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `mobile_view_configs` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `notifications` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `ocr_invoice_intake` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `offer_events` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offers.py:1568 |
+| `offer_events` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/routes/offers.py:1587 |
 | `offer_line_budgets` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `offer_versions` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `offers` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -135,6 +135,11 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `subcontractors` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:107<br>app/routes/billing.py:179 |
 | `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sync_conflicts` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sync_devices` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sync_late` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sync_quarantine` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `sync_receipts` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:81<br>app/routes/auth.py:417<br>app/routes/auth.py:466<br>app/routes/auth.py:466<br>app/routes/platform.py:300<br>app/tenancy/onboarding.py:126 |
 | `verified_bank_accounts` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/warehouse_movements/projections.py:255<br>app/services/warehouse_movements/projections.py:306<br>app/services/warehouse_movements/projections.py:340 |
@@ -175,7 +180,7 @@ app/routes/activity_budgets.py:82 activity_budgets.find in list_activity_budgets
 app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
 app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
 app/routes/auth.py:115 users.find in login()
-app/tenancy/data_access.py:451 offers.find in resolve_review_token()
+app/tenancy/data_access.py:465 offers.find in resolve_review_token()
 app/tenancy/identity.py:72 users.find in users_with_email()
 app/tenancy/project_team.py:301 project_team.count_documents in ownerless_row_count()
 ```

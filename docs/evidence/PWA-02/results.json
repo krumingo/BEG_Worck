@@ -1,0 +1,1113 @@
+{
+ "audit2": {
+  "backstop": "DuplicateKeyError",
+  "deciding_fresh": "ALREADY_DECIDED",
+  "deciding_legacy_no_stamp": 200,
+  "deciding_stale_status": "rejected",
+  "deciding_takeover_event": 1,
+  "m1_crash_http": 200,
+  "m1_crash_item": {
+   "idempotency_key": "17ffda92-9ed0-45cc-8fe0-a6689494cbd9",
+   "local_id": "fcc84daf-26f9-4d86-8d8b-c7c70bcb2d74",
+   "replay": false,
+   "result": {
+    "error_code": "SERVER_ERROR_RETRY",
+    "message": "Временна грешка — ще се изпрати отново"
+   },
+   "status": "retry"
+  },
+  "m1_receipt_after_crash": "retry",
+  "m1_replay": {
+   "captured_at": "2026-11-14T00:16:59.927618+00:00",
+   "idempotency_key": "17ffda92-9ed0-45cc-8fe0-a6689494cbd9",
+   "local_id": "fcc84daf-26f9-4d86-8d8b-c7c70bcb2d74",
+   "received_at": "2026-11-14T00:16:59.952892+00:00",
+   "replay": true,
+   "result": {
+    "date": "2026-11-14",
+    "draft_report_ids": [
+     "3c8eda4f-6e17-4454-9157-da666bb1ecf7",
+     "42e80cac-7564-4c8c-98e0-424587cbb248"
+    ],
+    "entity_id": "3c8eda4f-6e17-4454-9157-da666bb1ecf7",
+    "entity_type": "daily_report"
+   },
+   "status": "synced"
+  },
+  "m1_retry": "synced",
+  "m1_rows_after_crash": 0,
+  "m1_rows_after_replay": 2,
+  "m1_rows_after_retry": [
+   0,
+   1
+  ],
+  "m2_first": "retry",
+  "m2_rows_after_first": 2,
+  "m2_rows_after_takeover": 2,
+  "m2_takeover": {
+   "captured_at": "2026-11-14T00:16:59.982153+00:00",
+   "idempotency_key": "179ac75b-6dc2-4844-bf5e-5edcf9032ef6",
+   "local_id": "84e124cb-58a0-4cbc-8bb3-e943cb231888",
+   "received_at": "2026-11-14T00:17:00.015253+00:00",
+   "replay": false,
+   "result": {
+    "already": true,
+    "date": "2026-11-14",
+    "draft_report_ids": [
+     "49afa4ae-1f55-4fad-82ac-f0f05d2639e7",
+     "1cd1561f-52f4-4860-971d-9b51a820d17d"
+    ],
+    "entity_id": "49afa4ae-1f55-4fad-82ac-f0f05d2639e7",
+    "entity_type": "daily_report"
+   },
+   "status": "synced"
+  },
+  "n1_body_text": "{\"server_time\": \"2026-11-14T00:17:00.042439+00:00\", \"results\": [{\"local_id\": \"2c29c2f7-134d-4550-bec3-252678f06926\", \"idempotency_key\": \"16f1bcdf-3162-4985-9f5f-4382c575a0e1\", \"status\": \"retry\", \"result\": {\"error_code\": \"SERVER_ERROR_RETRY\", \"message\": \"Временна грешка — ще се изпрати отново\"}, \"replay\": false}, {\"local_id\": \"6bee529e-189e-4682-8170-5e987b54cb66\", \"idempotency_key\": \"8713c6e7-abe9-43c5-ad23-aaa96506d74d\", \"status\": \"synced\", \"result\": {\"entity_type\": \"probe\", \"entity_id\": \"6bee529e-189e-4682-8170-5e987b54cb66\", \"ok\": true}, \"replay\": false, \"received_at\": \"2026-11-14T00:17:00.042439+00:00\", \"captured_at\": \"2026-11-14T00:17:00.039456+00:00\"}]}",
+  "n1_boom_calls": 2,
+  "n1_http": 200,
+  "n1_items": [
+   {
+    "result": {
+     "error_code": "SERVER_ERROR_RETRY",
+     "message": "Временна грешка — ще се изпрати отново"
+    },
+    "status": "retry"
+   },
+   {
+    "result": {
+     "entity_id": "6bee529e-189e-4682-8170-5e987b54cb66",
+     "entity_type": "probe",
+     "ok": true
+    },
+    "status": "synced"
+   }
+  ],
+  "n1_receipt": "retry",
+  "n1_resend": "retry",
+  "online_keys": [
+   "attendance_warnings",
+   "draft_report_ids",
+   "hours_warnings",
+   "missing_smr_created",
+   "report_id",
+   "roster_id",
+   "total_hours"
+  ],
+  "online_row_untagged": true,
+  "online_status": 200
+ },
+ "calls": {
+  "boom": 2,
+  "confirm": 0,
+  "edit": 1,
+  "note": 4
+ },
+ "conflict": {
+  "conflict_rows": 1,
+  "replay": {
+   "captured_at": "2026-11-14T00:16:59.605703+00:00",
+   "idempotency_key": "25eb9591-b9b4-40f1-952e-e1eb379442bd",
+   "local_id": "c5aa23e6-40f7-4340-b3aa-70d75d1b31fe",
+   "received_at": "2026-11-14T00:16:59.608737+00:00",
+   "replay": true,
+   "result": {
+    "conflict_id": "43c62643-d440-46d2-800a-c77f1ec1d7f5",
+    "kind": "approved"
+   },
+   "status": "conflict"
+  },
+  "result": {
+   "captured_at": "2026-11-14T00:16:59.605703+00:00",
+   "idempotency_key": "25eb9591-b9b4-40f1-952e-e1eb379442bd",
+   "local_id": "c5aa23e6-40f7-4340-b3aa-70d75d1b31fe",
+   "received_at": "2026-11-14T00:16:59.608737+00:00",
+   "replay": false,
+   "result": {
+    "conflict_id": "43c62643-d440-46d2-800a-c77f1ec1d7f5",
+    "kind": "approved"
+   },
+   "status": "conflict"
+  },
+  "row": {
+   "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "diff": [
+    {
+     "field": "hours",
+     "office": 8,
+     "phone": 10
+    },
+    {
+     "field": "updated_at",
+     "office": "2026-11-09T07:00:00+00:00",
+     "phone": "2026-11-08T07:00:00+00:00"
+    }
+   ],
+   "field_version": {
+    "hours": 10,
+    "status": "APPROVED",
+    "updated_at": "2026-11-08T07:00:00+00:00"
+   },
+   "kind": "approved",
+   "office_version": {
+    "hours": 8,
+    "status": "APPROVED",
+    "updated_at": "2026-11-09T07:00:00+00:00"
+   },
+   "status": "open"
+  }
+ },
+ "console": {
+  "B_owner_sees_A_device": false,
+  "accountant": 403,
+  "admin": 200,
+  "owner": 200,
+  "owner_counts": {
+   "conflicts": 3,
+   "devices": 1,
+   "late": 2,
+   "quarantine": 0,
+   "revoked": 0
+  },
+  "owner_sees_device": true,
+  "requester": 403,
+  "technician": 403,
+  "viewer": 403
+ },
+ "device": {
+  "batch_unregistered": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_NOT_REGISTERED",
+     "message": "Устройството не е регистрирано"
+    }
+   },
+   "error_code": "DEVICE_NOT_REGISTERED",
+   "status": 409
+  },
+  "devices_rows": 1,
+  "register": {
+   "body": {
+    "created_at": "2026-11-14T00:16:59.462446+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "Телефон Иван",
+    "last_seen_at": "2026-11-14T00:16:59.462446+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoked_at": null,
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_again": {
+   "body": {
+    "created_at": "2026-11-14T00:16:59.462446+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "Телефон Иван",
+    "last_seen_at": "2026-11-14T00:16:59.470059+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoked_at": null,
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_bad_id": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_ID_INVALID",
+     "message": "Невалиден идентификатор на устройство"
+    }
+   },
+   "error_code": "DEVICE_ID_INVALID",
+   "status": 422
+  }
+ },
+ "flag": {
+  "batch_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "flag_by_owner": {
+   "body": {
+    "detail": {
+     "error_code": "PLATFORM_ADMIN_REQUIRED",
+     "message": "Platform administrator access required"
+    }
+   },
+   "error_code": "PLATFORM_ADMIN_REQUIRED",
+   "status": 403
+  },
+  "flag_by_platform_admin": {
+   "body": {
+    "enabled": true,
+    "module_code": "offline_queue"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "status_B_still_off": {
+   "enabled": false,
+   "revoked": false,
+   "server_time": "2026-11-14T00:16:59.458180+00:00",
+   "tenant_id": "85f2e683-aa09-4a80-9b0a-1e7a125150e9",
+   "user_id": "76e13e35-b362-5593-b92a-e3342cf6b3bf"
+  },
+  "status_off": {
+   "enabled": false,
+   "revoked": false,
+   "server_time": "2026-11-14T00:16:59.425825+00:00",
+   "tenant_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  },
+  "status_on": {
+   "enabled": true,
+   "revoked": false,
+   "server_time": "2026-11-14T00:16:59.454712+00:00",
+   "tenant_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  }
+ },
+ "flowguard": {
+  "accept_fresh": 200,
+  "can_photo_owner": true,
+  "can_photo_technician": true,
+  "can_photo_viewer": false,
+  "conflict": "conflict",
+  "flag_still_on": true,
+  "legacy_toggle": 200,
+  "legacy_toggle_events": 1,
+  "office_present": 200,
+  "office_sick": 200,
+  "photo_foreign_context": {
+   "http": 403,
+   "status": "rejected"
+  },
+  "photo_ok": "waiting_file",
+  "photo_svg": "TYPE_INVALID",
+  "photo_video": "TYPE_INVALID",
+  "photo_viewer": {
+   "code": "MEDIA_UPLOAD_FORBIDDEN",
+   "http": 403,
+   "status": "rejected"
+  },
+  "row_after_accept": {
+   "status": "Absent",
+   "version": 2
+  },
+  "row_after_stale": "SickLeave",
+  "site3_http": [
+   200
+  ],
+  "site3_key": true,
+  "site3_rows": 1,
+  "six_http": [
+   200
+  ],
+  "six_rows": 1,
+  "six_statuses": [
+   "synced",
+   "synced",
+   "synced",
+   "synced",
+   "synced",
+   "synced"
+  ],
+  "stale": {
+   "error_code": "CONFLICT_STALE",
+   "status": 409
+  },
+  "stale_conflict": {
+   "office_status": "SickLeave",
+   "status": "open"
+  },
+  "stale_no_bump": "CONFLICT_STALE",
+  "version_after_office_edit": 1
+ },
+ "handlers": {
+  "accept_event": {
+   "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "reason": "Потвърдено по телефона"
+  },
+  "after_accept": [
+   {
+    "status": "Late",
+    "update_source": "offline_conflict_resolution",
+    "version": 2
+   }
+  ],
+  "att_after_diff": [
+   "Present"
+  ],
+  "att_again": {
+   "captured_at": "2026-11-14T00:16:59.626733+00:00",
+   "idempotency_key": "45317cea-ea87-42df-8c6f-53981b39d223",
+   "local_id": "29c09d08-47ec-4c66-8443-7ae16f489b89",
+   "received_at": "2026-11-14T00:16:59.629697+00:00",
+   "replay": true,
+   "result": {
+    "date": "2026-11-14",
+    "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+    "entity_type": "attendance",
+    "status": "Present"
+   },
+   "status": "synced"
+  },
+  "att_diff": {
+   "captured_at": "2026-11-14T00:16:59.684509+00:00",
+   "idempotency_key": "141c917d-a160-4e5d-8031-e3eb0c2e36b1",
+   "local_id": "ace22f73-f65b-49cf-8d17-d3a60f020bfd",
+   "received_at": "2026-11-14T00:16:59.687568+00:00",
+   "replay": false,
+   "result": {
+    "conflict_id": "c11837b1-a9c8-48ee-9f9f-be0903da8224",
+    "kind": "already_recorded"
+   },
+   "status": "conflict"
+  },
+  "att_events": 1,
+  "att_first": {
+   "captured_at": "2026-11-14T00:16:59.626733+00:00",
+   "idempotency_key": "45317cea-ea87-42df-8c6f-53981b39d223",
+   "local_id": "29c09d08-47ec-4c66-8443-7ae16f489b89",
+   "received_at": "2026-11-14T00:16:59.629697+00:00",
+   "replay": false,
+   "result": {
+    "date": "2026-11-14",
+    "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+    "entity_type": "attendance",
+    "status": "Present"
+   },
+   "status": "synced"
+  },
+  "att_identical": {
+   "captured_at": "2026-11-14T00:16:59.673476+00:00",
+   "idempotency_key": "e893925f-44f1-4394-b094-90cacc9ca010",
+   "local_id": "8427e4ab-1c92-49b3-b1de-98898e322c7b",
+   "received_at": "2026-11-14T00:16:59.676485+00:00",
+   "replay": false,
+   "result": {
+    "date": "2026-11-14",
+    "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+    "entity_type": "attendance",
+    "identical": true
+   },
+   "status": "synced"
+  },
+  "att_row": {
+   "captured_at": "2026-11-14T00:16:59.626733+00:00",
+   "date": "2026-11-14",
+   "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+   "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "source": "offline_sync",
+   "status": "Present",
+   "sync_local_id": "29c09d08-47ec-4c66-8443-7ae16f489b89",
+   "version": 1
+  },
+  "att_rows": 1,
+  "att_rows_after_identical": 1,
+  "late": {
+   "captured_at": "2026-11-13T00:16:59.625930+00:00",
+   "idempotency_key": "a441e451-3633-4e45-81d2-dee09b1a7389",
+   "local_id": "a4db27c3-f499-4a31-ab0a-8cd4a37a1f3d",
+   "received_at": "2026-11-14T00:16:59.864904+00:00",
+   "replay": false,
+   "result": {
+    "late_id": "710cd736-bb6f-4da2-b0d2-62a08a953864",
+    "reason": "previous_day"
+   },
+   "status": "late"
+  },
+  "late_by_tech": 403,
+  "late_confirm": {
+   "body": {
+    "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "author_name": "ST01 A technician",
+    "author_role": "Technician",
+    "base_version": null,
+    "captured_at": "2026-11-13T00:16:59.625930+00:00",
+    "captured_tz": "Europe/Sofia",
+    "created_at": "2026-11-14T00:16:59.864904+00:00",
+    "decided_at": "2026-11-14T00:16:59.879758+00:00",
+    "decided_by": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+    "deciding_at": "2026-11-14T00:16:59.877581+00:00",
+    "decision": "confirm",
+    "decision_key": "5cd403cd-d1a2-4130-893e-cb35af4cce5d",
+    "device_clock_offset_ms": 0,
+    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "id": "710cd736-bb6f-4da2-b0d2-62a08a953864",
+    "idempotency_key": "a441e451-3633-4e45-81d2-dee09b1a7389",
+    "local_id": "a4db27c3-f499-4a31-ab0a-8cd4a37a1f3d",
+    "op_type": "attendance.mark",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "payload": {
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Present"
+    },
+    "project_id": null,
+    "reason": "Беше без покритие на обекта",
+    "received_at": "2026-11-14T00:16:59.864904+00:00",
+    "result": {
+     "date": "2026-11-13",
+     "entity_id": "f162ca31-31b0-4df4-947b-7c9689f2d043",
+     "entity_type": "attendance",
+     "status": "Present"
+    },
+    "status": "confirmed"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "late_confirm_replay": 200,
+  "late_decide_again": "ALREADY_DECIDED",
+  "late_event": {
+   "actor_id": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+   "reason": "Беше без покритие на обекта",
+   "structured_diff": {
+    "after": {
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Present"
+    },
+    "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "before": {
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Present"
+    },
+    "captured_at": "2026-11-13T00:16:59.625930+00:00",
+    "late_id": "710cd736-bb6f-4da2-b0d2-62a08a953864",
+    "op_type": "attendance.mark",
+    "received_at": "2026-11-14T00:16:59.864904+00:00"
+   }
+  },
+  "late_receipt": {
+   "status": "synced"
+  },
+  "late_reject": 200,
+  "late_reject_receipt": {
+   "result": {
+    "error_code": "LATE_REFUSED",
+    "message": "Няма такава работа"
+   },
+   "status": "rejected"
+  },
+  "late_reject_rows": 0,
+  "late_row": {
+   "captured_at": "2026-11-13T00:16:59.625930+00:00",
+   "date": "2026-11-13",
+   "late_confirmed_by": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+   "marked_by_user_id": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+   "source": "offline_sync"
+  },
+  "late_rows_after": 1,
+  "late_rows_before": 0,
+  "my_receipts_statuses": [
+   "conflict",
+   "late",
+   "rejected",
+   "synced",
+   "waiting_file"
+  ],
+  "paid_accept": {
+   "body": {
+    "detail": {
+     "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+     "kind": "paid",
+     "message": "Записът е одобрен/платен — промяна само чрез корекция или сторно"
+    }
+   },
+   "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+   "status": 409
+  },
+  "paid_correct": {
+   "body": {
+    "detail": {
+     "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+     "kind": "paid",
+     "message": "Записът е одобрен/платен — промяна само чрез корекция или сторно"
+    }
+   },
+   "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+   "status": 409
+  },
+  "paid_day": {
+   "captured_at": "2026-11-14T00:16:59.759863+00:00",
+   "idempotency_key": "8bc0807a-b7f7-4b0c-a057-5d32eeb36336",
+   "local_id": "b94748e3-0a25-494d-8634-7a3539336b9f",
+   "received_at": "2026-11-14T00:16:59.763055+00:00",
+   "replay": false,
+   "result": {
+    "conflict_id": "712981db-6383-4455-8883-fc76b5b72a1b",
+    "kind": "paid"
+   },
+   "status": "conflict"
+  },
+  "paid_rows": 0,
+  "paid_rows_after": 0,
+  "photo": {
+   "captured_at": "2026-11-14T00:16:59.837028+00:00",
+   "idempotency_key": "6552c342-2e03-4bfe-b63b-8d22c6542150",
+   "local_id": "6d23db38-47a6-4efa-b66a-bea6e553fb82",
+   "received_at": "2026-11-14T00:16:59.840168+00:00",
+   "replay": false,
+   "result": {
+    "context_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+    "context_type": "project",
+    "file_registry": "unavailable",
+    "mime": "image/jpeg",
+    "sha256": "abababababababababababababababababababababababababababababababab",
+    "size": 2000000
+   },
+   "status": "waiting_file"
+  },
+  "photo_bad_sha": {
+   "captured_at": "2026-11-14T00:16:59.847394+00:00",
+   "idempotency_key": "5ad5918c-5f2c-45c1-be11-9e3ad10b0f4f",
+   "local_id": "207b3969-3c13-4eeb-8a5b-378cd2ee3eac",
+   "received_at": "2026-11-14T00:16:59.850350+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "CHECKSUM_INVALID",
+    "message": "Невалидна контролна сума на файла"
+   },
+   "status": "rejected"
+  },
+  "photo_media_rows": 0,
+  "photo_too_big": {
+   "captured_at": "2026-11-14T00:16:59.854315+00:00",
+   "idempotency_key": "a68ae4b8-bfa6-484d-9a2a-4fd550d5bb92",
+   "local_id": "a277cc7d-7558-4af2-ab80-fabb49d9dc91",
+   "received_at": "2026-11-14T00:16:59.857176+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "FILE_TOO_LARGE",
+    "message": "Файлът е твърде голям"
+   },
+   "status": "rejected"
+  },
+  "receipt_after_keep": {
+   "result": {
+    "error_code": "CONFLICT_KEPT_OFFICE",
+    "message": "Говорих с техника — беше на обекта"
+   },
+   "status": "rejected"
+  },
+  "report": {
+   "captured_at": "2026-11-14T00:16:59.779673+00:00",
+   "idempotency_key": "2d86fd79-2483-44e6-a9f8-c77d10c25f59",
+   "local_id": "f75c741c-931c-4f21-b8c7-583e5b56b840",
+   "received_at": "2026-11-14T00:16:59.782563+00:00",
+   "replay": false,
+   "result": {
+    "date": "2026-11-14",
+    "draft_report_ids": [
+     "4ca55217-b802-4453-aba9-c9aaf4c0eec8"
+    ],
+    "entity_id": "4ca55217-b802-4453-aba9-c9aaf4c0eec8",
+    "entity_type": "daily_report"
+   },
+   "status": "synced"
+  },
+  "report_closed": {
+   "captured_at": "2026-11-14T00:16:59.822129+00:00",
+   "idempotency_key": "afc8cfd5-2c9a-40b7-8f0c-513c4ac3a385",
+   "local_id": "e189e088-3c44-4a37-bcc1-aa5b4ddb6814",
+   "received_at": "2026-11-14T00:16:59.825604+00:00",
+   "replay": false,
+   "result": {
+    "conflict_id": "9900381e-3998-4893-b31f-4eac52513897",
+    "kind": "approved"
+   },
+   "status": "conflict"
+  },
+  "report_closed_rows": 1,
+  "report_row": {
+   "date": "2026-11-14",
+   "hours": 6.5,
+   "status": "Draft",
+   "version": 1,
+   "worker_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  },
+  "report_rows": 1,
+  "resolve_accept": {
+   "body": {
+    "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "author_name": "ST01 A technician",
+    "author_role": "Technician",
+    "base_version": null,
+    "captured_at": "2026-11-14T00:16:59.721098+00:00",
+    "captured_tz": "Europe/Sofia",
+    "created_at": "2026-11-14T00:16:59.724011+00:00",
+    "decided_at": "2026-11-14T00:16:59.737681+00:00",
+    "decided_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+    "deciding_at": "2026-11-14T00:16:59.735801+00:00",
+    "decision": "accept_field",
+    "decision_key": "fa082f48-a5a1-4f04-bdcf-e42f85041f98",
+    "device_clock_offset_ms": 0,
+    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "diff": [
+     {
+      "field": "status",
+      "office": "Present",
+      "phone": "Late"
+     },
+     {
+      "field": "version",
+      "office": 1,
+      "phone": null
+     }
+    ],
+    "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+    "entity_type": "attendance",
+    "field_version": {
+     "date": "2026-11-14",
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Late",
+     "version": null
+    },
+    "id": "20e5b4cb-cbc2-494f-8dd9-3e7a4db265d0",
+    "idempotency_key": "c147ea22-4dd8-4958-bb24-757341e2ec81",
+    "kind": "already_recorded",
+    "local_id": "f9da6054-5d0d-4bbd-9c9a-9027457f4032",
+    "office_version": {
+     "date": "2026-11-14",
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Present",
+     "version": 1
+    },
+    "op_type": "attendance.mark",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "payload": {
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Late"
+    },
+    "project_id": null,
+    "reason": "Потвърдено по телефона",
+    "received_at": "2026-11-14T00:16:59.724011+00:00",
+    "result": {
+     "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+     "entity_type": "attendance",
+     "version": 2
+    },
+    "status": "accepted_field"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "resolve_by_tech": 403,
+  "resolve_keep": {
+   "body": {
+    "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "author_name": "ST01 A technician",
+    "author_role": "Technician",
+    "base_version": null,
+    "captured_at": "2026-11-14T00:16:59.684509+00:00",
+    "captured_tz": "Europe/Sofia",
+    "created_at": "2026-11-14T00:16:59.687568+00:00",
+    "decided_at": "2026-11-14T00:16:59.705783+00:00",
+    "decided_by": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+    "deciding_at": "2026-11-14T00:16:59.703999+00:00",
+    "decision": "keep_office",
+    "decision_key": "321b2261-4dcd-4903-803c-ffed03ee8c38",
+    "device_clock_offset_ms": 0,
+    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "diff": [
+     {
+      "field": "status",
+      "office": "Present",
+      "phone": "Absent"
+     },
+     {
+      "field": "version",
+      "office": 1,
+      "phone": null
+     }
+    ],
+    "entity_id": "e24048ae-ebe0-4b06-b48e-eb886b17719f",
+    "entity_type": "attendance",
+    "field_version": {
+     "date": "2026-11-14",
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Absent",
+     "version": null
+    },
+    "id": "c11837b1-a9c8-48ee-9f9f-be0903da8224",
+    "idempotency_key": "141c917d-a160-4e5d-8031-e3eb0c2e36b1",
+    "kind": "already_recorded",
+    "local_id": "ace22f73-f65b-49cf-8d17-d3a60f020bfd",
+    "office_version": {
+     "date": "2026-11-14",
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Present",
+     "version": 1
+    },
+    "op_type": "attendance.mark",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "payload": {
+     "note": "офлайн",
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "status": "Absent"
+    },
+    "project_id": null,
+    "reason": "Говорих с техника — беше на обекта",
+    "received_at": "2026-11-14T00:16:59.687568+00:00",
+    "result": {
+     "error_code": "CONFLICT_KEPT_OFFICE",
+     "message": "Говорих с техника — беше на обекта"
+    },
+    "status": "kept_office"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "resolve_keep_replay": 200,
+  "resolve_no_reason": 422,
+  "resolve_twice": {
+   "body": {
+    "detail": {
+     "current_status": "kept_office",
+     "error_code": "ALREADY_DECIDED",
+     "message": "Записът вече е решен"
+    }
+   },
+   "error_code": "ALREADY_DECIDED",
+   "status": 409
+  },
+  "status_after_keep": [
+   "Present"
+  ]
+ },
+ "idempotency": {
+  "calls_note": 2,
+  "event_fields": {
+   "idempotency_key": "75efaa18-92b4-4417-8b88-e643502ac449",
+   "source_channel": "offline_sync",
+   "source_flow": "FLOW-037",
+   "structured_diff": {
+    "captured_at": "2026-11-14T00:16:59.478841+00:00",
+    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "op_type": "probe.note",
+    "received_at": "2026-11-14T00:16:59.482305+00:00"
+   },
+   "tenant_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e"
+  },
+  "first": {
+   "captured_at": "2026-11-14T00:16:59.478841+00:00",
+   "idempotency_key": "75efaa18-92b4-4417-8b88-e643502ac449",
+   "local_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+   "received_at": "2026-11-14T00:16:59.482305+00:00",
+   "replay": false,
+   "result": {
+    "entity_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  },
+  "key_reused": {
+   "idempotency_key": "75efaa18-92b4-4417-8b88-e643502ac449",
+   "local_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+   "replay": false,
+   "result": {
+    "error_code": "IDEMPOTENCY_KEY_REUSED",
+    "message": "Ключът вече е използван за друг запис"
+   },
+   "status": "rejected"
+  },
+  "parallel_statuses": [
+   "processing",
+   "processing",
+   "synced"
+  ],
+  "receipts_env1": 1,
+  "receipts_par": 1,
+  "second": {
+   "captured_at": "2026-11-14T00:16:59.478841+00:00",
+   "idempotency_key": "75efaa18-92b4-4417-8b88-e643502ac449",
+   "local_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+   "received_at": "2026-11-14T00:16:59.482305+00:00",
+   "replay": true,
+   "result": {
+    "entity_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  },
+  "synced_events": 2,
+  "third": {
+   "captured_at": "2026-11-14T00:16:59.478841+00:00",
+   "idempotency_key": "75efaa18-92b4-4417-8b88-e643502ac449",
+   "local_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+   "received_at": "2026-11-14T00:16:59.482305+00:00",
+   "replay": true,
+   "result": {
+    "entity_id": "9f04b528-42a5-46ac-9b5d-a585a89224a7",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  }
+ },
+ "late": {
+  "clock_skew": {
+   "captured_at": "2026-11-14T00:16:59.585039+00:00",
+   "idempotency_key": "df65a590-650f-4cd1-b6f2-a6c6e617fb2c",
+   "local_id": "2e50b587-3140-4c38-928a-10e22597adcd",
+   "received_at": "2026-11-14T00:16:59.588292+00:00",
+   "replay": false,
+   "result": {
+    "late_id": "93815047-2f3e-44c9-9ec0-2458756673e8",
+    "reason": "clock_skew"
+   },
+   "status": "late"
+  },
+  "handler_not_called": true,
+  "late_row": {
+   "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "captured_at": "2026-11-12T22:16:59.574737+00:00",
+   "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+   "reason": "previous_day",
+   "received_at": "2026-11-14T00:16:59.577535+00:00",
+   "status": "open"
+  },
+  "late_rows": 2,
+  "nine_minutes_is_fine": "synced",
+  "previous_day": {
+   "captured_at": "2026-11-12T22:16:59.574737+00:00",
+   "idempotency_key": "f2d610b9-9a53-4d8f-9d92-f17f20fcee89",
+   "local_id": "95313d83-aa45-440f-a027-7bfdf51a9e2a",
+   "received_at": "2026-11-14T00:16:59.577535+00:00",
+   "replay": false,
+   "result": {
+    "late_id": "23ad5221-7512-4450-aea9-bc1dc34e33a9",
+    "reason": "previous_day"
+   },
+   "status": "late"
+  }
+ },
+ "refusals": {
+  "B_batch_on_A_device": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "bad_envelope": {
+   "idempotency_key": null,
+   "local_id": null,
+   "replay": false,
+   "result": {
+    "error_code": "ENVELOPE_INVALID",
+    "message": "Невалидно поле local_id"
+   },
+   "status": "rejected"
+  },
+  "empty_batch": 422,
+  "online_only_approve": {
+   "captured_at": "2026-11-14T00:16:59.539055+00:00",
+   "idempotency_key": "f5538b14-b4f8-4282-b847-45856d70dccd",
+   "local_id": "1c0623d8-303f-457d-8064-46df6a279e58",
+   "received_at": "2026-11-14T00:16:59.542178+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "ONLINE_ONLY",
+    "message": "Това изисква интернет"
+   },
+   "status": "rejected"
+  },
+  "online_only_payment": {
+   "captured_at": "2026-11-14T00:16:59.531087+00:00",
+   "idempotency_key": "81799ed0-6aec-4675-80c1-487a7d5858e0",
+   "local_id": "18f1bf41-5228-41fb-a941-62da5becae7e",
+   "received_at": "2026-11-14T00:16:59.534235+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "ONLINE_ONLY",
+    "message": "Това изисква интернет"
+   },
+   "status": "rejected"
+  },
+  "tenant_mismatch": {
+   "idempotency_key": "4f5e5cc4-75cb-44ca-8122-9a74d9b86891",
+   "local_id": "e2f9e636-f4db-4782-b882-3a778e1f5a4c",
+   "replay": false,
+   "result": {
+    "error_code": "TENANT_MISMATCH",
+    "message": "Записът е за друга фирма"
+   },
+   "status": "rejected"
+  },
+  "unsupported": {
+   "captured_at": "2026-11-14T00:16:59.546462+00:00",
+   "idempotency_key": "054186a1-0b1f-40d6-95bd-9887f47d5161",
+   "local_id": "a1458777-200e-49d9-a3c4-47b58fde381f",
+   "received_at": "2026-11-14T00:16:59.549635+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "UNSUPPORTED_OP",
+    "message": "Този запис не може да се прави без интернет"
+   },
+   "status": "rejected"
+  },
+  "user_mismatch": {
+   "idempotency_key": "369804f0-8aae-4f3e-93c5-014224b8bb3a",
+   "local_id": "f7f843f9-2f30-43ba-b277-61b1c152ff19",
+   "replay": false,
+   "result": {
+    "error_code": "USER_MISMATCH",
+    "message": "Записът е на друг потребител"
+   },
+   "status": "rejected"
+  }
+ },
+ "revoke": {
+  "batch_after_revoke": {
+   "error_code": "DEVICE_REVOKED",
+   "results": [
+    {
+     "captured_at": "2026-11-14T00:17:00.386947+00:00",
+     "idempotency_key": "d876a095-8eb5-49ce-a831-c6d80ffedc8e",
+     "local_id": "46ec6fca-c3ee-4386-8839-1e630a242cfc",
+     "received_at": "2026-11-14T00:17:00.389778+00:00",
+     "replay": false,
+     "result": {
+      "quarantine_id": "a75d8aa1-5bc3-4083-baf3-90f801552086"
+     },
+     "status": "quarantined"
+    }
+   ],
+   "status": 403
+  },
+  "by_B_owner": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_NOT_FOUND",
+     "message": "Няма такова устройство"
+    }
+   },
+   "error_code": "DEVICE_NOT_FOUND",
+   "status": 404
+  },
+  "by_owner": {
+   "body": {
+    "created_at": "2026-11-14T00:16:59.462446+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "",
+    "last_seen_at": "2026-11-14T00:17:00.182053+00:00",
+    "last_sync_at": "2026-11-14T00:17:00.284953+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoke_reason": "Изгубен телефон",
+    "revoked_at": "2026-11-14T00:17:00.377529+00:00",
+    "revoked_by": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+    "revoked_by_name": "ST01 A owner",
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "by_technician": 403,
+  "console_counts": {
+   "conflicts": 3,
+   "devices": 1,
+   "late": 2,
+   "quarantine": 1,
+   "revoked": 1
+  },
+  "handler_not_called": true,
+  "no_key": {
+   "body": {
+    "detail": {
+     "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+     "message": "Липсва Idempotency-Key — заявката не е записана"
+    }
+   },
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "status": 428
+  },
+  "no_reason": {
+   "body": {
+    "detail": {
+     "error_code": "REASON_REQUIRED",
+     "message": "Посочете причина"
+    }
+   },
+   "error_code": "REASON_REQUIRED",
+   "status": 422
+  },
+  "quarantine_rows": 1,
+  "register_after_revoke": {
+   "body": {
+    "detail": {
+     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+     "error_code": "DEVICE_REVOKED",
+     "message": "Устройството е блокирано"
+    }
+   },
+   "error_code": "DEVICE_REVOKED",
+   "status": 403
+  },
+  "revoke_event": {
+   "actor_id": "08b2633f-88f7-406e-a4b3-b7244a4ac5d0",
+   "reason": "Изгубен телефон",
+   "tenant_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e"
+  },
+  "status_revoked": {
+   "enabled": true,
+   "revoked": true,
+   "server_time": "2026-11-14T00:17:00.386453+00:00",
+   "tenant_id": "ae3641a3-cef6-44fe-b2bd-abd9fd714c2e",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  },
+  "user_can_still_log_in": 200
+ },
+ "rollback": {
+  "batch_when_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "off": 200,
+  "receipts_kept": 39
+ }
+}

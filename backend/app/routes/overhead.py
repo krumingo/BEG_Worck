@@ -162,8 +162,10 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 
     # Attendance stats for today
     date = today_str()
-    today_marked = await tenant.attendance_entries.count_documents({"org_id": org_id, "date": date})
-    today_present = await tenant.attendance_entries.count_documents({"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}})
+    # FG-647: distinct workers marked today, not entries (one entry per object — FLOW-013)
+    today_marked = len(await tenant.attendance_entries.distinct("user_id", {"org_id": org_id, "date": date}))
+    today_present = len(await tenant.attendance_entries.distinct(
+        "user_id", {"org_id": org_id, "date": date, "status": {"$in": ["Present", "Late"]}}))
 
     # Work report stats
     pending_reports = await tenant.work_reports.count_documents({"org_id": org_id, "date": date, "status": "Submitted"})

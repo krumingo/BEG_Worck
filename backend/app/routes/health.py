@@ -19,7 +19,9 @@ router = APIRouter(tags=["misc"])
 
 @router.get("/health")
 async def health():
-    return {"status": "ok"}
+    # FG-642: a boolean only (no login here); the details are on GET /api/sync/ops/alarms
+    from app.services.offline_sync import is_degraded
+    return {"status": "ok", "degraded": True} if is_degraded() else {"status": "ok"}
 
 @router.get("/version")
 async def version():

@@ -32,6 +32,9 @@ jest.mock("react-i18next", () => ({ __esModule: true, useTranslation: () => ({ t
 jest.mock("@/components/NotificationBell", () => ({ __esModule: true, default: () => null }));
 jest.mock("@/components/LanguageSwitcher", () => ({ __esModule: true, default: () => null }));
 jest.mock("@/components/ChangePasswordModal", () => ({ __esModule: true, default: () => null }));
+// PWA-02: the offline queue UI (it imports the API client); not what these tests check.
+jest.mock("@/components/offline/OfflineQueueUI", () => ({ __esModule: true, UnsentBadge: () => null,
+  useLogoutGuard: (fn) => ({ request: fn, dialog: null }) }));
 
 import DashboardLayout from "@/components/DashboardLayout";
 

@@ -570,8 +570,9 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     
     # Hours summary (current month) — includes both old work_reports and new daily_reports
     month_start = datetime.now(timezone.utc).strftime("%Y-%m-01")
-    month_att = await tenant.attendance_entries.count_documents(
-        {"org_id": org_id, "user_id": user_id, "date": {"$gte": month_start}, "status": "Present"})
+    # FG-647: worker-DAYS, not entries (one entry per object — FLOW-013)
+    month_att = len(await tenant.attendance_entries.distinct(
+        "date", {"org_id": org_id, "user_id": user_id, "date": {"$gte": month_start}, "status": "Present"}))
     month_reports = await tenant.work_reports.find(
         {"org_id": org_id, "user_id": user_id, "created_at": {"$gte": month_start + "T00:00:00"}},
         {"_id": 0, "lines": 1}

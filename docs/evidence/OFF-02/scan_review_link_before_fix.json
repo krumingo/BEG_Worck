@@ -1,0 +1,207 @@
+{
+ "calls": 6984,
+ "roles": [
+  "requester",
+  "technician",
+  "warehousekeeper",
+  "driver",
+  "viewer"
+ ],
+ "control": [
+  "owner"
+ ],
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "get_routes": 389,
+ "answered_200_per_role_all_modes": {
+  "requester": 561,
+  "technician": 513,
+  "warehousekeeper": 474,
+  "driver": 495,
+  "viewer": 492
+ },
+ "hits": {
+  "/api/offers": {
+   "off/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ]
+  },
+  "/api/offers/{offer_id}": {
+   "off/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "off/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "off/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "off/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "shadow/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "shadow/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "shadow/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "shadow/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "enforce/requester": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "enforce/technician": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "enforce/driver": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ],
+   "enforce/viewer": [
+    "f89rtmmmmmmmmmmmmmmmmmmm",
+    "review_token"
+   ]
+  },
+  "/api/projects/{project_id}/dashboard": {
+   "off/requester": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/technician": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/warehousekeeper": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/driver": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "off/viewer": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/requester": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/technician": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/warehousekeeper": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/driver": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "shadow/viewer": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/requester": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/technician": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/warehousekeeper": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/driver": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ],
+   "enforce/viewer": [
+    "f89rtxxxxxxxxxxxxxxxxxxx",
+    "review_token"
+   ]
+  }
+ },
+ "finance_sees": [
+  "/api/offers",
+  "/api/offers/{offer_id}",
+  "/api/projects/{project_id}/dashboard"
+ ]
+}

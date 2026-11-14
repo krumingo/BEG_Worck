@@ -5,10 +5,13 @@ import { WifiOff, RefreshCw } from "lucide-react";
 import { useStore } from "@/lib/pwa/store";
 import { connectivityStore, isOffline } from "@/lib/pwa/connectivity";
 import { updateStore, applyUpdate } from "@/lib/pwa/serviceWorker";
+import { useOfflineQueue } from "@/lib/offline";
 
 export function OfflineBanner() {
   const { t } = useTranslation();
   const offline = isOffline(useStore(connectivityStore));
+  // PWA-02: with the offline queue on, field records stay on the phone — say so, not "lost"
+  const { enabled: queueOn } = useOfflineQueue();
   if (!offline) return null;
   return (
     <div
@@ -18,7 +21,9 @@ export function OfflineBanner() {
       className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground shadow-lg"
     >
       <WifiOff className="h-4 w-4 shrink-0" />
-      <span>{t("pwa.offline", "Без връзка — промените няма да се запишат")}</span>
+      <span data-testid={queueOn ? "pwa-offline-queue-on" : undefined}>{queueOn
+        ? t("pwa.offlineQueued", "Без връзка — присъствие, отчет и снимка се пазят на телефона; другото изисква интернет")
+        : t("pwa.offline", "Без връзка — промените няма да се запишат")}</span>
     </div>
   );
 }

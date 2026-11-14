@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { sendOrQueue, STATUS, ONLINE_ONLY_MESSAGE } from "@/lib/offline";
+import SitePhotoButton from "@/components/offline/SitePhotoButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +25,23 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// FG-665: the reason for removing a presence someone else marked (the server voids it)
+export function askRemovalReason(prompt = (typeof window !== "undefined" ? window.prompt : null)) {
+  if (!prompt) return null;
+  const r = prompt("Причина за премахването от списъка (присъствието се анулира):", "");
+  return r && r.trim().length >= 3 ? r.trim() : null;
+}
+
+// FG-661: why a worker could not be removed from the day's list (the server keeps the presence)
+export function refusedReasonText(r) {
+  const why = (r && r.relies_on) || "";
+  if (r && r.error_code === "CORRECTION_OR_REVERSAL_REQUIRED") return "денят е затворен (заплати/одобрен отчет)";
+  if (why === "daily_report") return "има отчет";
+  if (why === "offline_sync") return "офлайн запис";
+  if (why === "late_confirmation") return "потвърден закъснял запис";
+  return "присъствието се ползва";
+}
+
 export default function TechnicianDashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -31,6 +50,8 @@ export default function TechnicianDashboard() {
 
   // Navigation state
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
+  // FG-661: workers the last list save could not remove (their presence is in use / day closed)
+  const [rosterRefused, setRosterRefused] = useState([]);
   const [sites, setSites] = useState([]);
   const [myTools, setMyTools] = useState([]);
   const [todayInfo, setTodayInfo] = useState(null);  // { entry, reportsCount }
@@ -289,7 +310,18 @@ export default function TechnicianDashboard() {
         const toDelete = existingDrafts.filter(d => editingWorkerIds.has(d.worker_id));
         await Promise.all(toDelete.map(d => API.delete(`/technician/draft/${d.id}`).catch(() => null)));
       }
-      const res = await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined });
+      // PWA-02: without a connection (and the offline queue on) the report stays on the phone.
+      const body = { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined };
+      const sent = await sendOrQueue({ opType: "technician.daily_report", projectId: selectedSite.project_id,
+        payload: body, send: () => API.post("/technician/daily-report", body) });
+      if (sent.queued) {
+        // same exit as online, so the report is not sent twice from the review screen
+        toast.success(STATUS.saved);
+        setScreen("myDay");
+        setSelectedSite(null);
+        return;
+      }
+      const res = sent.response;
 
       // Check for hours warnings per worker
       const warnings = res.data?.hours_warnings || [];
@@ -307,7 +339,7 @@ export default function TechnicianDashboard() {
       setScreen("myDay");
       setSelectedSite(null);
       loadSites();
-    } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
+    } catch (err) { toast.error(err.response?.data?.detail?.message || err.response?.data?.detail || "Error"); }
     finally { setSubmitting(false); }
   };
 
@@ -320,7 +352,9 @@ export default function TechnicianDashboard() {
 
   const submitPhoto = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    try { const fd = new FormData(); fd.append("file", file); fd.append("project_id", selectedSite.project_id); fd.append("description", "Фактура от терена"); await API.post("/technician/photo-invoice", fd, { headers: { "Content-Type": "multipart/form-data" } }); toast.success(t("technician.invoiceUploaded")); setQuickScreen(null); } catch { toast.error("Error"); }
+    // R61-1: an invoice is money — never queued; without a connection: „Това изисква интернет“.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) { toast.error(ONLINE_ONLY_MESSAGE); return; }
+    try { const fd = new FormData(); fd.append("file", file); fd.append("project_id", selectedSite.project_id); fd.append("description", "Фактура от терена"); await API.post("/technician/photo-invoice", fd, { headers: { "Content-Type": "multipart/form-data" } }); toast.success(t("technician.invoiceUploaded")); setQuickScreen(null); } catch (err) { toast.error(!err.response ? ONLINE_ONLY_MESSAGE : "Error"); }
     e.target.value = "";
   };
 
@@ -638,6 +672,7 @@ export default function TechnicianDashboard() {
           <Button onClick={startReport} className="h-16 rounded-2xl flex-col text-xs font-semibold"><FileText className="w-5 h-5 mb-1" />Отчет за деня</Button>
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
+          <SitePhotoButton projectId={selectedSite?.project_id} allowed={selectedSite?.can_upload_photo !== false} />
         </div>
 
         {/* Чернови за днес — with edit + delete */}
@@ -727,7 +762,19 @@ export default function TechnicianDashboard() {
     // === Auto-save helper ===
     const saveRoster = async (workers) => {
       const payload = workers.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name, status: "Present" }));
-      await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers: payload });
+      const url = `/technician/site/${selectedSite.project_id}/attendance`;
+      let saved;
+      try {
+        saved = await API.post(url, { workers: payload });
+      } catch (err) {
+        // FG-665: removing someone else's entry needs a reason — ask for it and send it
+        const d = err && err.response && err.response.data && err.response.data.detail;
+        if (!(err.response && err.response.status === 422 && d && d.error_code === "REASON_REQUIRED")) throw err;
+        const reason = askRemovalReason();
+        if (!reason) return;
+        saved = await API.post(url, { workers: payload, removal_reason: reason });
+      }
+      setRosterRefused((saved && saved.data && saved.data.refused) || []);
       try {
         const [detailRes, draftsRes] = await Promise.all([
           API.get(`/technician/site/${selectedSite.project_id}/detail`),
@@ -783,11 +830,21 @@ export default function TechnicianDashboard() {
 
     const todayStr = new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const dailyIds = new Set(enrichedRoster.map(w => w.worker_id));
+    const refusedWorkerName = (wid) => ((enrichedRoster.find(w => w.worker_id === wid) || {}).worker_name) || wid;
     const shortlistFiltered = siteWorkers.filter(w => w.is_active && !dailyIds.has(w.worker_id));
     const allShownIds = new Set([...dailyIds, ...shortlistFiltered.map(w => w.worker_id)]);
 
     return (
       <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-people">
+        {rosterRefused.length > 0 && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300" role="alert" data-testid="roster-refused">
+            {rosterRefused.map((r) => (
+              <p key={r.worker_id} data-testid="roster-refused-item">
+                {refusedWorkerName(r.worker_id)} не е премахнат: {refusedReasonText(r)}
+              </p>
+            ))}
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>

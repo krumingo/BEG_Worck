@@ -63,7 +63,8 @@ export default function OffersListPage() {
   const [projectFilter, setProjectFilter] = useState(projectIdParam);
   const [typeFilter, setTypeFilter] = useState("");
 
-  const canCreate = ["Admin", "Owner", "SiteManager"].includes(user?.role);
+  // R67 (Krum 09.11.2026): offers are written only by Owner / Admin / Accountant
+  const canCreate = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
   // New offer dialog
   const [newOfferOpen, setNewOfferOpen] = useState(false);

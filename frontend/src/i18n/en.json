@@ -238,7 +238,8 @@
     "techView": "Field",
     "techDashboard": "My Workday",
     "fieldPortal": "Field Portal",
-    "ocrInvoices": "OCR Invoices"
+    "ocrInvoices": "OCR Invoices",
+    "syncConsole": "Offline work"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -2256,6 +2257,7 @@
   },
   "pwa": {
     "offline": "Offline — changes will not be saved",
+    "offlineQueued": "Offline — attendance, reports and photos stay on the phone; everything else needs internet",
     "updateAvailable": "A new version is available",
     "update": "Update",
     "later": "Later",

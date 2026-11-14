@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
 import { clearTenantLocalData, noteActiveTenant } from "@/lib/pwa/clearLocalData";
+import { startOfflineQueue, stopOfflineQueue } from "@/lib/offline";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Auth Context - uses bw_token / bw_user
@@ -63,6 +64,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  // PWA-02: the offline queue follows the session (owner = tenant + user). It never blocks
+  // login: it starts in the background and is a no-op while the offline_queue flag is off.
+  const userId = user?.id;
+  const tenantId = user?.org_id || org?.id;
+  useEffect(() => {
+    if (userId && tenantId) startOfflineQueue({ tenantId, userId }).catch(() => {});
+    else stopOfflineQueue().catch(() => {});
+  }, [userId, tenantId]);
 
   const login = async (email, password) => {
     const res = await API.post("/auth/login", { email, password });
