@@ -849,6 +849,50 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
 
 # ── Daily Report (DRAFT — NO work_sessions) ───────────────────────
 
+REPORT_AUTO_PRESENCE = "report_auto_presence"
+
+
+async def report_auto_presence_enabled(tenant, org_id) -> bool:
+    """FG-641: the tenant setting (default OFF) — Krum's answer to D21 only flips it."""
+    flag = await tenant.feature_flags.find_one({"org_id": org_id, "module_code": REPORT_AUTO_PRESENCE},
+                                               {"_id": 0, "enabled": 1})
+    return bool(flag and flag.get("enabled") is True)
+
+
+async def set_report_auto_presence(user, enabled: bool) -> None:
+    """FG-641: switched only by the platform administrator (PUT /api/feature-flags), with an
+    AuditEvent — Krum's answer to D21."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    tenant = _tenant(user)
+    stamp = datetime.now(timezone.utc).isoformat()
+    await tenant.feature_flags.update_one(
+        {"org_id": user["org_id"], "module_code": REPORT_AUTO_PRESENCE},
+        {"$set": {"enabled": bool(enabled), "updated_at": stamp, "updated_by": user["id"]},
+         "$setOnInsert": {"created_at": stamp}}, upsert=True)
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action="attendance.report_auto_presence_set", source_flow="FLOW-013",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="feature_flag",
+        entity_id=REPORT_AUTO_PRESENCE, reason=None, structured_diff={"enabled": bool(enabled)},
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=None,
+        source_channel="feature_flags"))
+
+
+async def _audit_auto_presence(user, project_id, date, ap):
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action="attendance.auto_from_report", source_flow="FLOW-013",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="attendance",
+        entity_id="%s:%s:%s" % (ap["worker_id"], project_id, date), reason="автоматично от отчет",
+        structured_diff={"worker_id": ap["worker_id"], "project_id": project_id, "date": date,
+                         "presence_on": ap.get("from_project_id"), "setting": REPORT_AUTO_PRESENCE},
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=None,
+        source_channel="daily_report"))
+
+
 async def _insert_auto_attendance(tenant, kw, entry):
     """FG-635: duplicate day key = already marked. Inside the offline transaction the error
     must abort it (the batch item is then retried and finds the entry), so it is re-raised."""
@@ -897,19 +941,27 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
 
     # Validate attendance: each worker must be Present/Late — HARD BLOCK
     attendance_warnings = []
+    auto_presence = []          # FG-641: only with report_auto_presence ON
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
-        # FG-641 (FLOW-013 L88-90): presence on THIS object. A worker reported by someone
-        # else must already be present here; the technician's OWN report is the presence on
-        # this object (FLOW-013: one person on several objects) — it needs a presence that day
-        # and then creates this object's entry below.
+        # FG-641 (FLOW-013 L89-90, literal reading until Krum decides — HANDOFF D21): a report
+        # for ANYONE on this object, the technician included, needs a presence on THIS object.
+        # Only with the tenant setting ``report_auto_presence`` (default OFF) does a presence
+        # on another object the same day let the report create this object's presence.
         day_flt = {"org_id": org_id, "date": today, "user_id": wid}
         att = await tenant.attendance_entries.find_one(
             {**day_flt, "project_id": data.project_id}, {"_id": 0, "status": 1})
-        if att is None and wid == user["id"]:
-            att = await tenant.attendance_entries.find_one(
-                {**day_flt, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "status": 1}
-            ) or await tenant.attendance_entries.find_one(day_flt, {"_id": 0, "status": 1})
+        if att is None:
+            elsewhere = await tenant.attendance_entries.find_one(
+                {**day_flt, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "project_id": 1})
+            if elsewhere and await report_auto_presence_enabled(tenant, org_id):
+                auto_presence.append({"worker_id": wid, "from_project_id": elsewhere.get("project_id")})
+                att = {"status": "Present"}
+            else:
+                raise HTTPException(status_code=400, detail={
+                    "error_code": "PRESENCE_REQUIRED_ON_OBJECT",
+                    "message": f"Работникът {entry.worker_name or wid} не е отбелязан като присъстващ "
+                               f"на този обект за датата. Първо потвърдете присъствието в Хора."})
         cal = await tenant.worker_calendar.find_one(
             {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
             {"_id": 0, "status": 1},
@@ -1016,7 +1068,7 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
             existing_att = await tenant.attendance_entries.find_one(
                 {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}, **kw
             )
-            if not existing_att:
+            if not existing_att and any(ap["worker_id"] == wid for ap in auto_presence):
                 await _insert_auto_attendance(tenant, kw, {
                     "id": str(uuid.uuid4()),
                     "org_id": org_id,
@@ -1024,10 +1076,11 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
                     "project_id": data.project_id,
                     "user_id": wid,
                     "status": "Present",
-                    "note": "Автоматично от дневен отчет",
+                    "note": "Автоматично от отчет",
+                    "auto_from_report": True,
                     "marked_at": now,
                     "marked_by_user_id": user["id"],
-                    "source": "DailyReport",
+                    "source": "DailyReportAuto",
                     "attendance_day_key": "%s|%s|%s|%s" % (org_id, wid, data.project_id or "", today),
                 })
 
@@ -1100,6 +1153,8 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
     else:
         await _write(None)
     total_hours = round(sum(e.hours for e in data.entries), 2)
+    for ap in auto_presence:
+        await _audit_auto_presence(user, data.project_id, today, ap)
 
     # Hours warnings per unique worker
     hours_warnings = []

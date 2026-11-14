@@ -616,11 +616,32 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         P2 = str(uuid.uuid4())
         q(lambda: op_db.projects.insert_one({"id": P2, "org_id": A["tenant_id"], "name": "ST01 A — втори обект",
                                              "code": "ST01-A-002", "status": "Active"}))
-        # the canon case: present on A, 4 h on A + 4 h on B → two entries, 8 h for the day
+        # the canon case: present on A, 4 h on A + 4 h on B. FG-641 literal L89: B needs a
+        # presence on B — refused with the setting OFF (default); with report_auto_presence ON
+        # the report creates B's presence (marked, audited) → two entries, 8 h for the day
         fg["canon_report_A"] = call("POST", "/api/technician/daily-report", role="viewer", json={
             "project_id": P, "entries": [{"smr_type": "Канон А", "hours": 4}]})["status"]
+        rb_off = call("POST", "/api/technician/daily-report", role="viewer", json={
+            "project_id": P2, "entries": [{"smr_type": "Канон Б", "hours": 4}]})
+        fg["canon_B_setting_off"] = {"status": rb_off["status"], "code": rb_off["error_code"]}
+        fg["setting_on"] = call("PUT", "/api/feature-flags", role="owner",
+                                json={"module_code": "report_auto_presence", "enabled": True})["status"]
         fg["canon_report_B"] = call("POST", "/api/technician/daily-report", role="viewer", json={
             "project_id": P2, "entries": [{"smr_type": "Канон Б", "hours": 4}]})["status"]
+        fg["auto_row"] = {k: (att_rows(vw["id"], today) and [r for r in att_rows(vw["id"], today)
+                                                          if r["project_id"] == P2][0].get(k))
+                          for k in ("source", "note", "auto_from_report")}
+        fg["auto_events"] = count("audit_events", {"action": "attendance.auto_from_report"})
+        fg["setting_events"] = count("audit_events", {"action": "attendance.report_auto_presence_set"})
+        # no presence anywhere → refused even with the setting ON
+        rq = call("POST", "/api/technician/daily-report", role="requester", json={
+            "project_id": P, "entries": [{"smr_type": "Без присъствие", "hours": 1}]})
+        fg["no_presence_anywhere_on"] = {"status": rq["status"], "code": rq["error_code"]}
+        call("PUT", "/api/feature-flags", role="owner", json={"module_code": "report_auto_presence", "enabled": False})
+        rq2 = call("POST", "/api/technician/daily-report", role="requester", json={
+            "project_id": P, "entries": [{"smr_type": "Без присъствие", "hours": 1}]})
+        fg["no_presence_anywhere_off"] = {"status": rq2["status"], "code": rq2["error_code"]}
+        fg["setting_events_after_off"] = count("audit_events", {"action": "attendance.report_auto_presence_set"})
         vrows = att_rows(vw["id"], today)
         fg["canon_entries"] = sorted((r["project_id"] == P2, r.get("source")) for r in vrows)
         from app.routes.daily_reports import check_employee_hours
@@ -655,7 +676,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "project_id": P2, "entries": [{"worker_id": vw["id"], "worker_name": "Зрител", "smr_type": "Свой обект", "hours": 1}]})["status"]
         own3 = call("POST", "/api/technician/daily-report", role="viewer", json={
             "project_id": P3, "entries": [{"smr_type": "Собствен", "hours": 1}]})
-        fg["own_report_new_object"] = own3["status"]
+        fg["own_report_new_object"] = {"status": own3["status"], "code": own3["error_code"]}
         fg["own_report_presence_created"] = [r.get("source") for r in att_rows(vw["id"], today) if r["project_id"] == P3]
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
@@ -1064,19 +1085,29 @@ def test_a_person_on_two_objects_gets_one_entry_per_object_and_the_hours_are_sum
     """FG-640 / FLOW-013 gate „човек на два обекта → коректен сбор на часовете“:
     present on A, 4 h on A + 4 h on B → two entries (B created by the report), 8 h total."""
     f = obs["flowguard"]
-    assert f["canon_report_A"] == 200 and f["canon_report_B"] == 200
-    assert f["canon_entries"] == [[False, "offline_sync"], [True, "DailyReport"]]
+    assert f["canon_report_A"] == 200
+    assert f["canon_B_setting_off"] == {"status": 400, "code": "PRESENCE_REQUIRED_ON_OBJECT"}
+    assert f["setting_on"] == 200 and f["setting_events"] == 1
+    assert f["setting_events_after_off"] == 2                           # on, then off again
+    assert f["canon_report_B"] == 200
+    assert f["canon_entries"] == [[False, "offline_sync"], [True, "DailyReportAuto"]]
+    assert f["auto_row"] == {"source": "DailyReportAuto", "note": "Автоматично от отчет", "auto_from_report": True}
+    assert f["auto_events"] == 1
     assert f["canon_total_hours"] == 8 and f["canon_by_project"] == [4, 4]
+    assert f["no_presence_anywhere_on"] == {"status": 400, "code": "PRESENCE_REQUIRED_ON_OBJECT"}
+    assert f["no_presence_anywhere_off"] == {"status": 400, "code": "PRESENCE_REQUIRED_ON_OBJECT"}
 
 
 @real
 def test_a_report_needs_presence_on_that_object(obs):
-    """FG-641 (FLOW-013 L88-90): for another worker the presence must be on this object; the
-    technician's own report creates its object's presence (no 'report without presence')."""
+    """FG-641 (FLOW-013 L89-90, literal until Krum decides): a report for anyone on an object
+    needs a presence on THAT object; no automatic presence with the setting OFF."""
     f = obs["flowguard"]
     assert f["for_other_no_presence_here"] == 400 and f["for_other_rows"] == 0
     assert f["for_other_with_presence_here"] == 200
-    assert f["own_report_new_object"] == 200 and f["own_report_presence_created"] == ["DailyReport"]
+    # literal L89 (setting OFF): the technician's own report needs a presence on the object too
+    assert f["own_report_new_object"] == {"status": 400, "code": "PRESENCE_REQUIRED_ON_OBJECT"}
+    assert f["own_report_presence_created"] == []
 
 
 @real

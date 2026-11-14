@@ -320,7 +320,7 @@ export default function TechnicianDashboard() {
       setScreen("myDay");
       setSelectedSite(null);
       loadSites();
-    } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
+    } catch (err) { toast.error(err.response?.data?.detail?.message || err.response?.data?.detail || "Error"); }
     finally { setSubmitting(false); }
   };
 

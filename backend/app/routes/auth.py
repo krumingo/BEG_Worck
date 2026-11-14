@@ -627,6 +627,11 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_p
     tenant = _tenant(user)
     if data.module_code == "M0":
         raise HTTPException(status_code=400, detail="Core module cannot be disabled")
+    from app.routes.technician import REPORT_AUTO_PRESENCE, set_report_auto_presence
+    if data.module_code == REPORT_AUTO_PRESENCE:
+        # FG-641: the D21 setting (default OFF), with its AuditEvent
+        await set_report_auto_presence(user, data.enabled)
+        return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
     from app.services import offline_sync
     if data.module_code == offline_sync.FLAG_CODE:
         # FG-629: the same path as PUT /api/sync/flag — the canonical sync.flag_set AuditEvent
