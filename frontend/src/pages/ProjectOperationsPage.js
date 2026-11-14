@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
-import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
+import { apiErrorText, createIdempotencyHolder, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -101,14 +101,14 @@ export default function ProjectOperationsPage() {
       if (method === "post" && isMoneyPost(endpoint)) {
         await API.post(endpoint, payload, idempotencyHeaders(moneyKeys.keyFor(endpoint, payload)));
         moneyKeys.done();
-      } else if (method === "post") await API.post(endpoint, payload);
-      else await API.put(endpoint, payload);
+      // R29 / CP-01: every other write carries an Idempotency-Key too (subcontractor create needs it)
+      } else if (method === "post") await API.post(endpoint, payload, idempotencyHeaders(newIdempotencyKey()));
+      else await API.put(endpoint, payload, idempotencyHeaders(newIdempotencyKey()));
       setDialog(null);
       setConfirmDialog(null);
       fetchAll();
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      alert(detail?.message || detail || "Грешка");
+      alert(apiErrorText(err, "Грешка"));
     } finally { setSaving(false); }
   };
 

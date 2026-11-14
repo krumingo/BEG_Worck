@@ -86,6 +86,8 @@ ORG_KEYED: Dict[str, str] = {
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
               "subcontractor_payments", "subcontractor_performance",
+              # CP-01: the VerifiedBankAccount register and the ЕИК claim rows
+              "verified_bank_accounts", "counterparty_eik_claims", "company_eik_claims",
               # PRJ-01 (R54-2): the append-only versions of a subcontractor rating
               "subcontractor_performance_versions"),
     **_family(FAMILY_COMMERCIAL,
@@ -138,6 +140,8 @@ ORG_KEYED: Dict[str, str] = {
               # field-vs-office conflicts, late records waiting for the office, and items
               # that arrived from a blocked device.
               "sync_receipts", "sync_conflicts", "sync_late", "sync_quarantine"),
+              # CP-01 writes its DQ rows into the one ``dq_issues`` registered by WH-FIX-01
+              # (#81, FAMILY_TASKS above) — same schema, one registration
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",

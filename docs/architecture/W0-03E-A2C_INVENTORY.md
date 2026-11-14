@@ -9,17 +9,17 @@
 
 The inventory covers the **whole active backend**, derived from the filesystem rather than a hand-written list: every `app/**/*.py`, `server.py`, and the operator scripts declared in the guard.
 
-* modules inventoried: **198**
-* tenant-owned accesses found: **2017** (1479 reads, 538 writes)
+* modules inventoried: **248**
+* tenant-owned accesses found: **2200** (1619 reads, 581 writes)
 * static guard on the same scope: **0 violation(s)**
 
 ## 2. Classification summary
 
 | class | accesses | reads | writes | meaning |
 | --- | --- | --- | --- | --- |
-| `TENANT_VIEW` | 1855 | 1384 | 471 | none — predicate applied by the access layer |
-| `RAW_SCOPED` | 101 | 52 | 49 | low — predicate present but hand-written |
-| `TENANT_DATABASE` | 22 | 13 | 9 | none — handle is this tenant's own database |
+| `TENANT_VIEW` | 1996 | 1501 | 495 | none — predicate applied by the access layer |
+| `RAW_SCOPED` | 141 | 74 | 67 | low — predicate present but hand-written |
+| `TENANT_DATABASE` | 24 | 14 | 10 | none — handle is this tenant's own database |
 | `BOUNDARY_CODE` | 7 | 6 | 1 | n/a — this code IS the boundary |
 | `PRE_TENANT` | 32 | 24 | 8 | declared — no tenant exists yet, or read-only report |
 | `UNSCOPED` | 0 | 0 | 0 | CROSS-TENANT READ/WRITE when ids collide |
@@ -68,8 +68,10 @@ Handle opened by `get_tenant_db(tenant_id)`; the guard rejects any import of the
 | `app/deps/auth.py` | `get_current_user()` | `users` |
 | `app/routes/auth.py` | `login()` | `users` |
 | `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `organizations`, `users` |
+| `app/tenancy/identity.py` | `users_with_email()` | `users` |
 | `scripts/migrate_m19_8_freeze_report_split.py` | `main()` | `organizations` |
 | `scripts/promote_platform_admin.py` | `promote_platform_admin()` | `users` |
+| `scripts/reset_user_password.py` | `find_candidates()` | `users` |
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `organizations` |
 | `scripts/w0_03e_a2c_settings_identity_migration.py` | `migrate()` | `settings` |
 
@@ -77,6 +79,9 @@ Handle opened by `get_tenant_db(tenant_id)`; the guard rejects any import of the
 
 | module | function |
 | --- | --- |
+| `scripts/r0_01_billing_exposure_report.py` | `__getitem__()` |
+| `scripts/r0_01_billing_exposure_report.py` | `build_report()` |
+| `scripts/r0_03_email_duplicates_report.py` | `build_report()` |
 | `scripts/smoke_test.py` | `smoke_test()` |
 | `scripts/w0_03e_legacy_migration_report.py` | `__getitem__()` |
 | `scripts/w0_04_bootstrap_audit_indexes.py` | `run()` |
@@ -99,7 +104,7 @@ Migration: `backend/scripts/w0_03e_a2c_settings_identity_migration.py` (dry run 
 
 Ordered by class, then path. Nothing is omitted.
 
-### TENANT_VIEW (1855)
+### TENANT_VIEW (1996)
 
 | path | function | collection | operation | current tenant predicate | risk | action |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -116,6 +121,11 @@ Ordered by class, then path. Nothing is omitted.
 | `app/deps/modules.py` | `enforce_limit()` | `users` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/deps/modules.py` | `get_plan_limits()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/master_data/legacy_adapter.py` | `advance_mapping_report()` | `advances` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/permissions/money_input.py` | `project_in_tenant()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/permissions/money_write.py` | `money_alarm_exclusion()` | `alarm_events` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/permissions/money_write.py` | `project_labor_workers()` | `daily_work_logs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/permissions/money_write.py` | `project_labor_workers()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/permissions/money_write.py` | `project_labor_workers()` | `work_types` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/activity_budgets.py` | `calculate_all_snapshots()` | `activity_budgets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/activity_budgets.py` | `calculate_all_snapshots()` | `activity_budgets` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/activity_budgets.py` | `calculate_snapshot()` | `activity_budgets` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -367,7 +377,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/attendance.py` | `update_work_report()` | `work_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/attendance.py` | `update_work_report()` | `work_reports` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `_business()` | `users` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/auth.py` | `admin_set_password()` | `users` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `change_password()` | `users` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `change_password()` | `users` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `delete_user()` | `users` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -377,6 +386,23 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/auth.py` | `list_users()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `toggle_feature_flag()` | `feature_flags` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/auth.py` | `toggle_feature_flag()` | `feature_flags` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/bank_accounts.py` | `_activate()` | `verified_bank_accounts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/bank_accounts.py` | `_cas()` | `verified_bank_accounts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/bank_accounts.py` | `_list()` | `verified_bank_accounts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/bank_accounts.py` | `tx()` | `verified_bank_accounts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/bank_accounts.py` | `tx()` | `verified_bank_accounts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_checkout_completed()` | `billing_checkout_sessions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_checkout_completed()` | `feature_flags` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_checkout_completed()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_payment_failed()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_payment_succeeded()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_subscription_deleted()` | `feature_flags` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_subscription_deleted()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_apply_subscription_updated()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_claim_event()` | `billing_webhook_events` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_claim_event()` | `billing_webhook_events` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_finish_event()` | `billing_webhook_events` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `_resolve_checkout_completed()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `check_limit()` | `invoices` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `check_limit()` | `projects` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `check_limit()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -386,6 +412,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/billing.py` | `compute_org_usage()` | `invoices` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `compute_org_usage()` | `projects` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `compute_org_usage()` | `users` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `create_checkout_session()` | `billing_checkout_sessions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `create_checkout_session()` | `feature_flags` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `create_checkout_session()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `create_checkout_session()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -394,11 +421,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/billing.py` | `get_billing_subscription()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `get_billing_subscription()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/billing.py` | `get_billing_usage()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/billing.py` | `stripe_webhook()` | `feature_flags` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/billing.py` | `stripe_webhook()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/billing.py` | `stripe_webhook()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/billing.py` | `stripe_webhook()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/billing.py` | `stripe_webhook()` | `subscriptions` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/billing.py` | `stripe_webhook()` | `billing_webhook_events` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/brigades.py` | `_member_names()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/brigades.py` | `add_brigade_member()` | `brigades` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/brigades.py` | `add_brigade_member()` | `brigades` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -433,17 +456,13 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/budget_progress.py` | `get_project_progress_summary()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/budget_progress.py` | `list_budget_freezes()` | `budget_freezes` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/budget_progress.py` | `list_progress_updates()` | `progress_updates` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_client()` | `clients` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_company_client()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_company_client()` | `companies` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_person_client()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_person_client()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `create_person_client()` | `persons` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `delete_client()` | `clients` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `delete_client()` | `clients` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `_claim_company_eik()` | `company_eik_claims` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `check()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `check()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `check()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `check()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `company_duplicate_dq()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `find_or_create_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `find_or_create_client()` | `clients` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `get_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `get_client()` | `counterparties` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `get_client_by_phone()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -461,37 +480,25 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/clients.py` | `list_clients()` | `clients` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `list_clients()` | `counterparties` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `list_clients()` | `invoices` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/clients.py` | `tx()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `unified_client_search()` | `companies` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/clients.py` | `unified_client_search()` | `persons` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_client()` | `clients` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/clients.py` | `update_project_client_link()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `auto_link_counterparty_to_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `auto_link_counterparty_to_client()` | `clients` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/counterparties.py` | `_selectable_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `auto_link_counterparty_to_client()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `auto_link_counterparty_to_client()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `create_counterparty()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `create_counterparty()` | `counterparties` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `delete_counterparty()` | `counterparties` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `delete_counterparty()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `get_counterparty()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `get_counterparty()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `link_counterparty_to_client()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `link_counterparty_to_client()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `link_counterparty_to_client()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `list_counterparties()` | `counterparties` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `list_counterparties()` | `counterparties` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/counterparties.py` | `list_counterparties()` | `invoices` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `unlink_counterparty_from_client()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `unlink_counterparty_from_client()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `update_counterparty()` | `counterparties` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/counterparties.py` | `update_counterparty()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/counterparties.py` | `tx()` | `clients` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/counterparties.py` | `tx()` | `clients` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/counterparties.py` | `tx()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/counterparties.py` | `tx()` | `counterparties` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/daily_reports.py` | `approve_daily_report()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/daily_reports.py` | `approve_report_one()` | `activity_budgets` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/daily_reports.py` | `approve_report_one()` | `activity_budgets` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -546,12 +553,12 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/daily_reports.py` | `update_daily_report()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/daily_reports.py` | `update_daily_report()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/daily_reports.py` | `update_daily_report()` | `employee_daily_reports` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/dashboard.py` | `_finance_by_project_rows()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_dashboard_activity()` | `audit_logs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_by_counterparty()` | `counterparties` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_by_counterparty()` | `invoices` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_by_counterparty()` | `invoices` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/dashboard.py` | `get_finance_by_project()` | `invoices` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/dashboard.py` | `get_finance_by_project()` | `invoices` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/dashboard.py` | `get_finance_by_project()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_by_project()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_details_summary()` | `bonus_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/dashboard.py` | `get_finance_details_summary()` | `cash_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -627,28 +634,37 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/extra_works.py` | `update_extra_work()` | `extra_work_drafts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/extra_works.py` | `update_extra_work()` | `extra_work_drafts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/extra_works.py` | `update_extra_work()` | `extra_work_drafts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoice_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoice_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_body()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_cancel_allocation()` | `payment_allocations` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_create()` | `invoices` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_ensure_reversal_row()` | `finance_payments` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_invoice_lock()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_invoice_remaining()` | `payment_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_outstanding_net()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_payment_lock()` | `finance_payments` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_peek_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_peek_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_peek_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_quick_pay_locked()` | `finance_payments` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_quick_pay_locked()` | `payment_allocations` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_resolve_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_resolve_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_resolve_payment_account()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_resolve_payment_account()` | `financial_accounts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `_resolve_payment_account()` | `financial_accounts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `add_invoice_payment()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `add_invoice_payment()` | `payment_allocations` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_reverse_one()` | `finance_payments` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `_stamp_and_refresh()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `aging_report()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `allocate_payment()` | `payment_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `allocate_payment()` | `payment_allocations` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `cancel_invoice()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `create_account()` | `financial_accounts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `create_invoice()` | `invoices` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `create_other_expense()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `create_other_income()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `create_payment()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `create_transfer()` | `finance_payments` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `delete_account()` | `financial_accounts` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `delete_invoice()` | `invoices` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `delete_payment()` | `finance_payments` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `fund_account()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `delete_payment()` | `finance_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `delete_payment()` | `finance_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `get_finance_stats()` | `finance_payments` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `get_finance_stats()` | `finance_payments` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `get_finance_stats()` | `financial_accounts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -675,30 +691,27 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/finance.py` | `list_payments()` | `finance_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `list_payments()` | `payment_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `list_subcontractor_documents()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `remove_invoice_payment()` | `finance_payments` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `remove_invoice_payment()` | `payment_allocations` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `remove_invoice_payment()` | `payment_allocations` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `send_invoice()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `tx()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `upcoming_payments()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `upcoming_payments()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `update_account()` | `financial_accounts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `update_invoice()` | `invoice_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `update_invoice()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `update_invoice()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `update_invoice()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/finance.py` | `update_invoice_lines()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `update_invoice_status()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `update_invoice_status()` | `payment_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `update_settings()` | `invoice_settings` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/finance.py` | `validate_invoice_no_unique()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `finance_payments` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `payment_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/finance.py` | `work()` | `payment_allocations` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `aggregate_overhead()` | `overhead_snapshots` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `aggregate_overhead()` | `overhead_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `execution_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `overhead_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `compute_overhead_allocation()` | `project_overhead_alloc` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/full_cost.py` | `create_overhead_snapshot()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `create_overhead_snapshot()` | `overhead_snapshots` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_employee_cost_basis()` | `employee_profiles` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_employee_cost_basis()` | `settings` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -707,21 +720,19 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/full_cost.py` | `get_financial_alerts()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_financial_alerts()` | `labor_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_financial_alerts()` | `material_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `get_financial_alerts()` | `project_overhead_alloc` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/full_cost.py` | `get_package_net_financial()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_package_net_financial()` | `execution_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_package_net_financial()` | `subcontractor_package_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_net_profit()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_net_profit()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_net_profit()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_net_profit()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `get_project_net_profit()` | `project_overhead_alloc` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_net_profit()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_risk()` | `client_acts` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_risk()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_risk()` | `invoices` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_risk()` | `material_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `get_project_risk()` | `offers` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/full_cost.py` | `get_project_risk()` | `project_overhead_alloc` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `list_overhead_snapshots()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/full_cost.py` | `update_employee_cost_config()` | `settings` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/health.py` | `get_subscription()` | `subscriptions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -794,16 +805,28 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/hr.py` | `upsert_employee_profile()` | `employee_profiles` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/hr.py` | `upsert_employee_profile()` | `employee_profiles` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/hr.py` | `upsert_employee_profile()` | `users` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_apply_header()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_body()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_body()` | `invoice_lines` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_body()` | `invoice_lines` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_body()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_meta()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_line_allocation_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `_write()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `allocate_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `allocate_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `allocate_invoice_line()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `create_invoice_line()` | `invoice_lines` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `create_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `create_invoice_line()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `create_invoice_lines_bulk()` | `invoice_lines` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `create_invoice_lines_bulk()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `delete_invoice_line()` | `invoice_lines` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `delete_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `delete_invoice_line()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `get_allocation_versions()` | `invoice_line_allocation_versions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/invoice_lines.py` | `get_allocation_versions()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `get_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `get_invoice_line()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `get_lines_by_client()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -823,13 +846,29 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/invoice_lines.py` | `get_unallocated_lines()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `get_unallocated_lines()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `list_invoice_lines()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `recalculate_invoice_totals()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `recalculate_invoice_totals()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `update_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `update_invoice_line()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/invoice_lines.py` | `update_invoice_line()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/invoice_lines.py` | `update_invoice_line()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `create_item()` | `items` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `create_item()` | `items` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `delete_item()` | `items` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `list_items()` | `items` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `list_items()` | `items` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/items.py` | `update_item()` | `items` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_recompute_package_labor()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_recompute_package_labor()` | `execution_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_recompute_package_labor()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_recompute_package_labor()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_recompute_package_labor()` | `settings` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `employee_profiles` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `labor_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `labor_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `labor_entries` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `_sync_labor_entries()` | `work_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `create_labor_entry()` | `employee_profiles` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/labor_smr.py` | `create_labor_entry()` | `labor_entries` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `create_labor_entry()` | `labor_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `get_labor_cost_by_exec_pkg()` | `execution_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `get_labor_cost_by_exec_pkg()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -841,16 +880,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/labor_smr.py` | `get_labor_warnings()` | `labor_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `get_labor_warnings()` | `labor_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/labor_smr.py` | `list_labor_entries()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `recompute_execution_package_labor()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `recompute_execution_package_labor()` | `execution_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `recompute_execution_package_labor()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `recompute_execution_package_labor()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `recompute_execution_package_labor()` | `settings` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `sync_labor_entries_from_work_reports()` | `employee_profiles` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `sync_labor_entries_from_work_reports()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `sync_labor_entries_from_work_reports()` | `labor_entries` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `sync_labor_entries_from_work_reports()` | `labor_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/labor_smr.py` | `sync_labor_entries_from_work_reports()` | `work_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/locations.py` | `create_location()` | `location_nodes` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/locations.py` | `create_location()` | `location_nodes` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/locations.py` | `create_location()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -877,10 +906,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/locations.py` | `update_location()` | `location_nodes` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/locations.py` | `update_location()` | `location_nodes` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `get_material_cost_by_exec_pkg()` | `execution_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `get_material_cost_by_exec_pkg()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `get_material_summary_for_project()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `get_material_summary_for_project()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `get_material_summary_for_project()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `get_material_warnings()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `get_material_warnings()` | `material_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `get_material_warnings()` | `material_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -891,18 +917,11 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/material_smr.py` | `list_material_entries()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `recompute_execution_package_material()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `recompute_execution_package_material()` | `execution_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `recompute_execution_package_material()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `recompute_execution_package_material()` | `planned_materials` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `sync_material_entries()` | `material_entries` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `material_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `material_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `material_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/material_smr.py` | `sync_material_entries()` | `material_entries` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `sync_material_entries()` | `planned_materials` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `project_material_ops` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_smr.py` | `sync_material_entries()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_smr.py` | `sync_material_entries()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/material_waste.py` | `create_waste_entry()` | `material_waste_entries` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/material_waste.py` | `get_waste_log()` | `material_waste_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/materials_baseline.py` | `delete_planned_materials()` | `planned_materials` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/materials_baseline.py` | `generate_planned_materials()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -918,8 +937,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/materials_baseline.py` | `get_project_material_summary()` | `planned_materials` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/materials_baseline.py` | `get_project_material_summary()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/materials_baseline.py` | `get_project_material_summary()` | `supplier_invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/materials_baseline.py` | `get_project_material_summary()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/materials_baseline.py` | `get_project_material_summary()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/materials_baseline.py` | `list_planned_materials()` | `planned_materials` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/media.py` | `delete_media()` | `media_files` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/media.py` | `delete_media()` | `media_files` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1028,10 +1045,23 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/offer_versions.py` | `restore_offer_version()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offer_versions.py` | `restore_offer_version()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offer_versions.py` | `restore_offer_version()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `accept_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `_draft_was_used()` | `offer_events` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `_family_guard()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `_family_guard()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `_has_newer_version()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offer_events` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offer_events` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offer_versions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offer_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/offers.py` | `body()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `create_activity()` | `activity_catalog` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `create_offer()` | `offers` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `create_offer_version()` | `offers` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `delete_activity()` | `activity_catalog` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `delete_activity()` | `activity_catalog` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `delete_offer()` | `offers` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1041,43 +1071,48 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/offers.py` | `import_offer_confirm()` | `offers` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `list_activity_catalog()` | `activity_catalog` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `list_offers()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `reject_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `respond_to_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `send_offer()` | `offer_events` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `send_offer()` | `offer_versions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `send_offer()` | `offer_versions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `send_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `update_activity()` | `activity_catalog` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `update_activity()` | `activity_catalog` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `update_activity()` | `activity_catalog` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `update_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/offers.py` | `update_offer()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/offers.py` | `update_offer_lines()` | `offers` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `attendance_entries` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_allocation_basis()` | `attendance_entries` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_allocation_basis()` | `work_reports` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_asset_usage()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_category_usage()` | `overhead_costs` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_cost_usage()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_hours_total()` | `work_reports` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_mark_history()` | `overhead_snapshots` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_next_version()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_next_version()` | `overhead_snapshots` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_person_days_total()` | `attendance_entries` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_refuse_overlap()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_supersede_previous()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_supersede_previous()` | `overhead_snapshots` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_supersede_previous()` | `project_overhead_allocations` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_write_allocation_version()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `_write_allocation_version()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `project_overhead_allocations` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `project_overhead_allocations` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `allocate_overhead_to_projects()` | `work_reports` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `compute_overhead_snapshot()` | `attendance_entries` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `compute_overhead_snapshot()` | `overhead_assets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `compute_overhead_snapshot()` | `overhead_costs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `compute_overhead_snapshot()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `compute_overhead_snapshot()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `compute_overhead_snapshot()` | `overhead_snapshots` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `compute_overhead_snapshot()` | `work_reports` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `create_overhead_asset()` | `overhead_assets` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `create_overhead_category()` | `overhead_categories` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `create_overhead_cost()` | `overhead_costs` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `delete_overhead_asset()` | `overhead_assets` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `delete_overhead_category()` | `overhead_categories` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `delete_overhead_cost()` | `overhead_costs` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `delete_overhead_asset()` | `overhead_assets` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `delete_overhead_category()` | `overhead_categories` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/overhead.py` | `delete_overhead_cost()` | `overhead_costs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_dashboard_stats()` | `attendance_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_dashboard_stats()` | `attendance_entries` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_dashboard_stats()` | `projects` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_dashboard_stats()` | `users` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_dashboard_stats()` | `work_reports` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `get_overhead_snapshot()` | `overhead_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `get_overhead_snapshot()` | `project_overhead_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `list_overhead_allocations()` | `project_overhead_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `list_overhead_assets()` | `overhead_assets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `list_overhead_categories()` | `overhead_categories` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1085,14 +1120,8 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/overhead.py` | `list_overhead_costs()` | `overhead_costs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `list_overhead_snapshots()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `update_overhead_asset()` | `overhead_assets` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_asset()` | `overhead_assets` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_asset()` | `overhead_assets` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `update_overhead_category()` | `overhead_categories` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_category()` | `overhead_categories` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_category()` | `overhead_categories` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead.py` | `update_overhead_cost()` | `overhead_costs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_cost()` | `overhead_costs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/overhead.py` | `update_overhead_cost()` | `overhead_costs` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead_realtime.py` | `bulk_calendar()` | `worker_calendar` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead_realtime.py` | `bulk_calendar()` | `worker_calendar` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead_realtime.py` | `bulk_calendar()` | `worker_calendar` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1111,8 +1140,18 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/overhead_realtime.py` | `update_calendar_entry()` | `worker_calendar` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead_realtime.py` | `update_fixed_expenses()` | `fixed_expenses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/overhead_realtime.py` | `update_fixed_expenses()` | `fixed_expenses` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_conflict()` | `pay_runs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_mark_slips_paid()` | `payment_slips` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_reduce_advances()` | `advances` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_reduce_advances()` | `advances` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_release_op_lock()` | `pay_runs` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_row_for_selected_reports()` | `employee_profiles` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_write_salary_outflows()` | `finance_payments` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_write_salary_outflows()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `_write_salary_outflows()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `audit_check()` | `employee_profiles` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `audit_check()` | `pay_run_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `audit_check()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `audit_check()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `audit_check()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `audit_check()` | `payroll_payment_allocations` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1141,15 +1180,9 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/pay_runs.py` | `list_pay_runs()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `list_payment_slips()` | `payment_slips` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `list_payment_slips()` | `payment_slips` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `advances` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `advances` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `pay_runs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `pay_runs` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `pay_runs` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `pay_runs` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/pay_runs.py` | `mark_pay_run_paid()` | `payment_slips` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `reopen_pay_run()` | `pay_runs` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `reopen_pay_run()` | `pay_runs` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `reopen_pay_run()` | `payment_slips` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1161,7 +1194,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/pay_runs.py` | `update_pay_run()` | `payment_slips` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `update_pay_run()` | `payment_slips` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pay_runs.py` | `update_pay_run()` | `payment_slips` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/price_modifiers.py` | `delete_project_modifiers()` | `price_modifiers_config` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `get_line_modifier_breakdown()` | `smr_analyses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `get_org_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `get_project_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1169,7 +1201,9 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/price_modifiers.py` | `recalculate_with_modifiers()` | `smr_analyses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `recalculate_with_modifiers()` | `smr_analyses` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `update_org_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/price_modifiers.py` | `update_org_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `update_org_modifiers()` | `price_modifiers_config` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/price_modifiers.py` | `update_project_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `update_project_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/price_modifiers.py` | `update_project_modifiers()` | `price_modifiers_config` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pricing.py` | `fetch_prices_for_line()` | `smr_analyses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1177,6 +1211,10 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/pricing.py` | `fetch_prices_for_line()` | `smr_analyses` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pricing.py` | `get_catalog()` | `material_prices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pricing.py` | `get_price_history()` | `material_prices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/procurement.py` | `_body()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/procurement.py` | `_body()` | `supplier_invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/procurement.py` | `_supplier_invoice_link()` | `warehouse_transactions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/procurement.py` | `canonical_warehouse_stock()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `compute_project_ledger()` | `material_requests` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `compute_project_ledger()` | `project_material_ops` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `compute_project_ledger()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1200,24 +1238,11 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/procurement.py` | `get_supplier_invoice()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `get_warehouse_stock()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `get_warehouse_stock()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `issue_to_project()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `issue_to_project()` | `warehouse_transactions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `issue_to_project()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `list_material_requests()` | `material_requests` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `list_material_requests()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `list_supplier_invoices()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `list_supplier_invoices()` | `supplier_invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `list_warehouse_transactions()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `material_requests` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `material_requests` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `supplier_invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `warehouse_transactions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `post_invoice_to_warehouse()` | `warehouses` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `record_consumption()` | `project_material_ops` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `return_to_warehouse()` | `warehouse_transactions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `return_to_warehouse()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `submit_material_request()` | `material_requests` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `submit_material_request()` | `material_requests` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `submit_material_request()` | `material_requests` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1227,26 +1252,24 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/procurement.py` | `update_stock_threshold()` | `stock_thresholds` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `update_supplier_invoice()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `update_supplier_invoice()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/procurement.py` | `update_supplier_invoice()` | `supplier_invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `upload_invoice_file()` | `supplier_invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/procurement.py` | `upload_invoice_file()` | `supplier_invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/procurement.py` | `warehouse_stock_items()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/project_pnl.py` | `get_org_pnl_overview()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `add_subproject_to_group()` | `projects` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `add_subproject_to_group()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `add_subproject_to_group()` | `projects` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `add_team_member()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `add_team_member()` | `users` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `check()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `check()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `check()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_invoices()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `count_materials()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_offers()` | `offers` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_offers()` | `offers` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_report_hours()` | `employee_daily_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_reported()` | `employee_daily_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `count_work()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `create_company()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `create_company()` | `companies` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `create_person()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `create_person()` | `persons` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_phase()` | `project_phases` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_phase()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_project()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1259,19 +1282,11 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `create_sub_project()` | `projects` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_sub_project()` | `projects` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_sub_project()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `create_sub_project()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_sub_project()` | `team_tenant.collection('project_team')` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `create_sub_project()` | `warehouse_transactions` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `create_sub_project()` | `work_sessions` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_company()` | `companies` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_person()` | `persons` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `delete_phase()` | `project_phases` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `delete_phase()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project()` | `project_phases` | delete_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project()` | `projects` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project()` | `projects` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project_photo()` | `project_photos` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `delete_project_photo()` | `project_photos` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `find_company_by_eik()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `find_person_by_phone()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_company()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1285,6 +1300,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `get_person()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project()` | `users` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `get_project_aggregate()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_aggregate()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_dashboard()` | `attendance_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_dashboard()` | `companies` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1304,7 +1320,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `get_project_dashboard()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_dashboard()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_dashboard()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `get_project_dashboard()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_project_pending_reports()` | `employee_daily_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_site_workers()` | `attendance_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_site_workers()` | `employee_daily_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1313,6 +1328,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `get_site_workers()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `get_site_workers()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `import_client_invoice()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `links_of()` | `project_phases` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `list_companies()` | `companies` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `list_persons()` | `persons` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `list_phases()` | `project_phases` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1325,9 +1341,10 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `list_projects()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `list_projects()` | `users` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `remove_team_member()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `rename()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `reparent()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `serve_project_photo()` | `project_photos` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `update_company()` | `companies` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `update_person()` | `persons` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `tx()` | `persons` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `update_phase()` | `project_phases` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `update_phase()` | `project_phases` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `update_phase()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1336,17 +1353,32 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/projects.py` | `update_project()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `upload_project_photo()` | `project_photos` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `upload_project_photo()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `notifications` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `project_photos` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `project_photos` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/projects.py` | `work()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `wrap_in_group()` | `projects` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `wrap_in_group()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `wrap_in_group()` | `projects` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/projects.py` | `wrap_in_group()` | `projects` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/projects.py` | `wrap_in_group()` | `projects` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pulse.py` | `get_pulse_range()` | `site_pulses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pulse.py` | `get_pulse_summary()` | `site_pulses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pulse.py` | `get_site_pulse()` | `site_pulses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/pulse.py` | `get_today_pulses()` | `site_pulses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/reports.py` | `create_bonus_payment()` | `bonus_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `create_bonus_payment()` | `bonus_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/reports.py` | `create_cash_transaction()` | `cash_transactions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `create_cash_transaction()` | `cash_transactions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/reports.py` | `create_overhead_transaction()` | `overhead_transactions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `create_overhead_transaction()` | `overhead_transactions` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `export_company_finance()` | `bonus_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `export_company_finance()` | `cash_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1376,12 +1408,9 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/reports.py` | `list_bonus_payments()` | `bonus_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `list_cash_transactions()` | `cash_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/reports.py` | `list_overhead_transactions()` | `overhead_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/revenue_expense.py` | `client_act_remaining()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `confirm_client_act()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `confirm_client_act()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `confirm_client_act()` | `client_acts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `create_act_from_offer()` | `client_acts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `create_act_from_offer()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `create_client_act()` | `client_acts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `create_client_act()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `generate_execution_packages()` | `execution_packages` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `generate_execution_packages()` | `execution_packages` | insert_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1390,17 +1419,14 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/revenue_expense.py` | `get_labor_cost_by_project()` | `employee_profiles` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_labor_cost_by_project()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_labor_cost_by_project()` | `work_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `get_next_act_number()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `employee_profiles` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `project_overhead_alloc` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_profit_summary()` | `work_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_smr_view()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `get_project_smr_view()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1410,8 +1436,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/revenue_expense.py` | `list_client_acts()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `list_execution_packages()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `update_client_act()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `update_client_act()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_expense.py` | `update_client_act()` | `client_acts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `update_execution_package()` | `execution_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `update_execution_package()` | `execution_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_expense.py` | `update_execution_package()` | `execution_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1431,8 +1455,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `labor_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `project_overhead_alloc` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_snapshot.py` | `get_profit_by_period()` | `subcontractor_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_snapshot.py` | `get_revenue_snapshot()` | `revenue_snapshots` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/revenue_snapshot.py` | `list_revenue_snapshots()` | `revenue_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1564,15 +1586,29 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/smr_groups.py` | `update_group()` | `smr_groups` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/smr_groups.py` | `update_group()` | `smr_groups` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/smr_groups.py` | `update_group()` | `smr_groups` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractor_performance.py` | `create_performance()` | `subcontractor_performance` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractor_performance.py` | `get_log()` | `subcontractor_performance` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractor_performance.py` | `update_performance()` | `subcontractor_performance` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractor_performance.py` | `update_performance()` | `subcontractor_performance` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractor_performance.py` | `update_performance()` | `subcontractor_performance` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `subcontractor_performance` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `subcontractor_performance` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `subcontractor_performance` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `tenant.collection(VERSIONS)` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `tenant.collection(VERSIONS)` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractor_performance.py` | `work()` | `tenant.collection(VERSIONS)` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_confirm_advance()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_confirm_deduction()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_confirmed_act()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `_get_assigned_qty()` | `subcontractor_package_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `_get_next_act_no()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `_get_next_pay_no()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `_get_next_pkg_no()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_record_act_deduction()` | `subcontractor_acts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_refresh_package_totals()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_refresh_package_totals()` | `subcontractor_payments` | aggregate | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_reserve_advance()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_reserve_within_certified()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_reserve_within_certified()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_write_subcontractor_payment()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `_write_subcontractor_payment()` | `subcontractor_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `add_lines_from_offer()` | `execution_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `add_lines_from_offer()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `add_lines_from_offer()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1597,22 +1633,35 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/subcontractors.py` | `create_package()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_package()` | `subcontractor_packages` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_package()` | `subcontractors` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractors.py` | `create_subcontractor()` | `subcontractors` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_act()` | `subcontractor_acts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_act()` | `subcontractor_package_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_act()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `finance_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_advance()` | `subcontractor_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `financial_accounts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_packages` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_payments` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `create_subcontractor_payment()` | `subcontractor_payments` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `deduct_advance_on_act()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `deduct_advance_on_act()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `deduct_advance_on_act()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `deduct_advance_on_act()` | `subcontractor_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `deduct_advance_on_act()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `get_advance_metrics()` | `subcontractor_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `get_package()` | `subcontractor_package_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `get_package()` | `subcontractor_packages` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `get_subcontract_metrics()` | `subcontractor_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `list_packages()` | `subcontractor_packages` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `list_subcontractor_acts()` | `subcontractor_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/subcontractors.py` | `list_subcontractor_payments()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `list_subcontractor_payments()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `list_subcontractors()` | `subcontractors` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/subcontractors.py` | `remove_package_line()` | `subcontractor_package_lines` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1722,17 +1771,18 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/technician.py` | `update_draft()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/technician.py` | `update_draft()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/technician.py` | `update_draft()` | `employee_daily_reports` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/warehouse_batches.py` | `block_batch()` | `warehouse_batches` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/warehouse_batches.py` | `block_batch()` | `warehouse_batches` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/routes/warehouse_batches.py` | `consume_stock()` | `material_consumption_log` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouse_batches.py` | `get_batch()` | `warehouse_batches` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouse_batches.py` | `item_batches()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouse_batches.py` | `list_batches()` | `warehouse_batches` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouse_batches.py` | `list_batches()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouse_batches.py` | `warehouse_value()` | `warehouses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/warehouse_canonical_queries.py` | `_legacy_warehouse_types()` | `warehouses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/warehouses.py` | `_refuse_if_warehouse_in_use()` | `warehouse_transactions` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/warehouses.py` | `_refuse_if_warehouse_in_use()` | `warehouse_transactions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `create_warehouse()` | `warehouses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `create_warehouse()` | `warehouses` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `delete_warehouse()` | `warehouses` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/routes/warehouses.py` | `dev_reset_warehouses()` | `warehouse_transactions` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `dev_reset_warehouses()` | `warehouses` | delete_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `dev_reset_warehouses()` | `warehouses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/routes/warehouses.py` | `get_warehouse()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1833,6 +1883,26 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/alarm_engine.py` | `evaluate_rule()` | `work_sessions` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/alarm_engine.py` | `evaluate_rule()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/audit.py` | `log_audit()` | `audit_logs` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/bank_account_guard.py` | `receipt_references()` | `tenant.collection(coll)` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/bank_account_guard.py` | `resolve_invoice_party()` | `counterparties` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `_existing_line_ids()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `canonical_movement_lines()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `ledger_invoice_line_links()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `legacy_issue_rows()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `load_planned_mapping()` | `planned_materials` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `path_b_integrity_warnings()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `path_b_integrity_warnings()` | `warehouse_transactions` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_cost_rows()` | `material_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_input_vat()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_invoice_lines()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_ledger_rows()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_link_conflicts()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_link_conflicts()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_over_link_exclusions()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `project_over_link_exclusions()` | `warehouse_transactions` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `tenant_cutover()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `tenant_over_linked_warnings()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/canonical_material_cost.py` | `tenant_over_linked_warnings()` | `warehouse_transactions` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/cashflow_forecast.py` | `build_cashflow_forecast()` | `contract_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/cashflow_forecast.py` | `build_cashflow_forecast()` | `fixed_expenses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/cashflow_forecast.py` | `build_cashflow_forecast()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1842,8 +1912,28 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/centralized_reports.py` | `build_centralized_reports()` | `employee_daily_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/centralized_reports.py` | `build_centralized_reports()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/centralized_reports.py` | `build_centralized_reports()` | `missing_smr` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/centralized_reports.py` | `build_centralized_reports()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/centralized_reports.py` | `build_centralized_reports()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `_acted_from_acts()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `_offer_of_line()` | `offers` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `_value_from_acts()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `acted_by_line()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `body()` | `client_acts` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `create_act()` | `client_acts` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `guard_offer_family()` | `offers` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `next_act_number()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `offer_family()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `remaining_for_project()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `resolve_offer_lines()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `revalue_line()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `revalue_line()` | `client_acts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/client_acts.py` | `revalue_line()` | `tenant.collection(TOTALS)` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/excel_import_v2.py` | `apply_template()` | `excel_import_templates` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/excel_import_v2.py` | `save_import_template()` | `excel_import_templates` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/expected_actual.py` | `build_expected_actual()` | `activity_budgets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1853,15 +1943,45 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/expected_actual.py` | `build_expected_actual()` | `smr_analyses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/expected_actual.py` | `build_expected_actual()` | `smr_groups` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/expected_actual.py` | `build_expected_actual()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/fifo_service.py` | `add_batch()` | `warehouse_batches` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/fifo_service.py` | `consume_fifo()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/fifo_service.py` | `consume_fifo()` | `warehouse_batches` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/fifo_service.py` | `generate_batch_number()` | `warehouse_batches` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/fifo_service.py` | `get_current_stock()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/fifo_service.py` | `get_stock_value()` | `warehouse_batches` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/hours_validator.py` | `get_worker_hours_for_day()` | `employee_daily_reports` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `apply_header_destination()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `apply_header_destination()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `apply_header_destination()` | `invoice_lines` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `apply_header_destination()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `apply_header_destination()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `invoice_allocation_state()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `invoice_allocation_state()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `invoices_to_allocate()` | `dq_issues` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `invoices_to_allocate()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `migrate_header_allocations()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `received_line_allocations()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `refresh_invoice_dq()` | `invoices` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `alarm_events` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `alarm_events` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `dq_issues` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `dq_issues` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `dq_issues` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_allocation.py` | `sync_invoice_issue()` | `dq_issues` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_line_lock.py` | `bump_line_lock()` | `warehouse_ledger_counters` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_line_lock.py` | `bump_supplier_invoice_lock()` | `supplier_invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_line_lock.py` | `ensure_line_lock()` | `warehouse_ledger_counters` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_line_lock.py` | `first_linked_movement()` | `warehouse_transactions` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_line_lock.py` | `supplier_invoices_of_receipt()` | `supplier_invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/invoice_state.py` | `claim_invoice()` | `invoices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/legacy_payslips.py` | `legacy_payslip_one()` | `payment_slips` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/legacy_payslips.py` | `legacy_payslips()` | `payment_slips` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `_reverify_bank_accounts()` | `verified_bank_accounts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `_reverify_bank_accounts()` | `verified_bank_accounts` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `claim_eik()` | `counterparty_eik_claims` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `eik_holder()` | `tenant.collection(coll)` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `tx()` | `tenant.collection(collection)` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_records.py` | `tx()` | `tenant.collection(collection)` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_write.py` | `dq_issue()` | `dq_issues` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_write.py` | `notify_roles()` | `notifications` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/master_write.py` | `notify_roles()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/material_waste.py` | `build_material_waste_summary()` | `material_requests` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/material_waste.py` | `build_material_waste_summary()` | `material_waste_entries` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/material_waste.py` | `build_material_waste_summary()` | `smr_analyses` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1884,6 +2004,11 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/morning_briefing.py` | `build_morning_briefing()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/morning_briefing.py` | `build_morning_briefing()` | `worker_calendar` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/ocr_invoice.py` | `create_ocr_intake()` | `ocr_invoice_intake` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/overhead_lifecycle.py` | `_read_current_pointers()` | `tenant.collection(PERIOD_LOCKS_COLLECTIO` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/overhead_lifecycle.py` | `current_allocations()` | `overhead_snapshots` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/overhead_lifecycle.py` | `current_allocations()` | `project_overhead_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/overhead_lifecycle.py` | `project_overhead_current()` | `project_overhead_alloc` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/overhead_lifecycle.py` | `publish_allocation_batch()` | `tenant.collection(PERIOD_LOCKS_COLLECTIO` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/overhead_realtime.py` | `compute_realtime_overhead()` | `employee_profiles` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/overhead_realtime.py` | `compute_realtime_overhead()` | `fixed_expenses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/overhead_realtime.py` | `compute_realtime_overhead()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1893,6 +2018,15 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/paid_labor.py` | `_paid_alloc_rows()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/paid_labor.py` | `_resolve()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/paid_labor.py` | `paid_labor_v3()` | `payment_slips` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `password_reset_tokens` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `users` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/password_reset.py` | `body()` | `users` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/payroll_sync.py` | `sync_on_confirm()` | `employee_daily_reports` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/payroll_sync.py` | `sync_on_confirm()` | `employee_daily_reports` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/payroll_sync.py` | `sync_on_confirm()` | `payroll_payment_allocations` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1905,6 +2039,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/payroll_sync.py` | `sync_on_reopen()` | `payroll_payment_allocations` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/payroll_sync.py` | `sync_on_reopen()` | `payroll_payment_allocations` | update_many | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pnl_aggregator.py` | `compute_aggregated_pnl()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/pnl_aggregator.py` | `compute_aggregated_pnl()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pnl_aggregator.py` | `compute_org_profit_attribution()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/price_modifiers.py` | `get_effective_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/price_modifiers.py` | `get_effective_modifiers()` | `price_modifiers_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1916,24 +2051,19 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/pricing_engine.py` | `get_material_price()` | `material_prices` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_financial_results.py` | `compute_financial_results()` | `contract_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_financial_results.py` | `compute_financial_results()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_financial_results.py` | `compute_financial_results()` | `project_overhead_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_financial_results.py` | `compute_financial_results()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_financial_results.py` | `compute_financial_results()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_financial_results.py` | `compute_financial_results()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_guards.py` | `check_project_writable()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/project_lifecycle.py` | `business_links()` | `tenant.collection(name)` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/project_lifecycle.py` | `business_links()` | `tenant.collection(name)` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_pnl_trend()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_pnl_trend()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `activity_budgets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `client_acts` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `contract_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `finance_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_pnl.py` | `compute_project_pnl()` | `invoice_lines` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `missing_smr` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `offers` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_pnl.py` | `compute_project_pnl()` | `project_overhead_allocations` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_pnl.py` | `compute_project_pnl()` | `subcontractor_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/project_pnl.py` | `compute_project_pnl()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/project_pnl.py` | `compute_project_pnl()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_all_pulses()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `activity_budgets` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1942,7 +2072,6 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/pulse_generator.py` | `generate_pulse()` | `site_pulses` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `site_pulses` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `site_pulses` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
-| `app/services/pulse_generator.py` | `generate_pulse()` | `warehouse_transactions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `work_reports` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/pulse_generator.py` | `generate_pulse()` | `work_sessions` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
@@ -1957,9 +2086,26 @@ Ordered by class, then path. Nothing is omitted.
 | `app/services/resource_model.py` | `save_resource_config()` | `resource_model_config` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/resource_model.py` | `save_resource_config()` | `resource_model_config` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/resource_model.py` | `save_resource_config()` | `resource_model_config` | update_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/slip_payment_state.py` | `_run_statuses()` | `pay_runs` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/slip_payment_state.py` | `paid_run_ids()` | `pay_runs` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 | `app/services/subcontractor_performance.py` | `build_subcontractor_performance()` | `subcontractor_performance` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/subcontractor_performance.py` | `ledger_paid()` | `finance_payments` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/subcontractor_performance.py` | `ledger_paid()` | `subcontractor_payments` | distinct | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/user_role_policy.py` | `_assert_not_last_owner()` | `users` | count_documents | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/user_role_policy.py` | `_enforce_owner_ids()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/price_history.py` | `_project_buckets()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/price_history.py` | `_project_buckets()` | `projects` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/price_history.py` | `project_purchases()` | `invoices` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `_bind_invoice_line_price()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `_check_invoice_line_delivery()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `_check_invoice_line_total()` | `invoice_lines` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `_next_ledger_sequence()` | `warehouse_ledger_counters` | find_one_and_update | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `resolve_subproject_parent()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `app/services/warehouse_movements/service.py` | `resolve_subproject_parent()` | `projects` | find_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `scripts/reset_user_password.py` | `body()` | `notifications` | insert_one | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
+| `scripts/reset_user_password.py` | `body()` | `users` | find | TenantData applies it to filter and write filter | none — predicate applied by the access layer | keep |
 
-### RAW_SCOPED (101)
+### RAW_SCOPED (141)
 
 | path | function | collection | operation | current tenant predicate | risk | action |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -2030,6 +2176,7 @@ Ordered by class, then path. Nothing is omitted.
 | `app/master_data/legacy_plan.py` | `load_state()` | `[<expression>]` | find | literal {'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/master_data/legacy_plan.py` | `load_state()` | `[<expression>]` | find | literal {'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/master_data/legacy_plan.py` | `load_state()` | `md_legacy_refs` | find | literal {'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/permissions/money_input.py` | `completed_replay()` | `[<expression>]` | find_one | literal {'tenant_id': user['org_id'], 'id': _record_id(user['org_i | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/assets_custody.py` | `_close_active()` | `asset_custody` | update_many | literal {'org_id': org, 'unit_id': unit_id, 'status': {'$in': ACTI | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/assets_intake_pending.py` | `_materialize()` | `asset_item_types` | find | literal {'org_id': org} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/assets_intake_pending.py` | `_materialize()` | `asset_item_types` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': org, 'key': type_key,  | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
@@ -2038,13 +2185,48 @@ Ordered by class, then path. Nothing is omitted.
 | `app/routes/assets_intake_pending.py` | `_materialize()` | `asset_units` | insert_one | literal {'id': unit_id, 'org_id': org, 'item_id': item_id, 'qr_id' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/billing.py` | `signup_organization()` | `feature_flags` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/billing.py` | `signup_organization()` | `subscriptions` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
-| `app/routes/billing.py` | `stripe_webhook()` | `feature_flags` | update_one | literal {'org_id': org_id, 'module_code': mod_code} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
-| `app/routes/billing.py` | `stripe_webhook()` | `subscriptions` | update_one | literal {'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/offers.py` | `get_offer_review()` | `offer_events` | find_one | literal {'offer_id': offer['id'], 'org_id': offer['org_id'], 'even | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/offers.py` | `get_offer_review()` | `offer_events` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': offer['org_id'], 'offe | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
-| `app/routes/offers.py` | `respond_to_offer()` | `offer_events` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': offer['org_id'], 'offe | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `audit_logs` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': 'SYSTEM', 'user_id': ' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
-| `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `audit_logs` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': 'SYSTEM', 'user_id': ' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/routes/procurement.py` | `canonical_warehouse_stock()` | `md_item` | find | literal {'tenant_id': org_id, 'id': {'$in': ids}} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/canonical_material_cost.py` | `canonical_movement_lines()` | `md_item` | find | literal {'tenant_id': org_id, 'id': {'$in': ids}} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/master_write.py` | `tx_body()` | `[<expression>]` | update_one | literal {'id': record_id, 'tenant_id': tenant_id, 'status': IDEMPO | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/overhead_lifecycle.py` | `audit_overhead_event_once()` | `[<expression>]` | find_one | literal {'tenant_id': user['org_id'], 'action': action, 'entity_id | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/overhead_lifecycle.py` | `legacy_audit_once()` | `audit_logs` | find_one | literal {'org_id': user['org_id'], 'action': action, 'entity_id':  | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/migration_readiness.py` | `ledger_batch_reconciliation_report()` | `warehouse_batches` | find | literal {'tenant_id': tenant_id, '$or': [{'projection_source': {'$ | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/migration_readiness.py` | `ledger_batch_reconciliation_report()` | `warehouse_transactions` | find_one | literal {'tenant_id': tenant_id, 'movement_id': mv_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_close_in_transit()` | `warehouse_in_transit` | find_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'dis | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_close_in_transit()` | `warehouse_in_transit` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'dis | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_close_unresolved_discrepancies()` | `warehouse_in_transit` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'dis | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_close_unresolved_discrepancies()` | `warehouse_transactions` | find | literal {'tenant_id': env.tenant_id, 'action': 'discrepancy_resolv | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_drain_batches()` | `warehouse_batches` | find_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_drain_batches()` | `warehouse_batches` | find_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_drain_batches()` | `warehouse_batches` | find_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'lay | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_drain_batches()` | `warehouse_batches` | update_one | literal {'_id': batch['_id'], 'tenant_id': env.tenant_id, 'org_id' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_open_batch()` | `warehouse_batches` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_open_destination_from_layers()` | `warehouse_batches` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_open_destination_from_layers()` | `warehouse_batches` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_open_in_transit()` | `warehouse_in_transit` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'dis | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_record_unresolved_layers()` | `warehouse_in_transit` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'dis | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `_record_unresolved_layers()` | `warehouse_transactions` | find_one | literal {'tenant_id': env.tenant_id, 'movement_id': unresolved_mov | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `apply_projection()` | `material_entries` | update_one | literal {'tenant_id': env.tenant_id, 'org_id': env.tenant_id, 'id' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `rebuild_from_ledger()` | `[<expression>]` | delete_many | literal {'tenant_id': tenant_id, 'projection_source': 'canonical_w | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `rebuild_from_ledger()` | `warehouse_in_transit` | update_one | literal {'tenant_id': tenant_id, 'org_id': tenant_id, 'dispatch_mo | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `rebuild_from_ledger()` | `warehouse_in_transit` | update_one | literal {'tenant_id': tenant_id, 'org_id': tenant_id, 'dispatch_mo | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/projections.py` | `rebuild_from_ledger()` | `warehouse_transactions` | find | literal {'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_begin_with_session()` | `[<expression>]` | find_one | literal {'id': record_id, 'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_begin_with_session()` | `[<expression>]` | find_one | literal {'id': record_id, 'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_begin_with_session()` | `[<expression>]` | find_one | literal {'id': record_id, 'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_begin_with_session()` | `[<expression>]` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_begin_with_session()` | `[<expression>]` | update_one | literal {'id': record_id, 'tenant_id': tenant_id, 'status': IDEMPO | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_idem_complete_with_session()` | `[<expression>]` | update_one | literal {'id': _idempotency_record_id(tenant_id, action, key), 'te | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_record_event_in_session()` | `[<expression>]` | find_one | literal {'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_record_event_in_session()` | `[<expression>]` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_record_event_in_session()` | `audit_chain_head` | find_one | literal {'tenant_id': tenant_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_record_event_in_session()` | `audit_chain_head` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_record_event_in_session()` | `audit_chain_head` | update_one | literal {'tenant_id': tenant_id, 'sequence': prev_sequence, 'integ | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_resolve_item_identity()` | `md_item` | find_one | literal {'tenant_id': tenant_id, 'id': item_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `app/services/warehouse_movements/service.py` | `_resolve_item_identity()` | `md_pending_mapping` | find_one | literal {'tenant_id': tenant_id, 'id': item_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/backfill_asset_qr.py` | `backfill()` | `asset_qr_codes` | find_one | literal {'org_id': org_id, 'entity_type': 'project', 'entity_id':  | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/backfill_asset_qr.py` | `backfill()` | `asset_qr_codes` | find_one | literal {'org_id': org_id, 'entity_type': 'employee', 'entity_id': | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/backfill_asset_qr.py` | `backfill()` | `asset_qr_codes` | find_one | literal {'org_id': org_id, 'entity_type': 'warehouse', 'entity_id' | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
@@ -2057,6 +2239,10 @@ Ordered by class, then path. Nothing is omitted.
 | `scripts/migrate_m19_8_freeze_report_split.py` | `main()` | `employee_daily_reports` | update_one | literal {'id': rid, 'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/migrate_m19_8_freeze_report_split.py` | `main()` | `work_sessions` | find_one | literal {'approved_report_id': rid, 'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/promote_platform_admin.py` | `promote_platform_admin()` | `audit_logs` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': user.get('org_id'), 'u | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `scripts/reset_user_password.py` | `body()` | `audit_logs` | insert_one | literal {'id': str(uuid.uuid4()), 'org_id': org_id, 'user_id': 'sy | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `scripts/reset_user_password.py` | `body()` | `password_reset_tokens` | update_many | literal {'org_id': org_id, 'user_id': uid, 'used_at': None} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `scripts/reset_user_password.py` | `body()` | `users` | count_documents | literal {'id': uid, 'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
+| `scripts/reset_user_password.py` | `body()` | `users` | update_one | literal {'id': uid, 'org_id': org_id, 'is_active': {'$ne': False}, | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `bonus_payments` | delete_many | literal {'org_id': org_id, 'description': {'$regex': '^SEED:'}} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `bonus_payments` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `cash_transactions` | delete_many | literal {'org_id': org_id, 'description': {'$regex': '^SEED:'}} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
@@ -2065,7 +2251,7 @@ Ordered by class, then path. Nothing is omitted.
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `overhead_transactions` | insert_one | none | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 | `scripts/seed_finance_data.py` | `seed_finance_data()` | `users` | find_one | literal {'org_id': org_id} | low — predicate present but hand-written | keep; prefer the tenant view when next edited |
 
-### TENANT_DATABASE (22)
+### TENANT_DATABASE (24)
 
 | path | function | collection | operation | current tenant predicate | risk | action |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -2078,6 +2264,8 @@ Ordered by class, then path. Nothing is omitted.
 | `app/audit/idempotency.py` | `fail_idempotent()` | `audit_idempotency` | update_one | none | none — handle is this tenant's own database | keep |
 | `app/audit/idempotency.py` | `mark_idempotent_step()` | `audit_idempotency` | update_one | none | none — handle is this tenant's own database | keep |
 | `app/audit/store.py` | `_last_event()` | `audit_events` | find_one | literal {'tenant_id': tenant_id} | none — handle is this tenant's own database | keep |
+| `app/audit/store.py` | `has_event()` | `audit_events` | find_one | literal {'tenant_id': tenant_id, 'action': action, 'entity_id': en | none — handle is this tenant's own database | keep |
+| `app/audit/store.py` | `record_event()` | `audit_events` | insert_one | none | none — handle is this tenant's own database | keep |
 | `app/audit/store.py` | `record_event()` | `audit_events` | insert_one | none | none — handle is this tenant's own database | keep |
 | `app/audit/store.py` | `verify_tenant_chain()` | `audit_events` | find | literal {'tenant_id': tenant_id} | none — handle is this tenant's own database | keep |
 | `app/master_data/merge.py` | `_audit_once()` | `[<expression>]` | find_one | literal {'tenant_id': ctx.tenant_id, 'action': action, 'idempotenc | none — handle is this tenant's own database | keep |
@@ -2109,14 +2297,13 @@ Ordered by class, then path. Nothing is omitted.
 | path | function | collection | operation | current tenant predicate | risk | action |
 | --- | --- | --- | --- | --- | --- | --- |
 | `app/core/seed.py` | `seed_data()` | `organizations` | insert_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
-| `app/core/seed.py` | `seed_data()` | `users` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `app/core/seed.py` | `seed_data()` | `users` | insert_one | literal {'id': user_id, 'org_id': org_id, 'email': seed_email, 'pa | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `app/deps/auth.py` | `get_current_user()` | `users` | find_one | literal {'id': user_id, 'org_id': org_id} | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
-| `app/routes/auth.py` | `login()` | `users` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
+| `app/routes/auth.py` | `login()` | `users` | find | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `organizations` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `organizations` | insert_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
-| `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `users` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
-| `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `users` | insert_one | literal {'id': user_id, 'org_id': org_id, 'email': data.email, 'pa | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
+| `app/routes/platform.py` | `bootstrap_create_platform_admin()` | `users` | insert_one | literal {'id': user_id, 'org_id': org_id, 'email': email, 'passwor | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
+| `app/tenancy/identity.py` | `users_with_email()` | `users` | find | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/migrate_m19_8_freeze_report_split.py` | `main()` | `organizations` | distinct | no filter | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/promote_platform_admin.py` | `promote_platform_admin()` | `users` | find | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/promote_platform_admin.py` | `promote_platform_admin()` | `users` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
@@ -2134,6 +2321,7 @@ Ordered by class, then path. Nothing is omitted.
 | `scripts/w0_03e_a2c_settings_identity_migration.py` | `migrate()` | `settings` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/w0_03e_a2c_settings_identity_migration.py` | `migrate()` | `settings` | find_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/w0_03e_a2c_settings_identity_migration.py` | `migrate()` | `settings` | insert_one | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
+| `scripts/w0_04_bootstrap_audit_indexes.py` | `run()` | `[<expression>]` | aggregate | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/w0_04_bootstrap_audit_indexes.py` | `run()` | `[<expression>]` | count_documents | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/w0_04_bootstrap_audit_indexes.py` | `run()` | `[<expression>]` | count_documents | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
 | `scripts/w0_04_bootstrap_audit_indexes.py` | `run()` | `[<expression>]` | count_documents | none | declared — no tenant exists yet, or read-only report | keep; guard enforces the declaration |
@@ -2147,7 +2335,7 @@ Ordered by class, then path. Nothing is omitted.
 
 Every collection the application names is classified in `app/tenancy/ownership.py`; an unclassified one fails the guard (`A2C-UNCLASSIFIED`) rather than passing.
 
-* `ORG_KEYED` (tenant-owned, `org_id`): **124**
-* `TENANT_ID_KEYED` (W0-03/W0-04, `tenant_id`): **3** + prefixes ['md_']
+* `ORG_KEYED` (tenant-owned, `org_id`): **137**
+* `TENANT_ID_KEYED` (W0-03/W0-04, `tenant_id`): **4** + prefixes ['md_']
 * `TENANT_ROOT`: `organizations`
-* `TECHNICAL`: **1**
+* `TECHNICAL`: **4**

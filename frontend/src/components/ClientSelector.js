@@ -1,5 +1,6 @@
 import { useState } from "react";
 import API from "@/lib/api";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -98,7 +99,7 @@ export default function ClientSelector({ projectId, currentClient, onClientUpdat
           first_name: newPerson.firstName,
           last_name: newPerson.lastName,
           email: newPerson.email || null,
-        });
+        }, idempotencyHeaders(newIdempotencyKey()));
         newClient = res.data;
       } else {
         if (!newCompany.name) {
@@ -113,7 +114,7 @@ export default function ClientSelector({ projectId, currentClient, onClientUpdat
           email: newCompany.email || null,
           address: newCompany.addressText || null,
           mol: newCompany.contactPerson || null,
-        });
+        }, idempotencyHeaders(newIdempotencyKey()));
         newClient = res.data;
       }
 

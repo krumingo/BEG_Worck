@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import API from "@/lib/api";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { toast } from "sonner";
 
 export default function ClientsPage() {
@@ -167,10 +168,10 @@ export default function ClientsPage() {
   const handleSave = async () => {
     try {
       if (editingItem) {
-        await API.put(`/clients/${editingItem.id}`, form);
+        await API.put(`/clients/${editingItem.id}`, form, idempotencyHeaders(newIdempotencyKey()));
         toast.success(t("clients.updateSuccess"));
       } else {
-        await API.post("/clients", form);
+        await API.post("/clients", form, idempotencyHeaders(newIdempotencyKey()));
         toast.success(t("clients.createSuccess"));
       }
       setModalOpen(false);
@@ -183,7 +184,10 @@ export default function ClientsPage() {
 
   const handleConfirmDelete = async () => {
     try {
-      await API.delete(`/clients/${editingItem.id}`);
+      // CP-01 (R48.4): a client is never deleted — it is deactivated with a reason
+      const reason = window.prompt("Причина за деактивиране на клиента");
+      if (!reason || !reason.trim()) return;
+      await API.post(`/clients/${editingItem.id}/deactivate`, { reason: reason.trim() }, idempotencyHeaders(newIdempotencyKey()));
       toast.success(t("clients.deleteSuccess"));
       setDeleteOpen(false);
       setRefreshKey((k) => k + 1);

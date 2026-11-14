@@ -1,0 +1,7 @@
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_a6_cash_to_a_counterparty_needs_a_receipt[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_a6_cash_to_a_counterparty_needs_a_receipt[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_a6_cash_to_a_counterparty_needs_a_receipt[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list[real-enforce]
+6 failed, 3 passed, 590 deselected, 1 warning in 7.14s

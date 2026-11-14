@@ -721,4 +721,6 @@ async def list_audit_logs(user: dict = Depends(require_platform_admin), limit: i
         {"org_id": user["org_id"]}, {"_id": 0}
     ).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
     total = await tenant.audit_logs.count_documents({"org_id": user["org_id"]})
-    return {"logs": logs, "total": total}
+    # CP-01 FG-266: rows written before CP-01 may hold a full ЕГН / IBAN — masked on read
+    from app.services.counterparty_rules import mask_for_log
+    return {"logs": mask_for_log(logs), "total": total}

@@ -32,6 +32,10 @@ from ..models.finance import (
     PaymentCreate, AllocatePaymentRequest
 )
 
+from app.services import counterparty_rules as cr
+from app.services.bank_account_guard import (check_allocation, check_payment_target,
+                                             require_selectable_party, resolve_invoice_party)
+
 router = APIRouter(tags=["Finance"])
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -117,6 +121,18 @@ async def _require_tenant_project(user: dict, project_id) -> None:
             "message": "Обектът не съществува в тази фирма"})
 
 
+def _invoice_iban(value) -> Optional[str]:
+    """CP-01 / FG-175: the IBAN printed on an invoice is kept normalised; a malformed one → 422.
+    It is never trusted as a payment target: the payment checks it against the verified account."""
+    from app.services.counterparty_rules import iban_is_valid, normalize_iban
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not iban_is_valid(value):
+        raise HTTPException(status_code=422, detail={"error_code": "IBAN_INVALID",
+                                                     "message": "Невалиден IBAN във фактурата"})
+    return normalize_iban(value)
+
+
 def finance_permission(user: dict) -> bool:
     """Check if user has finance access"""
     return user["role"] in ["Admin", "Owner", "Accountant"]
@@ -145,6 +161,21 @@ def compute_invoice_totals(invoice: dict) -> dict:
 
 def _is_cash_method(method: str) -> bool:
     return str(method or "").strip().lower() in ("cash", "в брой", "вброй", "каса")
+
+
+async def _peek_payment_account(tenant: TenantData, method: str, account_id: Optional[str]) -> dict:
+    """FG-225: the account ``_resolve_payment_account`` WOULD pick, read-only (it may create a
+    default account; the IBAN guard must decide before anything is written)."""
+    if _is_cash_method(method):
+        if account_id:
+            acc = await tenant.financial_accounts.get(account_id)
+            if acc and acc.get("type") == "Cash":
+                return acc
+        return await tenant.financial_accounts.find_one({"type": "Cash"}) or {"type": "Cash"}
+    if account_id:
+        return await tenant.financial_accounts.get(account_id) or {"type": "Bank"}
+    return (await tenant.financial_accounts.find_one({"is_default": True})
+            or await tenant.financial_accounts.find_one({"type": "Bank"}) or {"type": "Bank"})
 
 
 async def _resolve_payment_account(tenant: TenantData, method: str, account_id: Optional[str]) -> str:
@@ -584,6 +615,21 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             raise HTTPException(status_code=400, detail="Изберете обект")
         method = data.get("method") or "Cash"
         tenant = _tenant(user)
+        # CP-01 / FG-225 (c): a documentless expense paid by bank transfer is an outflow to a
+        # payee too — verified account (or, with no payee, the legacy mode: enforce → 409);
+        # in cash to a named counterparty: receipt + recipient (R50.1). Before any write.
+        cp_id = data.get("counterparty_id") if isinstance(data.get("counterparty_id"), str) else None
+        if cp_id:
+            await require_selectable_party(tenant, "counterparty", cp_id)
+        bank_stamp = await check_payment_target(
+            tenant, user, direction="Outflow", method=method,
+            account=await _peek_payment_account(tenant, method, data.get("account_id")),
+            party_type="counterparty" if cp_id else None, party_id=cp_id,
+            bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
+            cash_receipt_file_id=data.get("cash_receipt_file_id"),
+            cash_recipient_name=data.get("cash_recipient_name"),
+            payee_name=data.get("counterparty_name"), payee_eik=data.get("counterparty_eik"),  # FG-242/268
+            path="/finance/other-expense") or {}
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -598,6 +644,9 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             "project_id": project_id, "category": "Други", "is_expense": True,
             "created_at": now, "updated_at": now,
         }
+        if cp_id:
+            payment["counterparty_id"] = cp_id
+        payment.update(bank_stamp)
         await tenant.finance_payments.insert_one(payment)
         await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
                         {"amount": amount, "project_id": project_id})
@@ -623,6 +672,7 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5),
         project_id = data.get("project_id")
         method = data.get("method") or "Cash"
         tenant = _tenant(user)
+        # CP83-02: income is not a payment to a payee — no IBAN / receipt guard here.
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -740,6 +790,8 @@ async def list_invoices(
         query.setdefault("issue_date", {})["$lte"] = to_date
     
     invoices = await tenant.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    invoices = cr.mask_invoice_egn(                                               # FG-294
+        cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user)))           # FG-245
     # W0-03E-A1: the related projects come from the caller's tenant only, in one
     # read; a project id that does not resolve here enriches to empty strings.
     projects_by_id = await tenant.projects.get_many(
@@ -853,12 +905,18 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
+    data.counterparty_vat_no = cr.canonical_vat_input(data.counterparty_vat_no)   # FG-496
     eik_check = validate_eik(data.counterparty_eik or "")
     if not eik_check["valid"]:
         raise HTTPException(status_code=400, detail=eik_check["message"])
     vat_check = validate_vat_number(data.counterparty_vat_no or "")
     if not vat_check["valid"]:
         raise HTTPException(status_code=400, detail=vat_check["message"])
+    # CP-01 R48.4: an inactive / archived counterparty is not chosen for a new invoice → 422
+    _ptype, _pid = await resolve_invoice_party(_tenant(user), {"counterparty_eik": data.counterparty_eik})
+    if _pid:
+        await require_selectable_party(_tenant(user), _ptype, _pid)
+    iban_value = _invoice_iban(data.counterparty_iban)
 
     # Generate or validate invoice number
     invoice_no = data.invoice_no
@@ -906,6 +964,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         "counterparty_mol": data.counterparty_mol,
         "counterparty_email": data.counterparty_email,
         "counterparty_phone": data.counterparty_phone,
+        "counterparty_iban": iban_value,
         "issue_date": data.issue_date,
         "due_date": data.due_date,
         "currency": data.currency,
@@ -942,13 +1001,15 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
-    return {k: v for k, v in invoice.items() if k != "_id"}
+    return cr.mask_invoice_egn({k: v for k, v in invoice.items() if k != "_id"})   # FG-294
 
 
 @router.get("/finance/invoices/{invoice_id}")
 async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     tenant = _tenant(user)
     invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+    invoice = cr.mask_invoice_egn(                                                # FG-294
+        cr.mask_iban_fields(invoice, await cr.full_iban_allowed(user)))            # FG-245
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -992,7 +1053,45 @@ async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5
         {"invoice_id": invoice_id},
         {"_id": 0},
     ).sort("version_no", -1).to_list(100)
-    return versions
+    return cr.mask_invoice_egn(                                                    # FG-294
+        cr.mask_iban_fields(versions, await cr.full_iban_allowed(user)))
+
+
+@router.post("/finance/invoices/{invoice_id}/egn/reveal")
+async def reveal_invoice_egn(invoice_id: str, user: dict = Depends(require_m5),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-294 (R48.3): the full ЕГН printed on an invoice to a natural person — Owner /
+    Accountant only; every reveal is an AuditEvent ``invoice.egn.revealed`` (who, when, which
+    invoice) committed before the value is returned. Every other read shows it masked."""
+    if not cr.can_reveal_egn(user):
+        from app.services.master_write import forbidden
+        raise forbidden("Пълното ЕГН се вижда само от Собственик и Счетоводител (Р48.3)")
+    from app.services.master_write import audit as mw_audit, kw, run_tx
+    tenant = _tenant(user)
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() \
+        else "reveal-" + uuid.uuid4().hex
+
+    async def tx(session):
+        invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                                 {"_id": 0, "id": 1, "counterparty_eik": 1,
+                                                  "egn": 1, "counterparty_vat_no": 1},
+                                                 **kw(session))
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        out = {"counterparty_eik": invoice.get("counterparty_eik") or ""}
+        if invoice.get("egn"):
+            out["egn"] = invoice["egn"]
+        if cr.vat_is_egn(invoice.get("counterparty_vat_no")):       # FG-429
+            out["counterparty_vat_no"] = invoice["counterparty_vat_no"]
+        shown = out.get("egn") or out["counterparty_eik"] or str(out.get("counterparty_vat_no", ""))[2:]
+        await mw_audit(db, session, user, "invoice.egn.revealed", entity_type="invoice",
+                       entity_id=invoice_id, key=key,
+                       diff={"egn_masked": cr.mask_egn(shown), "fields": sorted(out),
+                             "revealed_by": user["id"], "role": user.get("role")})
+        return out
+
+    value = await run_tx(db, tx)
+    return {"id": invoice_id, **value, "revealed": True}
 
 
 @router.put("/finance/invoices/{invoice_id}")
@@ -1011,6 +1110,15 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират. Премахнете плащанията първо.")
 
+    # FG-294: the edit form shows the ЕГН masked — sending it back keeps the stored value
+    if cr.is_masked_egn(data.counterparty_eik):
+        data.counterparty_eik = None
+    # FG-429 / FG-526 / FG-562: canonical, or the echo of the stored value's mask (kept)
+    _vat_action, _vat_value = cr.vat_update(data.counterparty_vat_no, invoice.get("counterparty_vat_no"))
+    if _vat_action == "set" and _vat_value is None:
+        data.counterparty_vat_no = ""          # an explicit clear ("") empties the stored value
+    else:
+        data.counterparty_vat_no = _vat_value if _vat_action == "set" else None
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")
@@ -1031,6 +1139,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             raise HTTPException(status_code=400, detail="Invoice number already exists")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "counterparty_iban" in update:
+        update["counterparty_iban"] = _invoice_iban(update["counterparty_iban"])
+    if update.get("supplier_counterparty_id") and \
+            update["supplier_counterparty_id"] != invoice.get("supplier_counterparty_id"):
+        await require_selectable_party(tenant, "counterparty", update["supplier_counterparty_id"])
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     version_id = str(uuid.uuid4())
 
@@ -1073,7 +1186,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 async def _stamp_and_refresh(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
@@ -1197,7 +1311,8 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/send")
@@ -1234,7 +1349,8 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
@@ -1270,7 +1386,8 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1347,11 +1464,15 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     async def work():
         org_id = user["org_id"]
         tenant = _tenant(user)
+        # CP-01 §1: checked before anything is written; a replay never reaches this.
+        bank_stamp = await _quick_pay_bank_target(tenant, user, invoice_id, data)
         # Addendum C: the remaining check and the writes run under the invoice lock, so two
         # concurrent payments (quick-pay or allocate) can never pay more than the invoice.
         async with _invoice_lock(tenant, invoice_id):
-            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key)
+            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key, bank_stamp)
         updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
+        updated_invoice = cr.mask_invoice_egn(                                     # FG-294
+            cr.mask_iban_fields(updated_invoice, await cr.full_iban_allowed(user)))
         return {
             "ok": True,
             "payment_id": ids["payment_id"],
@@ -1363,8 +1484,30 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     return await _once(user, key, "finance.invoice_payment.create", {"invoice_id": invoice_id, "body": data}, work)
 
 
+async def _quick_pay_bank_target(tenant: TenantData, user: dict, invoice_id: str, data: dict) -> dict:
+    """CP-01 §1 + FG-175: paying a received invoice goes only to a verified bank account of
+    its counterparty; an IBAN on the invoice that is not that account blocks it (+ DQ)."""
+    invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+    if not invoice or invoice.get("direction") == "Issued":
+        return {}
+    party_type, party_id = await resolve_invoice_party(tenant, invoice)
+    method = data.get("method") or data.get("payment_method", "BankTransfer")
+    if party_id:
+        await require_selectable_party(tenant, party_type, party_id)
+    return await check_payment_target(
+        tenant, user, direction="Outflow", method=method,
+        account=await _peek_payment_account(tenant, method, data.get("account_id")),
+        party_type=party_type, party_id=party_id,
+        bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
+        invoice_iban=invoice.get("counterparty_iban"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
+        payee_name=invoice.get("counterparty_name"), payee_eik=invoice.get("counterparty_eik"),  # FG-242
+        path="/finance/invoices/{id}/payments") or {}
+
+
 async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, data: dict,
-                            amount: float, key: str) -> dict:
+                            amount: float, key: str, bank_stamp: Optional[dict] = None) -> dict:
     """The quick-pay write, run while the invoice row is locked. The payment and allocation ids
     are derived from the idempotency key and written as upserts (D5 rule): a retry of the same
     key after a failure between the two writes never adds a second payment."""
@@ -1411,6 +1554,7 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
         "created_at": now,
         "updated_at": now,
     }
+    payment.update(bank_stamp or {})
     await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": payment}, upsert=True)
     allocation = {
         "id": allocation_id,
@@ -1832,9 +1976,23 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
     key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.amount)  # PAY-01-C01: finite > 0, else 422, nothing written
 
+    # CP-01 §1: an outgoing payment to a counterparty is executed only to a verified bank
+    # account (FLOW-010 §8.1, FLOW-025 L187) — checked before the key is taken, nothing written.
+    # A replay of the same key returns the first result (_once) before this runs again.
+
     async def work():
-        # Route to the correct account: cash → Каса, otherwise the chosen account.
         tenant = _tenant(user)
+        if data.counterparty_id:
+            await require_selectable_party(tenant, "counterparty", data.counterparty_id)
+        bank_stamp = await check_payment_target(
+            tenant, user, direction=data.direction, method=data.method,
+            account=await _peek_payment_account(tenant, data.method, data.account_id),
+            party_type="counterparty" if data.counterparty_id else None,
+            party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
+            cash_receipt_file_id=data.cash_receipt_file_id, cash_recipient_name=data.cash_recipient_name,
+            payee_name=data.counterparty_name, payee_eik=data.counterparty_eik,   # FG-242/268
+            path="/finance/payments") or {}
+        # Route to the correct account: cash → Каса, otherwise the chosen account.
         account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -1856,6 +2014,9 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             "created_at": now,
             "updated_at": now,
         }
+        if data.counterparty_id:
+            payment["counterparty_id"] = data.counterparty_id
+        payment.update(bank_stamp)
         await tenant.finance_payments.insert_one(payment)
     
         await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
@@ -1953,6 +2114,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                 if payment["direction"] != expected_dir:
                     raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
                 if alloc.invoice_id not in invoices:
+                    # CP-01 / FG-225 (a): the payment must have gone to THIS counterparty's
+                    # verified account (or be a receipted cash payment) — before any write
+                    await check_allocation(tenant, user, payment, invoice)
                     invoices[alloc.invoice_id] = invoice
                     invoice["_remaining"] = await _invoice_remaining(tenant, invoice, own_ids)
                 remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
@@ -2203,7 +2367,21 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+
+    # CP-01 R65 (Krum, 09.11.2026, D11): the PDF of an invoice to a natural person is the
+    # official document and carries the FULL ЕГН — so it is downloaded only by the Owner and
+    # the Accountant (other roles → 403), and every download is an AuditEvent (who, when,
+    # which invoice), committed before the document is returned. Company invoices unchanged.
+    # FG-429: a VAT number BG + ЕГН is an ЕГН too. FG-455: the AuditEvent is written only
+    # once the PDF is built (a failed build is no download), still before it is returned.
+    egn_value = invoice.get("egn") or (invoice.get("counterparty_eik")
+                                       if cr.possible_egn(invoice.get("counterparty_eik")) else None)
+    person_invoice = bool(egn_value) or cr.vat_is_egn(invoice.get("counterparty_vat_no"))
+    if person_invoice and not cr.can_reveal_egn(user):
+        from app.services.master_write import forbidden
+        raise forbidden("PDF на фактура към физическо лице (с ЕГН) се сваля само от "
+                        "Собственик и Счетоводител (Р65)")
+
     # Get org info
     org = await tenant.own_organization({"_id": 0})
     org_name = org.get("name", "") if org else ""
@@ -2289,7 +2467,11 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     cp_name = invoice.get("counterparty_name", "")
     if cp_name:
         client_lines.append(f"<b>{cp_name}</b>")
-    if invoice.get("counterparty_eik"):
+    # FG-455: a natural person's identifier is printed as "ЕГН" (R65: in full), also when it
+    # is stored only in ``egn``; a company's as "ЕИК"
+    if egn_value:
+        client_lines.append(f"ЕГН: {egn_value}")
+    elif invoice.get("counterparty_eik"):
         client_lines.append(f"ЕИК: {invoice['counterparty_eik']}")
     if invoice.get("counterparty_vat_no"):
         client_lines.append(f"ДДС номер: {invoice['counterparty_vat_no']}")
@@ -2369,7 +2551,20 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     
     doc.build(elements)
     buffer.seek(0)
-    
+
+    if person_invoice:
+        # R65 / FG-455: built — now the download is recorded, before the bytes leave
+        from app.services.master_write import audit as mw_audit, run_tx
+        shown = egn_value or str(invoice.get("counterparty_vat_no"))[2:]
+
+        async def _audit_download(session):
+            await mw_audit(db, session, user, "invoice.pdf.downloaded", entity_type="invoice",
+                           entity_id=invoice_id, key="pdf-" + uuid.uuid4().hex,
+                           diff={"egn_masked": cr.mask_egn(shown),
+                                 "downloaded_by": user["id"], "role": user.get("role")})
+
+        await run_tx(db, _audit_download)
+
     filename = f"invoice_{invoice.get('invoice_no', invoice_id)}.pdf"
     return StreamingResponse(
         buffer,

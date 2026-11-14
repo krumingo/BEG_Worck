@@ -45,6 +45,7 @@ def run(monkeypatch, backend, mode, scenario):
             await h._bootstrap_indexes(op)
             await h._seed(op, sysdb)
             app = h._app(monkeypatch, op, sysdb, mode)
+            await h.verified_supplier(monkeypatch, op, "cp-81")   # CP-01: guard stays on
             from app.routes import (dashboard, reports, revenue_expense, material_smr,
                                     subcontractors, labor_smr)
             for mod in (dashboard, reports, revenue_expense, material_smr, subcontractors, labor_smr):
@@ -370,6 +371,9 @@ def test_f81_03_subcontractor_advance_is_not_project_income(monkeypatch, backend
                     "aggregate_paid": agg["invoices"]["own"]["paid"],
                     "forecast_incoming": flow["summary"]["total_incoming"]}
 
+        # CP-01 (FG-427, setup only): the subcontractor exists and its bank account is verified
+        # through the real register (Accountant enters, Owner verifies) — the guard stays on
+        await h.verified_supplier(monkeypatch, op, "sub-f81", "828282828", kind="subcontractor")
         before = await income()
         if backend == "real":                   # the real endpoint (it aggregates with $round)
             r = await c.post("/api/subcontractor-packages/pkg-f81/advances",

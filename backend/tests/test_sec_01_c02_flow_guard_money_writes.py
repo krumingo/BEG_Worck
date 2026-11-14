@@ -160,6 +160,10 @@ async def seed_c02_records(op_db, fx: Dict[str, Any]) -> None:
         org, p1 = t["tenant_id"], t["project_id"]
         tech = t["users"]["technician"]["id"]
         if tkey == "A":
+            # CP-01 FG-290: the cash receipt is a file record of tenant A (legacy media_files
+            # until W0-06 — the File Registry — lands)
+            await op_db.media_files.insert_one({"id": "file_cash_receipt", "org_id": org,
+                                                "filename": "bon.jpg", "created_at": now})
             await op_db.financial_accounts.insert_one({
                 "id": rid(tkey, "cash"), "org_id": org, "name": "Каса", "account_type": "Cash",
                 "currency": "EUR", "created_at": now})
@@ -237,7 +241,9 @@ def ids_of(tkey: str) -> Dict[str, str]:
 def body_for(key: str, t: Dict[str, Any], rec_tkey: str, project_id: Optional[str]):
     tech = t["users"]["technician"]["id"]
     if key == "subpay":
-        return {"package_id": rid(rec_tkey, "pkg"), "amount": 10}
+        # CP-01 R50.1: cash to a counterparty only against a receipt with the recipient's name
+        return {"package_id": rid(rec_tkey, "pkg"), "amount": 10,
+                "cash_receipt_file_id": "file_cash_receipt", "cash_recipient_name": "Бригадир"}
     if key == "subpay_unknown_account":
         return {"package_id": rid(rec_tkey, "pkg"), "amount": 10,
                 "account_id": rid(rec_tkey, "no-such-account")}

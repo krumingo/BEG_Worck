@@ -183,6 +183,37 @@ class MoneyWrite:
                 **mw.wf.record_ref})
         return mw
 
+    @classmethod
+    async def completed_replay(cls, user: Dict[str, Any], action: str, raw_key: Optional[str],
+                               body: Any) -> Optional[str]:
+        """CP-01 FG-481 (R29): a READ-ONLY look at the key registry. When this key already
+        COMPLETED with the same request, the stored result's reference — so a route answers
+        the replay with the original result BEFORE any state guard runs (a retry after the
+        payee was archived still gets its 201). A known key with a DIFFERENT body → 409
+        IDEMPOTENCY_CONFLICT. Reserves nothing, writes nothing; otherwise (no key, a new key,
+        in progress) → None and the route goes on to its checks and ``begin`` as usual."""
+        from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED,
+                                           _record_id)
+        key = (raw_key or "").strip()
+        if not key or len(key) > MAX_KEY_LENGTH:
+            return None
+        # CP83-M5 (A2C): the literal tenant filter, as the registry stores it (tenant_id)
+        rec = await db[IDEMPOTENCY_COLLECTION].find_one(
+            {"tenant_id": user["org_id"],
+             "id": _record_id(user["org_id"], action, "%s:%s" % (user["id"], key))},
+            {"_id": 0, "status": 1, "request_fingerprint": 1, "result_reference": 1})
+        if not rec:
+            return None
+        if rec.get("request_fingerprint") not in (None, request_fingerprint(body)):
+            # CP83-M3: the same key with a different body → 409, before any state guard
+            # (exactly the answer ``begin`` gives); nothing is written
+            raise HTTPException(status_code=409, detail={
+                "error_code": "IDEMPOTENCY_CONFLICT",
+                "message": "The same operation key was already used with a different payload"})
+        if rec.get("status") != IDEMPOTENCY_COMPLETED:
+            return None
+        return rec.get("result_reference")
+
     def new_id(self, name: str) -> str:
         """A fresh id, or — under a key — the SAME id on every attempt of that key."""
         if self.key is None:
@@ -210,6 +241,21 @@ class MoneyWrite:
             pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
             if set(pattern) != {"_id"}:
                 raise
+
+    @staticmethod
+    def stored_response(reference: Optional[str]) -> Any:
+        """CP-01 FG-511 (R29): the ORIGINAL response stored with a completed key (a
+        ``json:`` reference), or None for a key that stored only a row id (older keys)."""
+        ref = reference or ""
+        if not ref.startswith(_PAYLOAD_PREFIX):
+            return None
+        return json.loads(ref[len(_PAYLOAD_PREFIX):])
+
+    @staticmethod
+    def as_stored(payload: Any) -> Any:
+        """The response exactly as ``__aexit__`` stores it — the first answer then equals
+        every replay byte for byte."""
+        return json.loads(json.dumps(payload, default=str, ensure_ascii=False, sort_keys=True))
 
     def replay_payload(self) -> Any:
         """The stored response of a completed computed write (``result_payload``)."""

@@ -1,0 +1,54 @@
+# CP-01 gates — main cd03324 vs branch (real MongoDB 7.0 replica set rs0, this container)
+
+## main cd03324
+R0:  814 passed, 12 warnings in 159.92s (0:02:39)
+W0:  15 failed, 1177 passed, 12 warnings in 147.74s (0:02:27)
+
+## branch
+R0:     814 passed, 12 warnings in 161.79s (0:02:41)
+W0:     9 failed, 1165 passed, 12 warnings in 139.24s (0:02:19)
+PAY-01: 630 passed, 3 warnings in 157.39s (0:02:37)
+CP-01:  401 passed, 3 skipped, 3 warnings in 121.09s (0:02:01)
+PM-01:  6 passed, 12 warnings in 202.01s (0:03:22)  (-rs: no SKIPPED line)
+
+## W0 failures on main (15)
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+
+## W0 failures on branch (9 — every one also fails on main)
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+
+## Full DB-free suite (PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider tests, no W0_03_REAL_MONGO_URL, REACT_APP_BACKEND_URL → closed port)
+main:   166 failed, 2337 passed, 1773 skipped, 11 warnings, 996 errors in 443.21s (0:07:23)
+branch: 160 failed, 2527 passed, 1978 skipped, 11 warnings, 993 errors in 464.40s (0:07:44)
+FAILED/ERROR set: branch ⊂ main (diff below: lines only on main, none only on the branch)
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_manifest_mode_mismatch_is_refused_before_any_change
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_manifest_records_the_staging_mode
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_matching_manifest_passes_the_r26_precheck
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]

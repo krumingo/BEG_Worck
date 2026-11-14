@@ -44,9 +44,10 @@ def _writes(pid=None):
                      {"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 13}, (2, 0)),
         "account_funding": ("/api/finance/account-funding", {"account_id": BANK_A, "amount": 10},
                             {"account_id": BANK_A, "amount": 14}, (1, 0)),
+        # CP-01 R59: a small expense with no payee only with a till receipt
         "other_expense": ("/api/finance/other-expense",
-                          {"project_id": "prj-1", "amount": 10, "method": "Cash"},
-                          {"project_id": "prj-1", "amount": 15, "method": "Cash"}, (1, 0)),
+                          {"project_id": "prj-1", "amount": 10, "method": "Cash", "cash_receipt_file_id": "file_till_receipt"},
+                          {"project_id": "prj-1", "amount": 15, "method": "Cash", "cash_receipt_file_id": "file_till_receipt"}, (1, 0)),
         "other_income": ("/api/finance/other-income",
                          {"project_id": "prj-1", "amount": 10, "method": "Cash"},
                          {"project_id": "prj-1", "amount": 16, "method": "Cash"}, (1, 0)),
@@ -375,7 +376,8 @@ def test_d_project_must_exist_in_this_tenant(monkeypatch, backend, mode, url):
             assert r.status_code == 422, (project, r.text)
             assert r.json()["detail"]["error_code"] == "PROJECT_NOT_FOUND", r.text
         assert await snap(op) == before                     # no row, no audit, no key record
-        r = await c.post(url, headers=hdr("acct-a"), json={"project_id": "prj-1", "amount": 10, "method": "Cash"})
+        r = await c.post(url, headers=hdr("acct-a"), json={"project_id": "prj-1", "amount": 10, "method": "Cash",
+                                                          "cash_receipt_file_id": "file_till_receipt"})  # R59
         assert r.status_code == 201, r.text
         row = await op.finance_payments.find_one({"id": r.json()["id"]}, {"_id": 0})
         assert row["project_id"] == "prj-1" and row["org_id"] == ORG_A

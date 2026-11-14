@@ -114,6 +114,10 @@ async def _seed(op, sysdb):
     for prj_id, org in (("prj-1", ORG_A), ("prj-a", ORG_A), ("prj-b", ORG_B)):
         await op.projects.insert_one({"id": prj_id, "org_id": org, "code": prj_id, "name": prj_id,
                                       "status": "Active"})
+    # CP-01 FG-290: a cash till receipt is a file record of the tenant (legacy media_files
+    # until W0-06 — the File Registry — lands)
+    await op.media_files.insert_one({"id": "file_till_receipt", "org_id": ORG_A,
+                                     "filename": "bon.jpg", "context_type": "finance_payment"})
     for acc_id, org, typ in ((CASH_A, ORG_A, "Cash"), (BANK_A, ORG_A, "Bank"), (BANK_B, ORG_B, "Bank")):
         await op.financial_accounts.insert_one({
             "id": acc_id, "org_id": org, "name": acc_id, "type": typ, "currency": "EUR",
@@ -182,6 +186,39 @@ async def snap(op, colls=MONEY):
         docs = await op[coll].find({}, {"_id": 0}).to_list(None)
         out[coll] = sorted(bson.BSON.encode({k: d[k] for k in sorted(d)}) for d in docs)
     return out
+
+
+def _iban(bban: str) -> str:
+    digits = "".join(str(int(ch, 36)) for ch in bban + "BG00")
+    return "BG%02d%s" % (98 - int(digits) % 97, bban)
+
+
+async def verified_supplier(monkeypatch, op, cp_id="cp-sup", eik="818181818", kind="counterparty"):
+    """CP-01 (FLOW-006 / FLOW-010 §8, R48.1; as CP83-04): an outgoing bank payment goes only to
+    a VERIFIED account of its payee. The supplier gets one through the real register —
+    entered by the Accountant, verified by the Owner (a different person) from two
+    independent sources. The guard itself stays on (production = enforce)."""
+    from app.routes import bank_accounts
+    monkeypatch.setattr(bank_accounts, "db", op)
+    coll = op.counterparties if kind == "counterparty" else op.subcontractors
+    if not await coll.find_one({"id": cp_id}):
+        await coll.insert_one({"id": cp_id, "org_id": ORG_A, "name": "Доставчик",
+                               "type": "supplier", "eik": eik, "active": True})
+    acct = {"id": "acct-a", "org_id": ORG_A, "role": "Accountant", "email": "acct-a@pay01.example"}
+    owner = {"id": "owner-a", "org_id": ORG_A, "role": "Owner", "email": "owner-a@pay01.example"}
+    register = (bank_accounts.register_counterparty_bank_account if kind == "counterparty"
+                else bank_accounts.register_subcontractor_bank_account)
+    acc = await register(
+        cp_id, {"iban": _iban("UNCR7000152" + eik[:7])}, user=acct,
+        idempotency_key="reg-" + cp_id)
+    verified = await bank_accounts.verify_bank_account(acc["id"], {
+        "version": acc["version"], "counterparty_confirmed_by": "управител на доставчика",
+        "sources": [{"kind": "contract", "description": "договор за доставка",
+                     "source_origin": "contract"},
+                    {"kind": "phone_known", "description": "обаждане на записания телефон",
+                     "source_origin": "known_contact"}]}, user=owner, idempotency_key="ver-" + cp_id)
+    assert verified["status"] == "verified"
+    return verified
 
 
 async def pay(c, amount=200.0, direction="Inflow", account=BANK_A, who="acct-a"):
@@ -436,7 +473,8 @@ def test_09_project_pnl_other_cost_nets_to_zero(monkeypatch, backend, mode):
     async def scenario(c, op):
         from app.services.project_pnl import compute_project_pnl
         r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
-            "project_id": "prj-a", "amount": 25, "method": "Cash"})
+            "project_id": "prj-a", "amount": 25, "method": "Cash",
+            "cash_receipt_file_id": "file_till_receipt"})          # CP-01 R59: till receipt
         assert r.status_code == 201, r.text
 
         before = await compute_project_pnl(ORG_A, "prj-a")

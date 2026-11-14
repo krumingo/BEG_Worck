@@ -1,0 +1,20 @@
+CP-01 gates — FLOW Guard pass 43 + merge of main 3863610: code head 62543b3 (evidence ddc6e9a)
+a2c        W0-03E-A2C tenant boundary guard: 248 module(s) checked, 0 violation(s)
+cp01       747 passed, 15 skipped, 1 warning in 215.47s (0:03:35)
+pay01      630 passed, 1 warning in 143.66s (0:02:23)
+sec01      30 passed, 10 warnings in 90.61s (0:01:30)
+sec02      31 passed, 10 warnings in 158.36s (0:02:38)
+subadv     9 passed, 10 warnings in 20.11s
+r0         814 passed, 10 warnings in 139.79s (0:02:19)
+w0         10 failed, 1164 passed, 10 warnings in 122.46s (0:02:02)
+pm01       6 passed, 10 warnings in 154.96s (0:02:34)
+warehouse  1438 passed, 19 warnings in 667.84s (0:11:07)
+full       160 failed, 3158 passed, 2682 skipped, 11 warnings, 993 errors in 400.20s (0:06:40)
+full_real  161 failed, 4798 passed, 1038 skipped, 11 warnings, 996 errors in 1673.33s (0:27:53)
+Baseline main 3863610:
+w0         16 failed, 1176 passed, 10 warnings in 121.25s (0:02:01)
+pay01      630 passed, 1 warning in 140.47s (0:02:20)
+full       166 failed, 2787 passed, 2303 skipped, 11 warnings, 993 errors in 371.49s (0:06:11)
+full_real  167 failed, 4063 passed, 1023 skipped, 11 warnings, 996 errors in 1400.12s (0:23:20)
+W0 new vs main: 0; DB-free full new: 0; real-Mongo full new: 0
+Frontend (yarn test): branch 252/253, main 3863610 252/253 — the same src/lib/__tests__/analytics.test.js fails on both.

@@ -1,0 +1,24 @@
+# CP-01 after FLOW Guard pass 23 / audit fixes — gates vs main 4bca18a (real MongoDB 7.0 rs0)
+cp01: 482 passed, 3 skipped, 1 warning in 135.04s (0:02:15)
+pay01: 630 passed, 1 warning in 149.95s (0:02:29)
+sec01: 30 passed, 10 warnings in 105.97s (0:01:45)
+r0: 814 passed, 10 warnings in 160.22s (0:02:40)
+w0: 9 failed, 1165 passed, 10 warnings in 148.87s (0:02:28)
+pm01: 6 passed, 10 warnings in 205.62s (0:03:25)
+full DB-free: 160 failed, 2598 passed, 2018 skipped, 11 warnings, 993 errors in 463.97s (0:07:43)  (main 4bca18a: 166 failed, 2366 passed, 1777 skipped, 11 warnings, 993 errors in 453.65s (0:07:33))
+FAILED/ERROR lines only on the branch: 0
+W0 failures only on the branch: 0
+A1 486 units / A2C 241 modules: 0 violations
+audit-item tests on fe13c43 (real): 40 failed, 445 deselected, 1 warning in 23.14s
+
+W0 failures (branch):
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+frontend yarn test: 173 passed

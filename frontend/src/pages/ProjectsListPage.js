@@ -455,7 +455,7 @@ function ProjectWizard({ form, setForm, editing, managers, saving, onSave, statu
       const body = newClient.type === "company"
         ? { type: "company", companyName: newClient.companyName, eik: newClient.eik, phone: newClient.phone, email: newClient.email }
         : { type: "person", fullName: newClient.fullName, phone: newClient.phone, email: newClient.email };
-      const res = await API.post("/clients", body);
+      const res = await API.post("/clients", body, idempotencyHeaders(newIdempotencyKey()));
       const created = res.data;
       setClients(prev => [created, ...prev]);
       setForm(f => ({ ...f, owner_id: created.id, owner_type: newClient.type, _clientName: newClient.type === "company" ? newClient.companyName : newClient.fullName }));

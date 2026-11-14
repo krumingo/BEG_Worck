@@ -1,0 +1,608 @@
+# CP-01: counterparties — verified IBAN before payment, never deleted, hidden ЕГН, rights and audit
+
+Package: `docs/architecture/tasks/CP-01_COUNTERPARTY_IBAN_EGN_NO_DELETE.md` (branch `claude/happy-meitner-bmcnel` @ e96cde8). Decision **R48** (Krum, 08.11.2026). Oracle **Q003** (`claude/flow-guard` @ 687786e). FLOW Guard FG-165, FG-167, FG-171, FG-172, FG-175 (partly).
+
+Canon: FLOW-010 §3.3, §8, §12; FLOW-006; FLOW-025 L146, L187; FLOW-032 L46, L99, L105, L109–112; FLOW-040 §9, §11; CLAUDE.md §2, §8, §14, §15.
+
+Branch `claude/cp-01-counterparty-iban` from main `cd03324`. No merge, no deploy, no production access.
+
+## 1. What was wrong on main (proved first)
+
+`backend/tests/test_cp_01_counterparty_iban_egn.py` was run against main `cd03324` on a real MongoDB 7.0 replica set before any fix. Result: **174 failed, 28 passed** (`red_on_main_cd03324_real_mongo.txt`).
+
+| Problem | Red test(s) on main |
+|---|---|
+| A payment to an unverified or changed IBAN is executed | `test_red_payment_to_an_unverified_account_is_refused`, `…quick_pay_with_an_invoice_iban…`, `…subcontractor_payment…`, `…during_an_iban_change…` |
+| DELETE of a counterparty, client, company or person deletes or soft-deletes it | `test_red_delete_never_deletes` (5 × 3 modes) |
+| Viewer, SiteManager and Technician create and edit clients, companies, persons and subcontractors, and change the client of a project | `test_red_other_roles_cannot_create_or_edit` (81 of 108 cells red; the 27 green ones are the counterparty and client routes that were already office-only) |
+| A Viewer (and every role) reads the full ЕГН | `test_red_no_reader_returns_the_full_egn` (18 red) |
+
+## 2. Source of truth and data model (additive)
+
+| Collection | Owner | Content |
+|---|---|---|
+| `verified_bank_accounts` (new) | FLOW-010 §3.3 | `party_type` (counterparty / subcontractor), `counterparty_id`, `iban` (normalised, mod-97), `bic`, `bank_name`, `holder`, `currency`, `status`, `is_change`, `replaces_account_id`, `evidence_file_ids`, `entered_by`/`entered_at`, `verification` {verified_by, verified_at, 2 sources {kind, description, source_origin}, counterparty_confirmed_by, evidence_file_ids}, `approvals` [{approval_id, approver_id, role, at, version}], `version`, `replaced_by_account_id` |
+| `finance_payments` (FLOW-006, unchanged ledger) | FLOW-006 | Outgoing payments to a counterparty now carry `bank_account_id` and `bank_account_iban_masked`. No second ledger. |
+| `counterparties`, `clients`, `companies`, `persons`, `subcontractors` | FLOW-010 / FLOW-032 | new fields: `lifecycle_status` (active / inactive / archived), `archived`, `lifecycle_reason`, `lifecycle_changed_by/at`, `version`, `created_by`, `updated_by`; counterparty `eik_change_request`, `eik_change_history` |
+| `dq_issues` (new, minimal) | until W0-07 | DQ rows: `INVOICE_IBAN_MISMATCH` (critical), `BANK_ACCOUNT_CHANGE` (critical), `DUPLICATE_EIK` (critical), `PAYMENT_WITHOUT_VERIFIED_ACCOUNT` (shadow) |
+| `counterparty_eik_claims`, `company_eik_claims` (new) | bookkeeping | one row per ЕИК; two concurrent writes of the same ЕИК write the same row in their transactions, so one conflicts and is retried |
+
+Statuses: `pending_verification` „за проверка“, `verified` „проверена“, `replaced` „заменена“, `rejected` „отказана“.
+
+Records written before CP-01 have no `lifecycle_status`; it is derived from the legacy `active`/`is_active` flag (`counterparty_rules.lifecycle_of`). No backfill is needed.
+
+## 3. Rules implemented
+
+### 3.1 Verified bank accounts (FG-165, FG-175, R48.1, R48.2)
+
+| Endpoint | Rule |
+|---|---|
+| `POST /counterparties/{id}/bank-accounts`, `POST /subcontractors/{id}/bank-accounts` | Owner / Admin / Accountant. IBAN mod-97 → else 422 `IBAN_INVALID`. Evidence is a list of `file_id`s; a URL or path → 422 `EVIDENCE_NOT_FILE_ID`. The same IBAN pending or verified again → 409. Status „за проверка“. If the party already has a verified account, this is a **change**: a critical DQ row is written and the Owner and the Accountant are notified at once (R48.2). |
+| `POST /bank-accounts/{id}/verify` | Owner or Accountant only (403). The person who entered it → 409 `SAME_PERSON_VERIFICATION`. Two sources of different kinds → else 422 `TWO_SOURCES_REQUIRED` / `SOURCES_NOT_INDEPENDENT`; both from the invoice (L274) → 422. `counterparty_confirmed_by` is required. The exact `version` is required (CAS). A first IBAN becomes „проверена“ (R48.1: no separate approval). |
+| `POST /bank-accounts/{id}/approve-change` | Only for a verified change. Owner or Accountant, two **different** people, each approving the exact `version` → 409 `VERSION_CONFLICT` / `ALREADY_APPROVED`. On the second approval, in the same transaction: the new account → „проверена“, the old → „заменена“, notification to Owner and Accountant. |
+| `POST /bank-accounts/{id}/reject` | Owner or Accountant, reason, „отказана“. |
+| `GET …/bank-accounts` | Owner / Admin / Accountant. Full IBAN only for Owner / Accountant; Admin sees the mask (D5). |
+
+### 3.2 FLOW-006 blocking (`app/services/bank_account_guard.py`)
+
+Applied to every path that executes an outgoing payment to a counterparty, before anything is written:
+- manual payment / advance: `POST /finance/payments` (new optional `counterparty_id`, `bank_account_id`);
+- invoice quick-pay: `POST /finance/invoices/{id}/payments` (the counterparty comes from `supplier_counterparty_id`, else from the ЕИК on the invoice);
+- subcontractor payment: `POST /subcontractor-payments`.
+
+| Case | Result |
+|---|---|
+| `bank_account_id` named and not this counterparty's, or not „проверена“ | 409 `BANK_ACCOUNT_NOT_VERIFIED`, nothing written |
+| IBAN on the invoice (new field `counterparty_iban`, FG-175) ≠ a verified account of the counterparty | critical DQ `INVOICE_IBAN_MISMATCH` + 409 |
+| the counterparty has a verified account | the payment goes to it and is stamped with it; a pending change never gets the money |
+| the counterparty has only unverified accounts | 409 |
+| legacy: no account named or registered, or no counterparty identified | `BANK_ACCOUNT_GUARD_MODE`: `off` = log only, `shadow` = DQ row + metric, `enforce` = 409. **Default `shadow`** (D1) |
+| incoming payment; cash payment without account or IBAN | not checked (D6) |
+| inactive or archived counterparty | 422 `COUNTERPARTY_NOT_SELECTABLE` |
+
+Nothing unlocks the block: no flag, role or Approval (FLOW-025 L187). A verified IBAN is not an approval of the payment (L296): every PAY-01 rule (amount, reason, key, locks) still applies.
+
+### 3.3 Never deleted (FG-167, R48.4)
+
+- `DELETE /counterparties/{id}`, `/clients/{id}`, `/persons/{id}`, `/companies/{id}` → **409 `COUNTERPARTY_NO_DELETE`**, nothing written, with the alternatives in the detail. This applies to used and unused records, in every `MASTER_DATA_MODE`.
+- `POST …/{id}/deactivate` and `…/reactivate`: Accountant / Admin / Owner. `POST …/{id}/archive`: Admin / Owner. Reactivating an **archived** record: Admin / Owner only (D8). Each needs a reason (400 otherwise) and writes a canonical AuditEvent.
+- Archived records are hidden from the lists unless `include_archived=true`, and they are read-only (update → 409 `COUNTERPARTY_ARCHIVED`).
+- Inactive or archived records cannot be chosen for a payment, an invoice (by ЕИК or `supplier_counterparty_id`), the client of a project (client-link, project create/update) or a counterparty→client link. Each of those returns 422. History stays readable.
+- `PUT` with a changed `active` / `is_active` → 422 `USE_LIFECYCLE_ROUTE`. The same value is accepted.
+
+### 3.4 Rights, audit, idempotency (FG-171, R48.5, R48.6, R22, R29)
+
+- Create and update of counterparties, clients (including find-or-create when it creates), companies, persons and subcontractors, plus the counterparty↔client link: **Owner, Admin, Accountant only**. Everyone else gets 403 before anything is read or written. R22: the client of a project (`PATCH /projects/{id}/client-link`, and owner changes in `PUT /projects/{id}`) is changed only by those three roles.
+- Every such write needs an `Idempotency-Key` (428 without one). It runs in **one transaction** (`auth_tx.run_in_transaction`) holding the CAS on `version`, the canonical AuditEvent (`record_event(session=…)`, FLOW-010, R1) and the completion of the key. A replay returns the first result. The same key with another body → 409. The ЕГН and IBAN are masked in every AuditEvent diff.
+- ЕИК: a new counterparty or company with an existing ЕИК (normalised) → **409 `EIK_ALREADY_EXISTS`**, plus a critical DQ row written outside the aborted transaction. The first ЕИК of a record is set directly. A **change** of an existing ЕИК needs `eik_change_reason` and is stored as a pending request. `POST /counterparties/{id}/eik-change/approve` (or `/reject`) is done by a **different** Owner / Admin / Accountant, who names the exact `request_id` → otherwise 409 `SAME_PERSON_APPROVAL` / `VERSION_CONFLICT`. The duplicate check runs again on approval. Merge is not here (FG-166 → CP-02).
+- Rights were only narrowed. The PM-01 diff (§5) has no cell that newly writes.
+
+### 3.5 ЕГН (FG-172, R48.3)
+
+- Every reader shows **`******1234`**, for every role, Owner and Accountant included: `/persons` list, detail and find-by-phone, `/clients/search/unified`, `/projects/{id}/client-info`, `/projects/{id}/invoice-context`, `GET /projects/{id}` (`invoice_details` copied before CP-01), and the create responses and conflict messages.
+- `import-client-invoice` no longer copies a full ЕГН into a project.
+- **`POST /persons/{id}/egn/reveal`**: Owner and Accountant only (403 for everyone else). Each reveal commits a canonical AuditEvent `person.egn.revealed` (who, when, whose; the event holds only the mask) **before** the value is returned.
+- Test: 6 roles × 7 readers, plus import-client-invoice — no full ЕГН in any response.
+
+## 4. Migration
+
+`backend/scripts/cp_01_migrate_bank_accounts.py --mongo-url … --db …` runs as a dry run by default; `--apply` writes.
+- IBANs found in counterparty and subcontractor fields (`iban`, `IBAN`, `bank_iban`, `bank_account`, `bank_account_iban`) become `verified_bank_accounts` rows with status „за проверка“, **never** „проверена“. Rows are per tenant, with deterministic ids and `$setOnInsert`, so the script is idempotent. Invalid IBANs are only reported, masked.
+- The report also counts projects that still hold a person's full ЕГН in `invoice_details` (masked on read; nothing is rewritten).
+- It never deletes. Tested in `test_migration_dry_run_then_apply_is_pending_and_idempotent` (mongomock + real).
+
+## 5. Tests and gates
+
+All runs: this container, MongoDB 7.0 replica set `rs0` in Docker, `W0_03_REAL_MONGO_URL` set, `PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider`. Raw summaries: `gates.txt`.
+
+| Gate | main cd03324 | branch |
+|---|---|---|
+| CP-01 (`test_cp_01_counterparty_iban_egn.py`, mongomock + real, off/shadow/enforce) | real: **174 failed**, 28 passed | **401 passed**, 3 skipped (the mongomock copies of the transaction-concurrency test; all 202 real cases pass) |
+| R0 (`tests/test_r0_*.py`) | 814 passed | **814 passed** |
+| W0 (`tests/test_w0_*.py`) | 15 failed, 1177 passed | **9 failed**, 1165 passed — every one of the 9 is also among main's 15 (see below) |
+| PAY-01 (`tests/test_pay_01*.py`) | — | **630 passed, 0 skipped** |
+| PM-01 (`test_pm_01_permission_matrix.py`, real, `-rs`) | — | **6 passed, 0 skipped**; matrix regenerated by the harness only |
+| A1 guard | 472 units, 0 violations | 482 units, **0 violations** |
+| A2C guard | 234 modules, 0 violations | 239 modules, **0 violations** |
+| frontend `yarn test` | — | 17 suites, 170 passed |
+| full DB-free suite (`tests/`, no real Mongo) | 166 failed, 2337 passed, 996 errors (live-API tests without a server) | 160 failed, 2527 passed, 993 errors — the FAILED/ERROR set is a **strict subset** of main's, nothing new |
+
+**W0, honestly:** the known 15 failures are all in `test_w0_03e_legacy_routes.py`; the `TENANT_NOT_REGISTERED` ones come from the order of modules in the full run. Six of them were the persons/companies cells of the "an unused identity may still be hard-deleted" matrix. R48.4 removes that contract for counterparties, clients, companies and persons, so those four collections moved out of `DELETE_PATHS` into a new test, `test_cp01_counterparty_identities_are_never_deleted` (409, both tenants' rows intact, no AuditEvent, foreign id → 404). That is why the count went from 15 to 9 and not to 15. No test that passed on main fails on the branch.
+
+Test files changed because the contract changed:
+- `test_w0_03e_legacy_routes.py`: the 4 collections are covered by the new test. The shadow, adapter-permission, tenant-resolution and invalid-mode tests that used `clients` as their example now use `location_nodes`, which still has the legacy delete.
+- `test_w0_03e_a2b_two_tenant_gate.py`: the HTTP helper sends an `Idempotency-Key` (R29). The ownership assertions are unchanged.
+- `docs/architecture/W0-03E-A1_INVENTORY.md` was regenerated (377 → 361 accesses, all SAFE or FIXED, none UNSCOPED); `W0-03E-A2B_INVENTORY.md` §1/§3 were regenerated (the 5 new collections are classified in `ownership.py`).
+
+**PM-01:** 767 → 789 routes. 279 existing cells changed, all toward refusal: 403 for the non-office roles, and 428 for the office roles because the harness sends no key. 528 cells belong to the 22 new routes. No cell newly writes. Per route: `pm01_matrix_diff_vs_main.md`.
+
+## 6. Rollback
+
+Revert the commits. What is left behind:
+- the new collections (`verified_bank_accounts`, `dq_issues`, the claim rows);
+- the new fields on the records (old code ignores them);
+- archived or inactive records keep `active` / `is_active = false`, which old code reads as soft-deleted.
+
+Nothing is deleted automatically. Before a revert, list `verified_bank_accounts` and the records with `lifecycle_status`, and Krum decides what happens to them. There is no index change.
+
+## 7. Debts (not done, for the orchestrator / Krum)
+
+| ID | Debt |
+|---|---|
+| ~~CP-01-D1~~ | **Closed by Addendum A / Q005.** The guard is always `enforce` unless `ENV` is staging, development or test (Р15). Production, an unknown `ENV` or a missing `ENV` → enforce. |
+| ~~CP-01-D2~~ | **Closed by Addendum A / R50.** Direct writes stay 403, and the 403 names the existing propose path `POST /api/master-data/pending` (`master_data.pending.propose`). The catalog is not widened: SiteManager may propose, Viewer and Technician may not. Remaining: the pending module accepts only the channels ai, ocr, excel and import, so a typed (human) proposal from a field user has no channel → **CP-01-D18**. |
+| **CP-01-D3** | There is no canonical DQ/Approval runtime (W0-07). DQ rows live in `dq_issues`. The IBAN-change approvals are stored on the bank-account record and the ЕИК approval on the counterparty, each with an `approval_id` in the AuditEvent. They move to W0-07 when it exists. |
+| **CP-01-D4** | Evidence `file_id`s are checked for shape only (no URL/path). The File Registry (W0-06 stack) is not on main, so their existence is not checked. |
+| ~~CP-01-D5~~ | **Closed by Addendum A / Q005.** The full IBAN is shown to the Owner and the Accountant, and to an Admin only when one of that Admin's own active RoleAssignments carries `sensitive.iban.read` (none by default; the catalog is untouched). Everyone else gets `****1234`, and so do the AuditEvent, DQ rows, logs and payment stamps. |
+| ~~CP-01-D6~~ | **Closed by R50.1.** A cash payment to a counterparty needs `cash_receipt_file_id` and `cash_recipient_name` (422 `CASH_RECEIPT_REQUIRED`). While the counterparty has an unverified IBAN, cash is refused too: 409 `PAYEE_BLOCKED_PENDING_IBAN`. Cash that names no counterparty is not checked. There is no UI field for the receipt yet (D11). |
+| ~~CP-01-D7~~ | **Closed by R50.2.** The entrant can never approve. The verifier may be approver 1. Approver 2 must be a different person (409 `SAME_PERSON_APPROVAL`). |
+| ~~CP-01-D8~~ | **Closed by R50.3.** Only an Admin or the Owner can bring a record back from the archive, with a reason and an AuditEvent. In the same transaction every verified IBAN of that counterparty or subcontractor goes back to „за проверка“ (`bank_account.reverification_required`), and payments to it are blocked until a new verification. |
+| **CP-01-D9** | Subcontractors are a separate collection from counterparties (FLOW-010 wants one MasterOrganization). The register serves both; unification and de-duplication across counterparties, companies and subcontractors → CP-02 / FG-166. The subcontractor ЕИК is not checked for duplicates. |
+| **CP-01-D10** | ЕГН: `/clients/search/unified` still accepts a full ЕГН as the query, so it works as an existence check. The Master Data reports (`md_person` identifiers, `uniqueness.mask_value`) use the old `12****90` mask. An invoice to a person now gets a masked ЕГН from import-client-invoice / invoice-context; issuing one with the full ЕГН needs the reveal (no UI yet). |
+| **CP-01-D11** | Frontend: there is no UI yet for the bank-account register, verification and approvals, archive/reactivate, ЕИК-change approval or ЕГН reveal. The old delete buttons on Counterparties and Clients now deactivate with a prompt for the reason, and every changed call sends an `Idempotency-Key`. A UX design is needed from Krum. |
+| **CP-01-D12** | After the merge of #69, `POST /subcontractor-payments` has SEC-01's money-write permission and Idempotency-Key; the CP-01 guard runs before the key is reserved. `POST /finance/other-expense` (documentless, no counterparty) is still not guarded. |
+| **CP-01-D13** | `PUT /projects/{id}` with an owner change now enforces R22 and selectability, but it has no key and no AuditEvent of its own; the client-link route has both. |
+| **CP-01-D14** | The rewritten routes write only the canonical AuditEvent, not the legacy `audit_logs` rows (`counterparty_created`, `client_created`, `created person/company`). A reader of `audit_logs` for these events would no longer see them (W0-04 parallel-record debt). |
+| **CP-01-D15** | A real standalone mongod (no replica set) now refuses these master-data writes with 503 (auth_tx has no fallback). Production Atlas is a replica set. |
+| **CP-01-D16** | ЕИК uniqueness uses claim rows, not a unique DB index, because legacy data may already hold duplicates. An index, after a duplicate report, is a follow-up. |
+| **CP-01-D17** | The R48.2 notification is the existing in-app `notifications` collection. There is no e-mail or push. |
+| **CP-01-D18** | A typed (human) proposal from a field user: the existing `master_data.pending.propose` refuses a human channel by design (W0-03). Allowing one is a model decision for W0-03 / Krum. |
+
+## 8. Addendum A (08.11.2026): R50 + Q005, and the merge of #69
+
+Package: Addendum A in `CP-01_COUNTERPARTY_IBAN_EGN_NO_DELETE.md` (branch `claude/happy-meitner-bmcnel` @ d8dc6c2).
+
+| Point | Code | Tests (`test_cp_01_counterparty_iban_egn.py`) |
+|---|---|---|
+| D1 production = enforce | `counterparty_rules.bank_guard_mode` (`ENV` via `build_info.environment_label`) | `test_a1_production_is_always_enforce` (8 cases), `test_a1_production_refuses_a_legacy_payment_even_with_shadow_set` |
+| D2 propose path | `master_records.require_writer`: 403 + `propose` | `test_a2_other_roles_are_pointed_to_the_pending_proposal` |
+| D5 IBAN view | `bank_accounts.full_iban_allowed`; `mask_iban` → `****1234` | `test_iban_is_masked_for_roles_that_do_not_verify` (Admin masked, then full with `sensitive.iban.read`) |
+| D6 cash | `bank_account_guard._check_cash` on manual, quick-pay and subcontractor payments | `test_a6_cash_to_a_counterparty_needs_a_receipt`; `test_red_payment_to_an_unverified_account_is_refused` (cash blocked) |
+| D7 three people | `approve_bank_account_change` | `test_a7_entrant_verifier_approvers_are_three_people`, `test_iban_change_needs_verification_and_double_approval` |
+| D8 unarchive | `master_records._reverify_bank_accounts` | `test_a8_unarchive_sends_the_iban_back_to_verification` |
+
+**The merge of origin/main `4bca18a` (#69, SEC-01)** is a merge commit, not a rebase. Both sides of every conflict were kept:
+- `PATCH /projects/{id}/client-link` keeps SEC-01's `require_money_write` and adds CP-01's key, R22, CAS and AuditEvent.
+- `PUT /projects/{id}` runs SEC-01's `check_money_write` and then CP-01's R22 check and selectability.
+- `POST /subcontractor-payments` keeps SEC-01's `MoneyWrite`, cap reservation and ledger-first order. The CP-01 guard runs before `MoneyWrite.begin`, so a refusal reserves no key.
+- `ProjectOperationsPage`: SEC-01's money keys stay, and the other writes send a key too.
+
+The A1 and A2B inventories and PM-01 were regenerated with their own tools. One existing fixture changed because R50.1 changed the rule: SEC-01-C02 `body_for("subpay")` now sends a cash receipt and a recipient name. The SEC-01 tests that use it are unchanged.
+
+Gates for this head: `gates_addendum_a.txt`.
+
+**Gates for this head**, against main `4bca18a`:
+
+| Gate | main `4bca18a` | this head |
+|---|---|---|
+| R0 | 814 | 814 |
+| W0 | 15 failed | 9 failed, all among main's 15 |
+| PAY-01 | 630 | 630 |
+| SEC-01 | 30 | 30 |
+| PM-01 (real, `-rs`) | — | 6 passed, 0 skipped |
+| CP-01 | — | 439 passed, 3 skipped (mongomock copies of the concurrency test) |
+| A1 / A2C guards | 0 / 0 | 0 / 0 |
+| full DB-free suite | 166 failed, 993 errors | 160 failed, 993 errors; the branch's failing set is a strict subset of main's |
+| frontend | — | 173 passed |
+
+The Addendum A tests fail on the previous head `ea51030`: 23 red (`addendum_a_red_on_ea51030_real_mongo.txt`).
+
+**PM-01 against `4bca18a`:** 264 changed cells, all toward refusal; 528 cells on the 22 new routes; **0 cells that newly write** (`pm01_matrix_diff_vs_main.md`).
+
+**SEC-01 evidence** (`SEC-01/results.json`, `SEC-01-C01/results.json`) was regenerated by its harnesses. The only difference is `op.audit_events` added to the client-link writes: that is CP-01's canonical AuditEvent. No status changed.
+
+Two tests changed because the rules changed:
+- `test_sec_01_money_write_permissions.KEY_REQUIRED` now also lists client-link. PM-01 shows 428 there because the harness sends no key.
+- `test_w0_03e_a1_collision_matrix.set_mode` sets `ENV=test` and the IBAN guard to `off`. This tenant-isolation fixture has no verified accounts, and the IBAN rule itself is proved in the CP-01 tests.
+
+## 9. FLOW Guard pass 23 / audit of `ea51030`
+
+Every item below has its own test in `test_cp_01_counterparty_iban_egn.py`. Each test runs in off / shadow / enforce, on mongomock and on real Mongo. On the previous head `fe13c43` they are **40 red** on real Mongo (`fg_pass23_red_on_fe13c43_real_mongo.txt`).
+
+| Finding | Fix | Test |
+|---|---|---|
+| **FG-225 (a)**: allocate had no guard | `bank_account_guard.check_allocation`, called for each invoice before any allocation is written. A payment to another counterparty → 409 `PAYEE_MISMATCH`. A bank payment to an account that is not this counterparty's verified one → 409. An invoice IBAN that differs from that account → critical DQ row + 409. A legacy payment with no account recorded → by mode. Cash without a receipt → 422. | `test_fg225a_allocate_checks_the_payee_and_its_account` |
+| **FG-225 (b)**: the method comes from the account | `check_payment_target(account=…)`: a Cash account means cash; any other account means a bank transfer, whatever `method` / `payment_method` says. Manual payment and quick-pay use `_peek_payment_account`, which reads the account the payment will use without creating anything; the subcontractor payment uses its resolved account. | `test_fg225b_the_account_decides_the_method` |
+| **FG-225 (c)**: other-expense had no guard | Guarded. It takes an optional `counterparty_id`, `bank_account_id` and cash receipt. Bank with no payee → legacy rule (enforce → 409). | `test_fg225c_other_expense_by_bank_is_guarded` |
+| **CP83-01 / FG-228**: the entrant could approve | The entrant ≠ any approver, and approver 2 ≠ approver 1 → 409 `SAME_PERSON_APPROVAL` (already in `fe13c43`). | `test_a7_entrant_verifier_approvers_are_three_people` (probe K1 = the entrant approves → 409) |
+| **FG-226**: full ЕГН in invoice-details, `/projects`, `/projects/{id}` | `_mask_invoice_details`: a person owner's `eik`, any 10-digit value, and `egn` / `tax_id` are masked on create/update of a project (**never stored in full**) and in every project reader. The migration masks existing copies (`--apply`); the original stays in `persons`. | `test_red_no_reader_returns_the_full_egn` (6 roles × 10 readers), `test_fg226_a_stored_project_never_holds_a_full_egn`, migration test |
+| **FG-227**: mask format and search | One mask, `******1234`, now also in the Master Data reports (`uniqueness.mask_value`; W0-03C assertion updated). `/clients/search/unified` matches on ЕГН only for Owner / Accountant. | `test_fg227_search_by_full_egn_only_for_owner_and_accountant`, `test_fg227_master_data_report_uses_the_one_egn_mask` |
+| **FG-229**: subcontractor ЕИК duplicates | `master_records.eik_holder` / `claim_eik`: one ЕИК check across counterparties **and** subcontractors, in both directions, with the shared claim row → 409 `EIK_ALREADY_EXISTS` + DQ. Subcontractor create is office-only, with a key and AuditEvent. | `test_fg229_subcontractor_eik_is_one_per_organisation` |
+| **FG-230**: one DQ schema | `dq_issues` rows now use #81's schema: `id, org_id, type, title, entity_type, entity_id, status (open/resolved), owner_role ("accountant"), opened_at, updated_at`, plus the CP-01 fields `code, severity, message, data, occurrences`. **After #81 merges:** a single shared writer (#81's `sync_invoice_issue` and CP-01's `dq_issue`) and the resolve path → CP-01-D21. | `test_fg230_dq_rows_have_the_one_schema_of_81` |
+| **FG-175 (FLOW-010 §8.4)**: our own IBAN on outgoing invoices | **Debt CP-01-D20.** Main has no field that carries our own IBAN on an outgoing invoice: not the invoice model, invoice settings, organization profile or PDF. The project's `invoice_details.iban` is the *client's* IBAN. There is nothing to check yet. When one is added, it must be chosen from `verified_bank_accounts` (party_type `own`), and sending must be blocked with a critical DQ row on a mismatch. | — |
+
+**Every outflow path** (FG-225: "list EVERY path"):
+
+| Path | Payee | Guard |
+|---|---|---|
+| `POST /finance/payments` (manual / advance) | `counterparty_id` | yes |
+| `POST /finance/invoices/{id}/payments` (quick-pay) | invoice → counterparty | yes |
+| `POST /finance/payments/{id}/allocate` | invoice → counterparty | yes (new) |
+| `POST /finance/other-expense` | optional `counterparty_id` | yes (new) |
+| `POST /subcontractor-payments` | subcontractor | yes; method from the account (fixed) |
+| `POST /finance/transfers`, `/finance/account-funding` | own accounts only | not a counterparty payment |
+| pay runs (`pay_runs._write_salary_outflows`), HR advances / loans / repayments | employees (FLOW-028) | not a counterparty; HR guest loans → debt CP-01-D22 |
+
+**New debts:**
+- **CP-01-D19:** `invoices.counterparty_eik` of a *person* buyer is a full ЕГН typed into an ЕИК field. Masking it in the invoice JSON would break invoice editing (the masked value fails validation on PUT), so it needs a separate buyer-ЕГН field with a reveal step.
+- **CP-01-D20:** FG-175 / §8.4, our own IBAN (above).
+- **CP-01-D21:** after #81 merges, one shared DQ writer and resolve path.
+- **CP-01-D22:** an HR loan to a guest (`guest_name`) is an outflow to a person who is outside the counterparty register.
+
+## 10. Early audit of `7e0b914`: CP83-02, CP83-03
+
+| Finding | Fix | Test |
+|---|---|---|
+| **CP83-02 (blocking)**: the outflow guard had also landed in `create_other_income`. The other-expense edit was a `str.replace`, and other-income contains the identical block. | Removed from other-income: income is not a payment to a payee. I checked every other CP-01 insertion for such duplicates; there are none, apart from the intentional `counterparty_iban` on both InvoiceCreate and InvoiceUpdate. | `test_cp83_02_other_income_is_never_blocked`: income to a Bank or Cash account, with and without a counterparty (one of them with a pending IBAN), in off, shadow and enforce → 201. The auditor's probe file `docs/audit/probes/cp01/test_probe_cp01.py` (K1–K3, 84 cases) passes. |
+| **CP83-03**: the migration masked `invoice_details` with no AuditEvent and could destroy data | A copy is masked **only** when it belongs to a person owner or is the `egn` field (never a 10-digit company tax id), **and** the canonical `persons` record holds the same full ЕГН. Each masked project gets one AuditEvent `project.invoice_details.egn_copy_masked` (masked values only). Every other copy is kept as it is, readers mask it, and a DQ issue „ЕГН копие без каноничен запис“ (owner_role accountant) is opened. `--apply` refuses to run without the `--plan-token` from the dry run. The project create/update path uses the same rule (`_store_invoice_details`). | `test_migration_dry_run_then_apply_is_pending_and_idempotent`, `test_fg226_a_stored_project_never_holds_a_full_egn` |
+
+On `7e0b914` these tests are **7 red** on real Mongo (`cp83_red_on_7e0b914_real_mongo.txt`). Gates for this head: `gates_cp83.txt`.
+
+## 11. CP83-04 and the merge of main `0750d75` (#71, SEC-02)
+
+**CP83-04 (blocking): the #55 fixture was stale**
+- On real Mongo, `test_warehouse_canonical_c26l_n_invoice_status` was 33 red: `edit_racing_send_and_pay` ×30 and `paused_edit_after_payment_is_409` ×3.
+- **Cause:** the fixture's received invoice names no supplier. Its bank quick-pay is therefore a legacy payment with no verified account, and in production mode (no `ENV`, so `enforce`) it is correctly refused with 409.
+- **Fix:** the guard stays on. The fixture now creates a supplier counterparty and links the invoice to it (`supplier_counterparty_id`). The supplier's IBAN goes through the real register: the Accountant enters it (`register_counterparty_bank_account`), and the Owner, a different person, verifies it from two independent sources with the counterparty's confirmation (`verify_bank_account`).
+- **Result:** the file is 72 passed (33 red with the old fixture on the same code). The **whole warehouse suite on real Mongo is 1121 passed**.
+
+**Merge of main `0750d75`**
+- Merged with a merge commit (`616a66c`).
+- One conflict, the imports in `subcontractors.py`; both sides were kept (CP-01 guard + SEC-02 finance read).
+- PM-01 and the SEC-01 / SEC-01-C01 evidence were regenerated by their harnesses. Against main, the SEC-01 evidence differs only by CP-01's added `op.audit_events`.
+- The inventories were regenerated and did not change.
+
+**Gates** (against main `0750d75`):
+
+| Gate | Result |
+|---|---|
+| CP-01 | 488 passed |
+| PAY-01 | 630 passed |
+| SEC-01 | 30 passed |
+| SEC-02 | 31 passed |
+| R0 | 814 passed |
+| W0 | 10 failed, all among main `0750d75`'s 16 |
+| PM-01 | 6 passed, 0 skipped |
+| Full DB-free suite | no line only on the branch |
+
+Details in `gates_cp83_04.txt`.
+
+## 12. FLOW Guard pass 24 (on `7e0b914`)
+
+On `e36af6e` these tests are 24 red, 6 passed on real Mongo (`fg_pass24_red_on_e36af6e_real_mongo.txt`). The 6 that pass are the Owner/Accountant "full view" cases.
+
+| Finding | Fix | Test |
+|---|---|---|
+| **FG-241** | = CP83-02, already fixed in `6449dac` (other-income is never guarded) | `test_cp83_02_other_income_is_never_blocked` |
+| **FG-242**: cash to a payee given only by `counterparty_name` / ЕИК passed | `bank_account_guard.resolve_payee`: if no `counterparty_id` is given, the ЕИК, or else an exact (case-insensitive) name matching **one** counterparty, resolves the payee. Every cash outflow **to a payee** (named or resolved) needs a receipt `file_id` + recipient. While the resolved counterparty has an unverified IBAN → 409 `PAYEE_BLOCKED_PENDING_IBAN`. Wired into manual payments, other-expense, quick-pay (invoice name / ЕИК) and allocate. Cash with no payee at all (a withdrawal) is not checked. | `test_fg242_cash_to_a_payee_named_only_by_name_or_eik` |
+| **FG-243**: a pending change verified before the archive survived the unarchive | On unarchive (R50.3), **every** live account (verified **and** pending) goes back to „за проверка“ with its verification, approvals and `replaces_account_id` cleared, plus one AuditEvent per account. The pre-archive second approval → 409. | `test_fg243_unarchive_resets_a_pending_change_too` |
+| **FG-244**: subcontractors had no lifecycle routes | `POST /subcontractors/{id}/deactivate`, `/reactivate`, `/archive`, with the same rules as counterparties (R48.4, R50.3). The subcontractor list hides archived records (`include_archived`). An inactive or archived subcontractor is not chosen for a new package or payment (422). | `test_fg244_subcontractor_deactivate_archive_reactivate` |
+| **FG-245**: full IBAN in legacy fields | `counterparty_rules.mask_iban_fields` + `full_iban_allowed` (Owner / Accountant, Admin only with `sensitive.iban.read`). Applied to: counterparties list / detail / write responses (`iban`), subcontractors list / detail (`bank_iban`), projects list / detail / invoice-details (`invoice_details.iban`), finance invoices list / detail / write responses / quick-pay (`counterparty_iban`), and the turnover drill report. A project form that sends back the masked value never overwrites the stored one (`keep_stored_if_masked`). | `test_fg245_legacy_iban_fields_masked_by_role` (6 roles × 10 readers), `test_fg245_a_masked_form_value_never_overwrites_the_stored_iban` |
+
+**Whichever merges second (#81 or #83):** both PRs add `"dq_issues"` to `ownership.py` (#81 under its own family; #83 under FAMILY_AUDIT). The second one to merge must keep **one** registration; otherwise the A2B classification test sees a duplicate. The row schema is already the same (§9, FG-230).
+
+## 13. FLOW Guard pass 26 (on `bc0d1c7`)
+
+On `bc0d1c7` these tests are 18 red, 6 passed on real Mongo (`fg_pass26_red_on_bc0d1c7_real_mongo.txt`). The 6 that pass are the Owner/Accountant full-view cases of FG-267.
+
+| Finding | Fix | Test |
+|---|---|---|
+| **FG-266**: a typed ЕГН with no canonical record leaked into `audit_logs` and the create response | `counterparty_rules.mask_for_log` masks every IBAN, ЕГН and possible ЕГН, for every role, in: the legacy `audit_logs` details of a project update, every CP-01 AuditEvent diff (`master_records.diff`), and `/audit-logs` on read (rows written before CP-01). The project create response goes through the same reader masking. Storage still follows CP83-03: the copy is kept, masked on read, and a DQ issue is opened. | `test_fg266_a_typed_egn_never_reaches_logs_or_responses` |
+| **FG-267**: a 10-digit value with no owner, or with an unconfirmed company owner, was shown in full | A 10-digit `eik` / `tax_id` is a *possible ЕГН* unless the owner is a confirmed company (`owner_type == "company"` with an `owner_id`). Every role except Owner and Accountant sees it masked. A confirmed company's 10-digit tax id is never masked. The same rule applies on write and in the migration: kept, plus a DQ issue. | `test_fg267_a_possible_egn_without_a_company_owner_is_masked` (6 roles × 3 readers + the company control) |
+| **FG-268** (superseded by R59, see §14): the cash block could be bypassed with a name variant or with `counterparty_eik` | A `counterparty_eik` in the request is always resolved. It decides the payee; if it belongs to a different counterparty than `counterparty_id` → 409 `PAYEE_MISMATCH`. Names are matched after normalising case, whitespace, punctuation and quotes, Bulgarian legal forms (ООД/ЕООД/АД/ЕАД/ЕТ/СД/КД…) and Cyrillic→Latin transliteration. An **ambiguous** name blocks if **any** of its matches has an unverified IBAN. | `test_fg268_name_variants_and_eik_do_not_bypass_the_cash_block` |
+
+**For Krum (FG-268):** should a named cash payment be required to carry a `counterparty_id`? ~~CP-01-D23~~ **Decided: R59** (§14).
+
+## 14. R59 (Krum, 08.11.2026; FG-268) and the merge of main `1ea98fe` (#77, #74)
+
+**R59:** a cash payment to a company or a person is possible **only with a counterparty chosen from the list** (`counterparty_id`). If it is missing, the Accountant creates it first. Small expenses with no counterparty (fuel, a shop) are allowed only with a till receipt (касов бон). The R50.1 block always applies.
+
+**The new rule** (`bank_account_guard._check_cash`, which replaces the name matching):
+
+| Cash outflow | Result |
+|---|---|
+| `counterparty_id` (or a counterparty the invoice / package is linked to) | receipt `file_id` + recipient name; while its IBAN is unverified → 409 `PAYEE_BLOCKED_PENDING_IBAN` |
+| a payee named only by `counterparty_name` or `counterparty_eik` | **422 `COUNTERPARTY_REQUIRED`**, nothing written; this also covers a received invoice that is linked to no counterparty |
+| no payee at all | only with a till receipt (`cash_receipt_file_id`) → recorded with `cash_expense_without_payee: true`; otherwise 422 `CASH_RECEIPT_REQUIRED` |
+
+**The ЕИК stays as a defence:**
+- If the ЕИК belongs to a different counterparty than `counterparty_id` → 409 `PAYEE_MISMATCH`.
+- On a bank transfer named only by ЕИК, the payee is resolved from it, so its IBAN rules apply.
+
+The name normalisation and matching code from FG-268 was removed; it is no longer the gate.
+
+**Tests:**
+- `test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list`
+- `test_fg268_r59_the_eik_stays_a_defence`
+- `test_a6_cash_to_a_counterparty_needs_a_receipt` (its no-payee case: till receipt)
+
+**PAY-01 fixtures:** four PAY-01 tests post a cash `other-expense` with no payee and no receipt, and R59 refuses that with 422 `CASH_RECEIPT_REQUIRED` (24 cells red). Each body now carries a till receipt (`cash_receipt_file_id`). No assertion changed: the amounts, idempotency, project-in-tenant and reversal checks are the same. `other-income` is not guarded (CP83-02) and was left unchanged.
+
+On `9f86d0b` the new rule is 6 red; `r59_red_on_9f86d0b_real_mongo.txt`. The ЕИК-defence test passes there by design: it guards behaviour that already existed.
+
+**Merge of `1ea98fe`:**
+- Merge commit `e8bf97f`.
+- Only generated evidence conflicted (`PM-01/run_meta.json`, `SEC-01-C01/results.json`). It was taken from main and regenerated by its harnesses.
+- The code merged cleanly.
+
+Gates for this head: `gates_r59.txt`.
+
+## 15. FLOW Guard pass 28 (FG-275, FG-267 remaining, R59 variants) and the merge of main `3699c3b`
+
+**FG-275 (R48.3): every full display is audited.**
+- Ordinary reads return the ЕГН **masked for every role, Owner and Accountant included**. This covers `GET /projects`, `GET /projects/{id}`, `GET /projects/{id}/invoice-details`, and the PUT/POST project responses.
+- The `possible_visible` exception for Owner / Accountant was removed.
+- The full value comes only from `POST /persons/{id}/egn/reveal` (Owner / Accountant), which writes `person.egn.revealed` before the value is returned.
+
+**FG-267 (remaining): a 10-digit value counts as a company tax id only when the owner is a real company of this tenant.**
+- `owner_type=company` alone is not enough.
+- An unknown `owner_id`, another tenant's company, or a person → the value is masked as a possible ЕГН.
+- The check is a read of `companies` through TenantData (`projects._company_confirmed`). `counterparty_rules.egn_copy_fields` takes `company_confirmed` and defaults to *not a company*.
+- The migration script uses the same check, so such a copy is kept and gets a DQ issue.
+
+**R59 variants:** the cash test now also covers each variant FLOW Guard proved: a typo, a Latin spelling, an unknown ЕИК, a name with an unknown ЕИК, each of those without a receipt, and a chosen counterparty without a receipt. All give 422 and write nothing. These already passed on `6fcd345`, where R59 landed.
+
+**Tests:**
+- `test_fg275_owner_and_accountant_see_the_full_egn_only_by_reveal`
+- `test_fg267_a_possible_egn_without_a_company_owner_is_masked`, now for all 6 roles, with unknown / foreign-tenant / person owners
+- the migration test, with case `pu`
+- `test_fg242_r59_…`, with the variants
+
+Red on `6fcd345`: 42 failed (`pass28_red_on_6fcd345_real_mongo.txt`).
+
+**Merge:** main `3699c3b` (#87, canon R56–R59, docs only) merged with a merge commit; no conflicts.
+
+**D9 (debt, for the orchestrator):** an ЕГН copy in `invoice_details` that has **no canonical `persons` record** is kept (CP83-03), but no role can see it in full now, because there is no reveal for a project copy. The way to use it is the DQ issue „ЕГН копие без каноничен запис“: the Accountant creates the person, whose ЕГН is then revealed with an audit. A separate audited `invoice-details` reveal would need a decision.
+
+Gates for this head: `gates_pass28.txt`.
+
+## 16. FLOW Guard pass 30 (FG-290, FG-294) and the merge of main `44e8d97` (#76, #79)
+
+**FG-290: the till receipt is a file of this tenant.** Every cash outflow `cash_receipt_file_id` must be an existing, active file record of **this** tenant. This covers a counterparty from the list, a small expense with no payee, an invoice payment, an allocation and a subcontractor payment.
+- An invented id (`"zzz"`), another tenant's file, or a file whose state is deleted / archived / quarantined / rejected / superseded (or with `deleted_at` / `is_deleted`) → **422 `CASH_RECEIPT_NOT_REGISTERED`**, nothing written.
+- The check runs in every mode, like the rest of the cash rules.
+- *Which registry:* W0-06 (File Registry, FLOW-016) is **NOT STARTED** in the Gate Matrix, so the tenant's file records today are the legacy `media_files`, read through TenantData (`bank_account_guard._require_registered_receipt`). No second registry was created. **D10** below.
+- The test fixtures (CP-01, PAY-01, SEC-01-C02) now register the receipts they use as tenant files.
+
+**FG-294 (R48.3): the ЕГН on an invoice.** An invoice to a natural person carries the ЕГН in `counterparty_eik` (10 digits; a Bulgarian ЕИК has 9 or 13).
+- That value, and any `egn` field, is masked `******1234` for **every role**, Owner / Accountant / Admin included, in every invoice read and write response:
+  - `GET /finance/invoices`, `/finance/invoices/{id}`, `/finance/invoices/{id}/versions` (the snapshots too);
+  - the update, lines, send and cancel responses, and the quick-pay response;
+  - the turnover drill (`/reports/turnover-by-counterparty/{id}/invoices`) and `/clients/{id}/invoices`.
+- `cr.mask_invoice_egn` applies it, recursively.
+- The full value only from **`POST /finance/invoices/{id}/egn/reveal`**: Owner / Accountant only, others get 403. It writes the AuditEvent `invoice.egn.revealed` (masked value, who, role) in the transaction before returning the value.
+- A masked value sent back by the edit form keeps the stored ЕГН.
+- The API already refuses a new 10-digit `counterparty_eik` (validator: 9 or 13 digits), so an ЕГН is on an invoice only from legacy or imported data. The validator was not changed.
+- This closes D9 for **invoice** copies. A project `invoice_details` copy with no canonical person stays D9.
+
+**Tests:**
+- `test_fg290_the_cash_receipt_is_a_file_of_this_tenant`
+- `test_fg294_an_invoice_egn_is_masked_for_every_role_and_revealed_with_an_audit`
+
+Red on `1e455e3`: 12 failed (`pass30_red_on_1e455e3_real_mongo.txt`).
+
+**Merge `44e8d97`:**
+- Merge commit `2f64d70`.
+- One code conflict: the import lines of `routes/subcontractors.py`, resolved as the union of both sides.
+- `PM-01/run_meta.json` and the A1 / A2B inventories were taken from main and regenerated by their tools; the A1/A2/A2B/A2C static guards are 122 passed.
+
+**Debts:**
+- **D10:** the receipt check reads legacy `media_files`. When W0-06 lands, switch `_require_registered_receipt` to the File Registry (`file_id`, active state, tenant). Also, today a `media_files` row can be hard-deleted through `DELETE /media/{id}`. A receipt that is financial evidence should not be deletable; that belongs in W0-06.
+- **D11:** the invoice **PDF** (`GET /finance/invoices/{id}/pdf`) prints `counterparty_eik` in full, because it is the legal document sent to the client. Whether a PDF to a natural person should mask the ЕГН, or be generated as an audited reveal, is a decision for Krum. It was left unchanged.
+
+Gates for this head: `gates_pass30.txt`.
+
+## 17. R65 (Krum, 09.11.2026, D11) and the merge of main `1525a1e` (#81)
+
+**R65:** the PDF of an invoice to a natural person is the official document and carries the **full ЕГН**.
+- Only the Owner and the Accountant may download it. Other roles (Admin included) → 403, nothing written.
+- Every download writes the AuditEvent `invoice.pdf.downloaded` (who, role, when, which invoice, the masked ЕГН) in a transaction, before the document is returned.
+- *Which PDFs:* `GET /finance/invoices/{id}/pdf` of an invoice that carries an ЕГН, meaning a 10-digit `counterparty_eik` or an `egn` field. A company invoice's PDF (9 / 13-digit ЕИК) is unchanged: Admin may download it, and no AuditEvent is written. This is the reading of R65 ("PDF на фактура към физическо лице…"); the orchestrator is told, to confirm.
+- Test: `test_r65_invoice_pdf_with_an_egn_only_owner_accountant_and_audited`. It covers positive (Owner, Accountant), forbidden (Admin, SiteManager, Viewer, Technician), cross-tenant (404) and a company invoice unchanged. Red on `4929451`: 6 of 6 (`r65_red_on_4929451_real_mongo.txt`).
+- D11 is closed.
+
+**Merge `1525a1e` (#81 WH-FIX-01):**
+- Merge commit `4f32e96`, no code conflicts.
+- The generated files (A1 / A2B inventories, PM-01 run_meta, SEC-01-C01 results) were taken from main and regenerated by their tools.
+- **`dq_issues` is registered once.** #81 registers it under FAMILY_TASKS, and #81 merged first. CP-01 had registered it under FAMILY_AUDIT; it now drops its own entry and writes into #81's collection with the same schema (FG-230). Before this, the dict merge silently let the later registration win.
+- The A1 inventory is 380 accesses on the branch against 392 on main. The difference is CP-01 removing the hard-delete paths of clients / counterparties / companies / persons and moving their writes into `master_records`.
+
+Gates for this head: `gates_r65.txt`.
+
+**#81's tests under the CP-01 guard (found by the full-suite gate after the merge):**
+- 48 cases of `test_wh_fix_01_a3_r44_allocation.py` / `test_wh_fix_01_f81_readers.py` paid a supplier invoice by bank to a supplier with **no verified bank account**. CP-01 refuses that correctly: 409 `BANK_ACCOUNT_NOT_VERIFIED`.
+- As in CP83-04, the guard was **not** turned off. The fixtures now give the supplier a verified account through the real register (`tests/test_pay_01_payment_reversal.verified_supplier`: entered by the Accountant, verified by the Owner from two independent sources). The invoices name that supplier: the seeded ones by `supplier_counterparty_id`, the UI-created ones by its ЕИК, as the form does.
+- `create_invoice` does not store a `supplier_counterparty_id` sent in the body; this is behaviour on main, and it was not changed.
+- The outgoing payment in `test_r44_allocate_payment_to_it_is_409` names the supplier by `counterparty_id`.
+- No assertion of #81 changed.
+- Result: `test_wh_fix_01_*` 317 passed, 0 skipped, with the warehouse real-Mongo variables, on the branch and on main 1525a1e alike.
+
+## 18. R71 (Krum, 09.11.2026): FG-427, FG-425, FG-429, FG-455, FG-457, receipt type
+
+- **FG-427: the SUB-ADV-01 advance goes through the payment guards.** `POST /subcontractor-packages/{id}/advances` now calls `require_selectable_party` and `check_payment_target`, the same as every payment, before the Idempotency-Key is reserved.
+  - An inactive or archived subcontractor → 422.
+  - The account decides cash vs bank.
+  - Cash needs a registered receipt and the recipient's name (R59 / FG-290 / R71); without them → 422.
+  - Cash is blocked with 409 while the subcontractor has an unverified IBAN (R50.1).
+  - Bank goes only to a verified account. In enforce mode, which is production, anything else → 409. Off / shadow keep the legacy path by the guard mode, as for every other payment (D1).
+  - A refusal writes nothing. The bank / receipt stamp is on both the package row and the ledger row.
+- **FG-425: a receipt in use is never hard-deleted.** `DELETE /media/{id}` of a file that a `finance_payments` or `subcontractor_payments` row names as `cash_receipt_file_id` → **409 `RECEIPT_IN_USE`**.
+  - The file and its record stay.
+  - The refusal writes the AuditEvent `media.delete_refused` (result `denied`, with the referencing rows).
+  - A file no payment uses is still deletable as before.
+  - "Archive only": the media module has no archive operation today. Archiving a receipt belongs to the W0-06 File Registry (D10). An archived record is already refused as a *new* receipt (FG-290).
+- **R71: a receipt is a photo or a PDF.** The `content_type` must be `image/*` or `application/pdf`; without one, the file extension decides. A video or anything else → **422 `CASH_RECEIPT_TYPE_NOT_ALLOWED`**, nothing written. R72 (OCR into lines) is a separate future task.
+- **FG-429: BG + ЕГН as a VAT number is an ЕГН.** A VAT number of `BG` + 10 digits (`counterparty_vat_no`, `vat_number`, `vat_no`) is shown as `BG******1234` for **every role**, full-IBAN right or not, Admin included.
+  - This covers every invoice reader and write response, counterparties, projects' `invoice_details`, the turnover drill and client invoices (`cr.mask_iban_fields`, `cr.mask_invoice_egn`), and the logs (`cr.mask_for_log`).
+  - A masked value sent back by a form keeps the stored one (invoice update, counterparty update, project update).
+  - The full value only via the audited `POST /finance/invoices/{id}/egn/reveal`, which now returns `counterparty_vat_no` (and `egn`) too.
+  - The PDF of such an invoice is downloaded only by Owner / Accountant, with `invoice.pdf.downloaded`.
+  - A company VAT number (BG + 9 digits) is shown as it is.
+- **FG-455: the PDF.**
+  - An ЕГН stored only in `egn` is printed in full, labelled **"ЕГН"**. A 10-digit `counterparty_eik` is also printed as "ЕГН", and a company's ЕИК as "ЕИК".
+  - `invoice.pdf.downloaded` is written only **after** `doc.build()` succeeded, still before the bytes are returned. A failed build writes no AuditEvent.
+- **FG-457:** main's `test_sub_adv_01_subcontractor_advance.py` real-Mongo harness was red on the branch with 422 `CASH_RECEIPT_REQUIRED`. Its cash advances and payments had no receipt, and the suite was in no gate glob.
+  - Setup only: the request helper and the `adv` body carry the receipt registered by the C02 records (`file_cash_receipt`) and a recipient. **No assertion changed**; 9 passed.
+  - The claim in `gates_r65.txt` is corrected there.
+  - From now on the gates also run the SUB-ADV-01 suite, regenerate its evidence with `--harness`, and run the **whole suite with real Mongo** on the branch and on main.
+- **Tests:**
+  - `test_fg427_a_subcontractor_advance_goes_through_the_payment_guards`
+  - `test_fg425_a_receipt_in_use_is_never_hard_deleted`
+  - `test_r71_a_receipt_is_a_photo_or_a_pdf`
+  - `test_fg429_a_bg_egn_vat_number_is_an_egn`
+  - `test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build`
+
+  Red on `7750f4e`: 27 of 27 (`r71_red_on_7750f4e_real_mongo.txt`).
+
+Gates for this head: `gates_r71.txt`.
+
+## 19. FLOW Guard pass 39 (FG-480..484)
+
+- **FG-480: the method comes from the account.** The advance row's `payment_method` is `cash` / `bank` according to the account the money leaves (`is_cash_account`), the same as the ledger row. The request's `payment_method` is ignored. The ordinary subcontractor payment row now follows the same rule (FG-225).
+- **FG-481 (R29): a replay comes before any guard.** `MoneyWrite.completed_replay` is a read-only look at the key registry: no reservation, no write.
+  - When the key has already **completed** with the same request, the advance and the subcontractor-payment routes return the stored row first, before any lifecycle / IBAN / receipt check.
+  - So a retry after the subcontractor was archived still gets its original result; a **new** key is refused (422).
+  - A different body, a key in progress, or a new key goes on to the checks and `begin` as before.
+  - The finance payment routes already replayed before their guards (`_once`).
+- **FG-482: a client company's BG + ЕГН VAT number.**
+  - It is masked for **every role** in:
+    - `/clients/search/unified`;
+    - `/projects/{id}/client-info` and `/projects/{id}/invoice-context`;
+    - `/companies`, `/companies/{id}` and `/companies/find-by-eik`, plus the company create / update responses;
+    - the project card's owner data and the `import-client-invoice` response.
+  - The helper is `cr.mask_vat_egn`, which also masks a 10-digit `tax_id`.
+  - Its digits match a search (client search, counterparty list) **only for Owner / Accountant**. For other roles a BG + 10-digit VAT number does not match.
+  - A masked value sent back by the company form keeps the stored one.
+  - The full value only from **`POST /companies/{id}/vat/reveal`**: Owner / Accountant only, AuditEvent `company.vat_egn.revealed` before the value is returned.
+- **FG-483:** **`POST /counterparties/{id}/vat/reveal`**: Owner / Accountant only, AuditEvent `counterparty.vat_egn.revealed`.
+  - 404 when the VAT number is not BG + ЕГН, or the record is another tenant's.
+  - The shared helper is `master_records.reveal_vat_egn`.
+- **FG-484:** `gates_r71.txt` exists since `f91b423` and is the gates file of that head. *(Corrected, FG-495:)* the pass 39 head was superseded by CP83-M3/M4/M5 and pass 40 before its gate run finished, so there is no `gates_pass39.txt`. The full gates of the final head are in **`gates_pass40.txt`**, which covers the whole suite with real Mongo too.
+- **Open question (not changed):** the same receipt can still be used for a second advance or payment. This is for Krum, together with R72.
+- **Tests:**
+  - `test_fg482_a_client_company_bg_egn_vat_is_masked_searched_and_revealed_by_rule`
+  - `test_fg483_a_counterparty_bg_egn_vat_has_an_audited_reveal`
+  - `test_fg480_fg481_advance_method_from_the_account_and_replay_before_the_guards`
+
+  Red on `f91b423`: 15 of 15 (`pass39_red_on_f91b423_real_mongo.txt`).
+
+Gates: see §20 (`gates_pass40.txt`, final head).
+
+
+## 20. CP83-M3, CP83-M4, CP83-M5 and FLOW Guard pass 40 (FG-495..499)
+
+- **CP83-M3 (R29 order):** in the advance, subcontractor-payment and advance-deduction routes the order is:
+  1. role check (dependency);
+  2. pure body validation (`money_value`, reason, shape; no DB read);
+  3. `MoneyWrite.completed_replay`;
+  4. state guards (party, IBAN, receipt, archive, act state).
+
+  #76's rule "validation before the first read" holds.
+  - A known key with **another body → 409 `IDEMPOTENCY_CONFLICT`**, before any state guard.
+  - A completed key replays the stored result even after the party was archived, or the act changed.
+- **CP83-M5 (A2C):** the replay lookup reads `audit_idempotency` with the literal `tenant_id` filter (as the registry stores it). The A2C tenant-boundary guard reports **0** (it was 1 on `6709453`; `cp83_m5_a2c_guard.txt`).
+- **CP83-M4:** PM-01 was regenerated by its harness. Both reveal routes (`POST /api/companies/{company_id}/vat/reveal`, `POST /api/counterparties/{counterparty_id}/vat/reveal`) are in the matrix: Owner / Accountant pass the role check (the harness's missing id → 404), and **every other role gets 403**, in off / shadow / enforce.
+- **FG-496: VAT normalised on input.**
+  - `cr.normalize_vat`: trim, upper-case, strip space - . /. It applies to counterparty, company and invoice create / update, and to project `invoice_details`. `BG-7501011111` and `bg.7501011111` are stored as `BG7501011111` and classified as BG + ЕГН.
+  - Classification normalises first, so legacy spellings are masked too.
+  - The search exclusion for roles other than Owner / Accountant covers any spelling and **partial digit runs** (e.g. `750101`): client search, and the counterparty list (regex over any separator).
+- **R48.3 "with audit":** an Owner / Accountant search whose digits matched an ЕГН (a person's, or a BG + ЕГН VAT number) writes the AuditEvent **`party.egn_search`**: who, when, where, the match count, and the query **masked**.
+- **FG-497:**
+  - `import-client-invoice` copies FROM the canonical record, so it stores a BG + ЕГН VAT number **masked** in `projects.invoice_details`; the full value stays only in the company record.
+  - A typed copy (project create / update) is stored masked when the owner's canonical record holds the same value. Otherwise it is kept and gets the DQ issue „ЕГН копие без каноничен запис“ (CP83-03).
+- **FG-498:** legacy `clients.vat_number` (BG + 10 digits in any spelling) is masked **on read** for every role: `/clients`, `/clients/{id}`, by-phone, summary and the update response. The old data is not rewritten.
+- **FG-499:** the advance-deduction route has the same order (replay before the act / package guards).
+- **D12 (debt, for the orchestrator):** the other `MoneyWrite` routes outside CP-01 call `begin` after their own reads. They are `full_cost` overhead snapshot, `labor_smr` (3), and `reports` cash / overhead / bonus. CP-01 adds no state guards there, so their order was not changed in #83. Applying the R29 replay-first order to them is a separate task.
+- **Left open (Krum, with R72):** one receipt used for several payments.
+- **Tests:**
+  - `test_cp83_m3_the_order_is_validation_replay_guards`
+  - `test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_archiving`
+  - `test_fg496_…`, `test_fg497_…`, `test_fg498_…`, `test_fg499_…`
+- **Red proof:**
+  - CP83-M3 red on `4c8e922`: 4, plus main's static rule.
+  - Pass 40 red on `a30a059`: 24 of 24 (`pass40_red_on_a30a059_real_mongo.txt`).
+
+Gates for the final head: **`gates_pass40.txt`**.
+
+## 21. FLOW Guard pass 41 (FG-510, FG-498 remainder, FG-511, FG-513)
+
+- **FG-510: one VAT normalisation everywhere.** `cr.normalize_vat` is the only function, and storing, classifying, masking and searching all use it. It applies, in order:
+  1. NFKC (full-width digits and letters, compatibility forms);
+  2. every format / zero-width character removed (Unicode category Cf);
+  3. Cyrillic homoglyphs to Latin, upper and lower case (`В→B`, `Г→G`, `ВГ→BG`, `А→A`, `Е→E`, …);
+  4. every non-alphanumeric character removed (space - . / _ : – — , …);
+  5. upper-case.
+
+  BG + 10 digits after normalisation = ЕГН (R71). The normalised value is stored (counterparty, company, invoice, project `invoice_details`). `mask_vat` masks the normalised value.
+
+  The counterparty-list search runs on the raw and the normalised query. For any role other than Owner / Accountant, a query with a digit run (≥ 4) does not match on `vat_number` at all. A legacy record in an odd spelling (e.g. `вг 7501011111`) cannot be found by its digits, and the ЕИК clause still matches company ЕИК digits.
+- **FG-498 (remainder):**
+  - The legacy camelCase `vatNumber` is masked like `vat_number` (`cr.VAT_KEYS`).
+  - `master_data.uniqueness.mask_value` masks a VAT key that is BG + ЕГН (`vat:BG******1234`), whether the caller passes `kind="vat"` or an organisation identifier key without a sensitive kind. This covers the uniqueness report and the legacy plan output (`legacy_plan._mask`).
+- **FG-511 (R29): a replay returns the original response.** The advance, subcontractor-payment and advance-deduction routes store their response with the key (`mw.result_payload`, a `json:` result reference). The first answer is that stored JSON (`MoneyWrite.as_stored`), and a replay, whether through `completed_replay` or `begin`, returns it **byte for byte** (`MoneyWrite.stored_response`), even after the record changed. An older key that stored only a row id still answers with the row.
+- **FG-513:** the `party.egn_search` AuditEvent also records `matched_ids`: the ids of the matched records, never the ЕГН.
+- **Not done here:** FG-512 (replay-first on the 7 other money routes) stays D12, as the orchestrator directed.
+- **Tests:**
+  - `test_fg510_one_vat_normalisation_for_every_spelling` (12 spellings)
+  - `test_fg510_stored_and_searched_normalised`
+  - `test_fg498_legacy_camelcase_vat_and_master_data_masks`
+  - `test_fg498_legacy_client_camelcase_vat_masked_on_read`
+  - `test_fg513_the_egn_search_audit_names_the_matched_records`
+  - `test_fg511_a_replay_returns_the_original_response_byte_for_byte`
+
+  Red on `2415b5f`: 32 (`pass41_red_on_2415b5f_real_mongo.txt`). The 8 that pass there are spellings pass 40 already handled, plus the skips.
+
+Gates for the final head: **`gates_pass41.txt`**.
+
+## 22. FLOW Guard pass 43 (Krum, 09.11.2026: FG-525..529) and the merge of main `3863610`
+
+- **FG-526 / FG-527 (Krum: refuse with an explanation): canonical VAT input only.**
+  - `cr.canonical_vat_input` accepts **only BG + 9 digits (ЕИК) or BG + 10 digits (ЕГН)**. This is the rule invoices already use (`validators.validate_vat_number`), which does not allow a bare ЕИК, so neither does this.
+  - It makes only the safe FG-510 changes: separators (space - . / _ : , – —), format / zero-width characters, full-width forms (U+FF01–FF5E), and the Cyrillic В / Г of the prefix.
+  - Everything else → **422 `VAT_NUMBER_INVALID`** with the message „Въведи ДДС номер като BG + цифри (BG + 9 цифри за фирма, BG + 10 за лице)…“. **Nothing is rewritten and nothing is stored.** Refused inputs include: "ДДС BG…", "VAT BG…", "ЕГН 7501011111", a bare 10-digit number, Greek Β, combining marks, non-Latin digits, "(физ. лице)", too few digits, and a foreign prefix.
+  - It applies on **every create / update path**: counterparty create / update; company create (two routes) / update; **subcontractor create (FG-525)**; invoice create / update; project `invoice_details` create / update.
+  - A masked value sent back still keeps the stored one.
+  - The read-side classifier (`normalize_vat`, FG-510) stays broader, so a legacy value in any spelling is still *masked*. It never rewrites stored data.
+- **FG-525:** `POST /subcontractors` normalises the VAT number with the same rule and its response masks a BG + ЕГН value. The subcontractor readers already masked it (FG-429).
+- **FG-528 (Krum: finance only):** Admin, Viewer and SiteManager never match ЕГН digits, **at any length**:
+  - in the counterparty list, a query with any digit does not match on `vat_number`;
+  - in the client search, a BG + ЕГН VAT number or a person's ЕГН matches only for Owner / Accountant.
+- **FG-529 (Krum: with a record):**
+  - The query digits of **any script** (full-width, Arabic-Indic, …) are converted to ASCII (`cr.search_digits`), so they cannot bypass the rules or the audit.
+  - **Every** Owner / Accountant search with a digit writes `party.egn_search`, short searches and searches with no match included. It records the query masked, the match count and the matched ids.
+- **Idempotency keys (FLOW Guard Q3, Krum):** they stay per user, the standard R29 scope; nothing changed.
+- **Tests:**
+  - `test_fg526_527_a_vat_number_not_in_canonical_form_is_refused_never_rewritten` (10 inputs)
+  - `test_fg526_527_only_the_safe_normalisation_is_applied`
+  - `test_fg525_526_every_write_path_refuses_and_writes_nothing` (9 paths, then the subcontractor positive case)
+  - `test_fg528_529_egn_digits_match_only_for_finance_and_every_such_search_is_audited`
+
+  Red on `781d185`: 23 of 23 (`pass43_red_on_781d185_real_mongo.txt`).
+
+Gates for the final head: **`gates_pass43.txt`**.
+
+## 23. FLOW Guard pass 46 (FG-562) and the gates of the pass 43 head
+
+- **Pass 43 head gates** (`62543b3` / `ddc6e9a`, run before pass 46 arrived; `gates_pass43.txt`). Against a fresh main `3863610` baseline:
+  - W0: 10 failed, all among main's 16.
+  - Full suite: **0 new** failures, both DB-free and real Mongo.
+  - A2C 0, PM-01 6 / 0.
+- **FG-562: a masked value is never stored.** A value containing `*` is accepted only as the form's echo of the stored value's own mask (`cr.vat_update`, `cr.keep_stored_if_masked`), and then the stored value stays untouched. Any other value with `*` → **422** `VAT_NUMBER_MASKED` / `VALUE_MASKED`, nothing written. That covers:
+  - nothing stored;
+  - a different mask;
+  - `BG*…`;
+  - a masked IBAN with no stored IBAN;
+  - any masked value on a project **create**.
+
+  This applies on counterparty update (`counterparties.py`, the place FG-562 named), company update, invoice update, and project create / update.
+  - *Why the echo stays allowed:* the edit forms show the value masked and send it back with the other fields. Refusing the echo would make every such record uneditable. The echo never writes anything; the stored value is kept as it is.
+- **Not changed, waiting for Krum:**
+  - FG-560: legacy odd-spelled VAT values (mask now and / or a DQ cleanup);
+  - FG-561: whether 10 digits in the ЕИК field means ЕГН;
+  - R78: whether separators, dashes and zero-width characters are stripped silently, and whether Cyrillic / full-width BG may be mapped. The current FG-526 behaviour stays as it is.
+- **Test:** `test_fg562_a_masked_value_is_never_stored`. Red on `ddc6e9a`: 6 of 6 (`pass46_red_on_ddc6e9a_real_mongo.txt`).
+
+- **AUDIT-2 note on `ec346f8`: clearing a VAT number with `""`.** On `update_invoice`, `cr.vat_update("")` returned `("set", None)`, and the `v is not None` update filter then dropped the field, so the old value stayed. Now an explicit `""` stores `""`, which clears the value as before. Counterparty and company updates already cleared it.
+  - Test: `test_ec346f8_an_explicit_empty_vat_clears_the_stored_value` (invoice, counterparty, company). Red on `ec346f8`: 6 of 6.
+
+Gates for the final head: **`gates_pass46.txt`**.

@@ -1,0 +1,16 @@
+# CP-01 after FLOW Guard pass 26 — gates vs main 0750d75 (real MongoDB 7.0 rs0)
+warehouse suite (real Mongo): 1121 passed, 19 warnings in 586.94s (0:09:46)
+cp01: 596 passed, 3 skipped, 1 warning in 176.63s (0:02:56)
+pay01: 630 passed, 1 warning in 154.29s (0:02:34)
+sec01: 30 passed, 10 warnings in 105.17s (0:01:45)
+sec02: 31 passed, 10 warnings in 173.10s (0:02:53)
+r0: 814 passed, 10 warnings in 153.07s (0:02:33)
+w0: 10 failed, 1164 passed, 10 warnings in 139.23s (0:02:19)
+pm01: 6 passed, 10 warnings in 173.23s (0:02:53)
+pm01 SKIPPED lines: 0
+W0 failures only on the branch: 0 (10, all among main 0750d75's 16)
+full DB-free: 160 failed, 2679 passed, 2079 skipped, 11 warnings, 996 errors in 469.25s (0:07:49); main 0750d75: 166 failed, 2393 passed, 1781 skipped, 11 warnings, 993 errors in 432.21s (0:07:12)
+lines only on the branch: 3 ERROR test_st_02_staging_stack::test_c03_r26_* (release_build while the tree was edited); the file alone: 162 passed
+A1 488 / A2C 242: 0 violations; inventories regenerated (unchanged)
+pass-26 tests on bc0d1c7 (real): 18 failed, 6 passed, 575 deselected, 1 warning in 15.15s
+Tests:       179 passed, 179 total

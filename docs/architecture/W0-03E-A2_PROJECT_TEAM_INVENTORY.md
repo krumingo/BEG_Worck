@@ -22,6 +22,10 @@
 | app/deps/auth.py:can_access_project | (helper) | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | bare@base | FIXED |
 | app/deps/auth.py:can_manage_project | (helper) | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | bare@base | FIXED |
 | app/deps/auth.py:get_user_project_ids | (helper) | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | bare@base | FIXED |
+| app/permissions/money_write.py:budget_view_visible | (helper) | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | new@A2 | SAFE |
+| app/permissions/money_write.py:budget_view_visible | (helper) | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | new@A2 | SAFE |
+| app/permissions/money_write.py:legacy_check | (helper) | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | new@A2 | SAFE |
+| app/permissions/money_write.py:legacy_check | (helper) | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | new@A2 | SAFE |
 | app/routes/activity_budgets.py:compute_avg_daily_wage | (helper) | roster read | project_team.project_rows() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
 | app/routes/activity_budgets.py:compute_avg_daily_wage | (helper) | tenant resolution | project_team.tenant_for_org() | caller-resolved org_id (server-side) | bare@base | FIXED |
 | app/routes/attendance.py:_team | (helper) | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | new@A2 | SAFE |
@@ -48,8 +52,16 @@
 | app/routes/attendance.py:mark_attendance_for_user | POST /attendance/mark-for-user | authorization read | project_team.managed_project_ids() | org_id+user_id+role=SiteManager | bare@base | FIXED |
 | app/routes/daily_reports.py:get_project_day_status | GET /daily-reports/project-day-status/{project_id} | roster read | project_team.project_member_ids() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
 | app/routes/daily_reports.py:get_project_day_status | GET /daily-reports/project-day-status/{project_id} | tenant resolution | project_team.tenant_for_org() | caller-resolved org_id (server-side) | bare@base | FIXED |
+| app/routes/employee_dossier.py:get_employee_dossier | GET /employee-dossier/{worker_id} | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | absent@base | SAFE |
+| app/routes/employee_dossier.py:get_employee_dossier | GET /employee-dossier/{worker_id} | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | absent@base | SAFE |
+| app/routes/employee_dossier.py:get_employee_dossier | GET /employee-dossier/{worker_id} | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | absent@base | SAFE |
 | app/routes/hr.py:get_employee_dashboard | GET /employees/{user_id}/dashboard | history read | project_team.user_rows() | org_id+user_id | bare@base | FIXED |
 | app/routes/hr.py:get_employee_dashboard | GET /employees/{user_id}/dashboard | tenant resolution | project_team.tenant_for_org() | caller-resolved org_id (server-side) | bare@base | FIXED |
+| app/routes/labor_smr.py:get_labor_warnings | GET /labor-warnings/{project_id} | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | absent@base | SAFE |
+| app/routes/labor_smr.py:get_labor_warnings | GET /labor-warnings/{project_id} | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | absent@base | SAFE |
+| app/routes/labor_smr.py:list_labor_entries | GET /labor-entries | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | absent@base | SAFE |
+| app/routes/labor_smr.py:list_labor_entries | GET /labor-entries | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | absent@base | SAFE |
+| app/routes/labor_smr.py:list_labor_entries | GET /labor-entries | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | absent@base | SAFE |
 | app/routes/media.py:list_media | GET /media | history read | project_team.user_rows() | org_id+user_id | bare@base | FIXED |
 | app/routes/media.py:list_media | GET /media | tenant resolution | project_team.tenant_for_org() | caller-resolved org_id (server-side) | bare@base | FIXED |
 | app/routes/projects.py:_team | (helper) | tenant resolution | project_team.tenant_for() | session user org_id (server-side) | new@A2 | SAFE |
@@ -59,7 +71,6 @@
 | app/routes/projects.py:create_project | POST /projects | WRITE | project_team.add_member() | org_id stamped from active tenant | bare@base | FIXED |
 | app/routes/projects.py:create_sub_project | POST /projects/{project_id}/create-sub-project | WRITE | project_team.add_member() | org_id stamped from active tenant | bare@base | FIXED |
 | app/routes/projects.py:create_sub_project | POST /projects/{project_id}/create-sub-project | read | tenant.collection('project_team').find() | org_id (TenantData.scoped) | bare@base | FIXED |
-| app/routes/projects.py:delete_project | DELETE /projects/{project_id} | WRITE | tenant.collection('project_team').delete_many() | org_id (TenantData.scoped) | bare@base | FIXED |
 | app/routes/projects.py:get_project | GET /projects/{project_id} | roster read | project_team.active_member_count() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
 | app/routes/projects.py:get_project_dashboard | GET /projects/{project_id}/dashboard | roster read | project_team.project_rows() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
 | app/routes/projects.py:list_project_team | GET /projects/{project_id}/team | roster read | project_team.project_rows() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
@@ -73,9 +84,11 @@
 | app/routes/work_logs.py:check_site_access | (helper) | authorization read | project_team.member_row() | org_id+project_id+user_id[+role] | bare@base | FIXED |
 | app/routes/work_logs.py:get_my_sites | GET /my-sites | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | bare@base | FIXED |
 | app/routes/work_logs.py:get_site_team | GET /my-team/{site_id} | roster read | project_team.project_rows() | org_id+project_id ∈ tenant projects | bare@base | FIXED |
+| app/services/warehouse_movements/legacy_gate.py:member_projects | (helper) | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | new@A2 | SAFE |
+| app/services/warehouse_movements/write_off_policy.py:member_in_date | (helper) | authorization read | project_team.member_row() | org_id+project_id+user_id[+role] | new@A2 | SAFE |
 | app/tenancy/data_access.py:assigned_project_ids | (helper) | authorization read | project_team.assigned_project_ids() | org_id+user_id → tenant projects | bare@base | FIXED |
 | app/tenancy/data_access.py:is_project_member | (helper) | authorization read | project_team.is_member() | org_id+project_id+user_id[+role] | bare@base | FIXED |
 
-Totals: 56 access site(s) — WRITE 5, authorization read 25, history read 2, read 2, roster read 13, tenant resolution 9
-At the A1 head 4b7f986: 51 site(s) reached project_team with no tenant predicate (all FIXED).
-Static guard: 217 unit(s), 0 violation(s).
+Totals: 69 access site(s) — WRITE 4, authorization read 34, history read 2, read 2, roster read 13, tenant resolution 14
+At the A1 head 4b7f986: 50 site(s) reached project_team with no tenant predicate (all FIXED).
+Static guard: 500 unit(s), 0 violation(s).

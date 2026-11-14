@@ -1,0 +1,46 @@
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+        failed build writes no AuditEvent; a built one writes it before returning."""
+                raise RuntimeError("build failed")
+            raise RuntimeError("build failed")
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg427_a_subcontractor_advance_goes_through_the_payment_guards[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg427_a_subcontractor_advance_goes_through_the_payment_guards[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg427_a_subcontractor_advance_goes_through_the_payment_guards[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[mongomock-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[mongomock-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[mongomock-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg425_a_receipt_in_use_is_never_hard_deleted[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[mongomock-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[mongomock-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[mongomock-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_r71_a_receipt_is_a_photo_or_a_pdf[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[mongomock-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[mongomock-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[mongomock-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg429_a_bg_egn_vat_number_is_an_egn[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[mongomock-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[mongomock-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[mongomock-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build[real-enforce]
+27 failed, 3 skipped, 623 deselected, 1 warning in 12.80s

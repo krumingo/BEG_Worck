@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,7 @@ export default function ClientDetailPage() {
 
   const handleSave = async () => {
     try {
-      await API.put(`/clients/${clientId}`, form);
+      await API.put(`/clients/${clientId}`, form, idempotencyHeaders(newIdempotencyKey()));
       toast.success(t("clientDetail.saved"));
       setEditing(false);
       load();

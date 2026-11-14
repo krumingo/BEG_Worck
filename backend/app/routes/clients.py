@@ -1,8 +1,8 @@
 """
 Routes - Clients (Private Persons) CRUD with pagination and filters.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from typing import Optional
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 import uuid
 import re
@@ -13,7 +13,9 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.permissions.money_write import require_money_write, require_finance_read
 from app.utils.audit import log_audit
-from app.master_data.legacy_adapter import guarded_identity_delete
+from app.services import counterparty_rules as cr
+from app.services import master_records as mr
+from app.services.master_write import audit, conflict, kw, once_in_tx, require_key
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(tags=["Clients"])
@@ -107,8 +109,9 @@ async def list_clients(
     search: Optional[str] = None,
     filters: Optional[str] = None,
     active_only: bool = True,
+    include_archived: bool = False,
 ):
-    """List clients with pagination, sorting, and filters"""
+    """List clients with pagination, sorting, and filters (archived hidden — R48.4)"""
     tenant = _tenant(user)
     base_query = {"org_id": user["org_id"]}
     
@@ -118,6 +121,7 @@ async def list_clients(
     # Parse additional filters
     parsed_filters = parse_filters(filters)
     query = build_mongo_query(user["org_id"], parsed_filters, base_query)
+    query = mr.hide_archived(query, include_archived)
     
     # Global search
     if search:
@@ -162,7 +166,7 @@ async def list_clients(
         client["linked_counterparties_count"] = len(cp_ids)
     
     return {
-        "items": clients,
+        "items": cr.mask_vat_egn(clients),       # FG-498: legacy vat_number masked on read
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -171,48 +175,27 @@ async def list_clients(
 
 
 @router.post("/clients", status_code=201)
-async def create_client(data: ClientCreate, user: dict = Depends(require_m5)):
-    """Create a new client (private person)"""
-    tenant = _tenant(user)
-    if not finance_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    # Normalize phone
+async def create_client(data: ClientCreate, user: dict = Depends(require_m5),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Create a new client (private person) — Accountant/Admin/Owner (R48.5), key (R29)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     phone_normalized = normalize_phone(data.phone)
-    
     if not phone_normalized:
         raise HTTPException(status_code=400, detail="Phone number is required")
-    
-    # Check phone uniqueness within org
-    existing = await tenant.clients.find_one({
-        "org_id": user["org_id"],
-        "phone_normalized": phone_normalized
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Client with this phone number already exists")
-    
-    now = datetime.now(timezone.utc).isoformat()
+
+    async def check(tenant, session):
+        if await tenant.clients.find_one({"phone_normalized": phone_normalized}, {"_id": 0, "id": 1},
+                                         **kw(session)):
+            raise HTTPException(status_code=400, detail="Client with this phone number already exists")
+
     client = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "first_name": data.first_name,
-        "last_name": data.last_name,
-        "phone": data.phone,
-        "phone_normalized": phone_normalized,
-        "email": data.email,
-        "address": data.address,
-        "notes": data.notes,
-        "is_active": data.is_active,
-        "created_at": now,
-        "updated_at": now,
+        "first_name": data.first_name, "last_name": data.last_name, "phone": data.phone,
+        "phone_normalized": phone_normalized, "email": data.email, "address": data.address,
+        "notes": data.notes, "is_active": True,
     }
-    
-    await tenant.clients.insert_one(client)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "client_created", "client", client["id"],
-                    {"name": f"{data.first_name} {data.last_name}", "phone": data.phone})
-    
-    return {k: v for k, v in client.items() if k != "_id"}
+    return await mr.create(db, user, idempotency_key, collection="clients", doc=client,
+                           fingerprint=data.model_dump(), check=check)
 
 
 @router.get("/clients/{client_id}")
@@ -234,120 +217,103 @@ async def get_client(client_id: str, user: dict = Depends(require_m5)):
     
     client["linked_counterparties"] = linked_counterparties
     
-    return client
+    return cr.mask_vat_egn(client)               # FG-498
 
 
 @router.put("/clients/{client_id}")
-async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends(require_m5)):
-    """Update client"""
-    if not finance_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    client = await _tenant(user).clients.get(client_id)
+async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends(require_m5),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Update client — Accountant/Admin/Owner, key, CAS, AuditEvent (CP-01)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
+    client = await _tenant(user).clients.get(client_id, {"_id": 0})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
-    update = {}
-    
-    # Handle phone update with uniqueness check
+    if data.is_active is not None and data.is_active != (
+            cr.lifecycle_of(client, "clients") == cr.LIFECYCLE_ACTIVE):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "USE_LIFECYCLE_ROUTE",
+            "message": "Активност се сменя с …/deactivate или …/reactivate (с причина)"})
+    changes: Dict[str, Any] = {}
+    phone_normalized = None
     if data.phone is not None:
         phone_normalized = normalize_phone(data.phone)
         if phone_normalized != client.get("phone_normalized"):
-            existing = await _tenant(user).clients.find_one({
-                "org_id": user["org_id"],
-                "phone_normalized": phone_normalized,
-                "id": {"$ne": client_id}
-            })
-            if existing:
-                raise HTTPException(status_code=400, detail="Client with this phone number already exists")
-            update["phone"] = data.phone
-            update["phone_normalized"] = phone_normalized
-    
-    # Update other fields
-    for field in ["first_name", "last_name", "email", "address", "notes", "is_active"]:
+            changes["phone"] = data.phone
+            changes["phone_normalized"] = phone_normalized
+    for field in ["first_name", "last_name", "email", "address", "notes"]:
         value = getattr(data, field)
         if value is not None:
-            update[field] = value
-    
-    if update:
-        update["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await _tenant(user).clients.update_one({"id": client_id}, {"$set": update})
-    
-    return await _tenant(user).clients.get(client_id, {"_id": 0})
+            changes[field] = value
+
+    async def check(tenant, session, before):
+        if "phone_normalized" in changes and await tenant.clients.find_one(
+                {"phone_normalized": phone_normalized, "id": {"$ne": client_id}}, {"_id": 0, "id": 1},
+                **kw(session)):
+            raise HTTPException(status_code=400, detail="Client with this phone number already exists")
+
+    return await mr.update(db, user, idempotency_key, collection="clients", record_id=client_id,
+                           changes=changes, check=check,
+                           fingerprint={"id": client_id, "body": data.model_dump()},
+                           result=cr.mask_vat_egn)                      # FG-498
 
 
 @router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, request: Request, user: dict = Depends(require_m5)):
-    """Delete client (soft delete if has linked counterparties)"""
+    """R48.4: a client is never deleted → 409 COUNTERPARTY_NO_DELETE, nothing written."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    client = await _tenant(user).clients.get(client_id)
+    client = await _tenant(user).clients.get(client_id, {"_id": 0, "id": 1})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
-    # Check if has linked counterparties
-    linked_count = await _tenant(user).counterparties.count({
-        "org_id": user["org_id"],
-        "client_id": client_id
-    })
-    
-    if linked_count > 0:
-        # Soft delete only
-        await _tenant(user).clients.update_one(
-            {"id": client_id, "org_id": user["org_id"]},
-            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
-        return {"ok": True, "soft_deleted": True, "reason": "Has linked counterparties"}
-    
-    done = await guarded_identity_delete(user, request, db, collection="clients",
-                                         legacy_id=client_id)
-    if done is not None:
-        return done
-    await _tenant(user).clients.delete_one({"id": client_id, "org_id": user["org_id"]})
-    return {"ok": True}
+    raise mr.no_delete("clients")
+
+
+def _lifecycle_route(collection: str, action: str):
+    async def handler(record_id: str, body: Dict[str, Any] = Body(default={}),
+                      user: dict = Depends(require_m5),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+        return await mr.lifecycle(db, user, idempotency_key, collection=collection,
+                                  record_id=record_id, action=action, body=body)
+    handler.__name__ = "%s_%s" % (action, collection)
+    return handler
+
+
+for _action in mr.LIFECYCLE_ACTIONS:
+    router.add_api_route("/clients/{record_id}/%s" % _action, _lifecycle_route("clients", _action),
+                         methods=["POST"])
 
 
 # ── Client-Counterparty Linking ──────────────────────────────────────────────
 
 @router.post("/clients/find-or-create")
-async def find_or_create_client(data: ClientCreate, user: dict = Depends(require_m5)):
-    """Find existing client by phone or create new one"""
+async def find_or_create_client(data: ClientCreate, user: dict = Depends(require_m5),
+                                idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Find existing client by phone or create new one. Creating is a master-data write:
+    Accountant/Admin/Owner only, with an Idempotency-Key (CP-01, R48.5, R29)."""
     tenant = _tenant(user)
     phone_normalized = normalize_phone(data.phone)
-    
     if not phone_normalized:
         raise HTTPException(status_code=400, detail="Phone number is required")
-    
-    # Try to find existing client
-    existing = await tenant.clients.find_one({
-        "org_id": user["org_id"],
-        "phone_normalized": phone_normalized
-    }, {"_id": 0})
-    
+    existing = await tenant.clients.find_one({"phone_normalized": phone_normalized}, {"_id": 0})
     if existing:
         return {"client": existing, "created": False}
-    
-    # Create new client
-    now = datetime.now(timezone.utc).isoformat()
+    mr.require_writer(user)
+    require_key(idempotency_key)
+
+    async def check(tenant_, session):
+        if await tenant_.clients.find_one({"phone_normalized": phone_normalized}, {"_id": 0, "id": 1},
+                                          **kw(session)):
+            raise conflict("CLIENT_EXISTS", "Клиент с този телефон вече съществува")
+
     client = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "first_name": data.first_name,
-        "last_name": data.last_name,
-        "phone": data.phone,
-        "phone_normalized": phone_normalized,
-        "email": data.email,
-        "address": data.address,
-        "notes": data.notes,
-        "is_active": True,
-        "created_at": now,
-        "updated_at": now,
+        "first_name": data.first_name, "last_name": data.last_name, "phone": data.phone,
+        "phone_normalized": phone_normalized, "email": data.email, "address": data.address,
+        "notes": data.notes, "is_active": True,
     }
-    
-    await tenant.clients.insert_one(client)
-    
-    return {"client": {k: v for k, v in client.items() if k != "_id"}, "created": True}
+    return await mr.create(db, user, idempotency_key, collection="clients", doc=client,
+                           fingerprint=data.model_dump(), check=check,
+                           result=lambda row: {"client": row, "created": True})
 
 
 @router.get("/clients/by-phone/{phone}")
@@ -364,7 +330,7 @@ async def get_client_by_phone(phone: str, user: dict = Depends(require_m5)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    return client
+    return cr.mask_vat_egn(client)               # FG-498
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -386,10 +352,8 @@ def normalize_egn(egn: str) -> str:
 
 
 def mask_egn(egn: str) -> str:
-    """Mask EGN for display in lists (show first 2 and last 2 digits)"""
-    if not egn or len(egn) < 6:
-        return egn or ""
-    return egn[:2] + "****" + egn[-2:]
+    """R48.3: ``******1234`` (last 4 digits) for every reader."""
+    return cr.mask_egn(egn)
 
 
 def validate_eik(eik: str) -> bool:
@@ -420,18 +384,35 @@ async def unified_client_search(
     results = []
     
     q = (query or "").strip()
+    egn_hits = 0                                  # R48.3: ЕГН-digit matches to audit
+    egn_ids: list = []                            # FG-513: their record ids
     q_normalized = normalize_phone(q) if q else ""
     q_lower = q.lower() if q else ""
     
     # Search companies
     if not type or type == "company":
-        companies = await tenant.companies.find({"org_id": org_id}, {"_id": 0}).to_list(500)
+        companies = await tenant.companies.find(mr.hide_archived({"org_id": org_id}), {"_id": 0}).to_list(500)
         
         for c in companies:
             if q:
                 name_match = q_lower in (c.get("name") or "").lower()
                 eik_match = normalize_eik(q) and normalize_eik(q) in normalize_eik(c.get("eik") or "")
-                vat_match = q_lower in (c.get("vat_number") or "").lower()
+                # FG-482 (R48.3): a BG + ЕГН VAT number is an ЕГН — matched by its digits only
+                # for the roles that may see it in full (Owner / Accountant)
+                vat_raw = c.get("vat_number") or ""
+                vat_norm = cr.normalize_vat(vat_raw) or ""
+                q_digits = cr.egn_digits_query(q)
+                if cr.vat_is_egn(vat_raw):
+                    # FG-482 / FG-496: a BG + ЕГН VAT number (in any spelling) matches — also by a
+                    # partial digit run — only for Owner / Accountant, and then it is audited
+                    vat_match = cr.can_reveal_egn(user) and bool(
+                        (q_digits and q_digits in vat_norm) or q_lower in vat_raw.lower())
+                    if vat_match and not (name_match or eik_match):
+                        egn_hits += 1
+                        egn_ids.append(c["id"])
+                else:
+                    vat_match = q_lower in vat_raw.lower() or bool(
+                        q_digits and q_digits in vat_norm)
                 phone_match = q_normalized and q_normalized in normalize_phone(c.get("phone") or "")
                 mol_match = q_lower in (c.get("mol") or "").lower()
                 
@@ -448,20 +429,27 @@ async def unified_client_search(
                 "email": c.get("email", ""),
                 "address": c.get("address", ""),
                 "mol": c.get("mol", ""),
-                "vat_number": c.get("vat_number", ""),
+                "vat_number": cr.mask_vat_egn({"vat_number": c.get("vat_number", "")})["vat_number"],
                 "is_active": c.get("is_active", True),
             })
     
     # Search persons
     if not type or type == "person":
-        persons = await tenant.persons.find({"org_id": org_id}, {"_id": 0}).to_list(500)
+        persons = await tenant.persons.find(mr.hide_archived({"org_id": org_id}), {"_id": 0}).to_list(500)
         
         for p in persons:
             full_name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
             
             if q:
                 name_match = q_lower in full_name.lower()
-                egn_match = normalize_egn(q) and normalize_egn(q) in normalize_egn(p.get("egn") or "")
+                # FG-227 (R48.3): searching by ЕГН would confirm a person's ЕГН — only the roles
+                # that may see it in full (Owner / Accountant) may search by it
+                # FG-529: the query digits of any script, as ASCII
+                egn_match = cr.can_reveal_egn(user) and bool(cr.search_digits(q)) and \
+                    cr.search_digits(q) in normalize_egn(p.get("egn") or "")
+                if egn_match and not name_match:
+                    egn_hits += 1
+                    egn_ids.append(p["id"])
                 phone_match = q_normalized and q_normalized in normalize_phone(p.get("phone") or "")
                 
                 if not (name_match or egn_match or phone_match):
@@ -480,6 +468,10 @@ async def unified_client_search(
             })
     
     results.sort(key=lambda x: x["display_name"].lower())
+    if cr.search_digits(q) and cr.can_reveal_egn(user):
+        # FG-529 (R48.3): every Owner / Accountant digit search is audited, matches or not
+        await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified", egn_ids,
+                                  always=True)
     
     return {
         "items": results[:limit],
@@ -508,47 +500,61 @@ class CompanyClientCreate(BaseModel):
 async def create_company_client(
     data: CompanyClientCreate,
     user: dict = Depends(get_current_user),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
-    """Create a new company client with duplicate detection"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    
+    """Create a new company client with duplicate detection (CP-01: R48.5, R29, AuditEvent)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     eik = normalize_eik(data.eik)
     if not validate_eik(eik):
         raise HTTPException(status_code=400, detail="Невалиден ЕИК. Трябва да е 9 или 13 цифри.")
-    
-    existing = await tenant.companies.find_one({"org_id": org_id, "eik": eik})
-    if existing:
-        raise HTTPException(
-            status_code=409, 
-            detail=f"Вече съществува фирма с ЕИК {eik}: {existing.get('name')}"
-        )
-    
-    now = datetime.now(timezone.utc).isoformat()
+    tenant = _tenant(user)
+
+    async def check(tenant_, session):
+        await _claim_company_eik(tenant_, session, eik)
+        if await tenant_.companies.find_one({"eik": eik}, {"_id": 0, "id": 1}, **kw(session)):
+            raise conflict("EIK_ALREADY_EXISTS", "Вече съществува фирма с ЕИК %s" % eik,
+                           existing_id=None)
+
     company = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "name": data.company_name.strip(),
         "eik": eik,
-        "vat_number": data.vat_number.strip() if data.vat_number else None,
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-496 / FG-526: 422 if not BG + digits
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip().lower() if data.email else None,
         "phone": normalize_phone(data.phone) if data.phone else None,
         "notes": data.notes or "",
         "is_active": True,
-        "created_at": now,
-        "updated_at": now,
     }
-    
-    await tenant.companies.insert_one(company)
-    
-    return {
-        "id": company["id"],
-        "type": "company",
-        "display_name": company["name"],
-        "identifier": company["eik"],
-    }
+    return await company_duplicate_dq(tenant, user, eik, lambda: mr.create(
+        db, user, idempotency_key, collection="companies", doc=company,
+        fingerprint=data.model_dump(), check=check,
+        result=lambda row: {"id": row["id"], "type": "company",
+                            "display_name": row["name"], "identifier": row["eik"]}))
+
+
+async def _claim_company_eik(tenant, session, eik: str) -> None:
+    """Two concurrent creates of the same ЕИК write the same claim row → one conflicts."""
+    await tenant.company_eik_claims.update_one(
+        {"id": "eik:" + eik}, {"$set": {"touched_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True, **kw(session))
+
+
+async def company_duplicate_dq(tenant, user, eik: str, work):
+    """``work()``; an EIK_ALREADY_EXISTS refusal leaves a DQ row (outside the aborted tx)."""
+    from app.services.master_write import dq_issue
+    try:
+        return await work()
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 409 and detail.get("error_code") == "EIK_ALREADY_EXISTS":
+            existing = await tenant.companies.find_one({"eik": eik}, {"_id": 0, "id": 1})
+            await dq_issue(tenant, None, code="DUPLICATE_EIK", severity="critical", entity_type="company",
+                           entity_id=existing["id"] if existing else None,
+                           message="Опит за втора фирма със същия ЕИК", data={"eik": eik},
+                           created_by=user["id"])
+        raise
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -568,46 +574,35 @@ class PersonClientCreate(BaseModel):
 async def create_person_client(
     data: PersonClientCreate,
     user: dict = Depends(get_current_user),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
-    """Create a new person client with duplicate detection"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    
+    """Create a new person client with duplicate detection (CP-01: R48.5, R29; ЕГН masked)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     egn = normalize_egn(data.egn) if data.egn else None
     phone = normalize_phone(data.phone) if data.phone else None
-    
     if egn and not validate_egn(egn):
         raise HTTPException(status_code=400, detail="Невалидно ЕГН. Трябва да е 10 цифри.")
-    
-    if egn:
-        existing = await tenant.persons.find_one({"org_id": org_id, "egn": egn})
-        if existing:
-            name = f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip()
-            raise HTTPException(
-                status_code=409,
-                detail=f"Вече съществува лице с ЕГН {mask_egn(egn)}: {name}"
-            )
-    
-    if phone and not egn:
-        existing = await tenant.persons.find_one({
-            "org_id": org_id,
-            "$or": [{"phone": data.phone}, {"phone_normalized": phone}]
-        })
-        if existing:
-            name = f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip()
-            raise HTTPException(
-                status_code=409,
-                detail=f"Вече съществува лице с телефон {data.phone}: {name}"
-            )
-    
+
+    async def check(tenant, session):
+        if egn:
+            existing = await tenant.persons.find_one({"egn": egn}, {"_id": 0}, **kw(session))
+            if existing:
+                name = f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip()
+                raise HTTPException(status_code=409,
+                                    detail=f"Вече съществува лице с ЕГН {mask_egn(egn)}: {name}")
+        if phone and not egn:
+            existing = await tenant.persons.find_one(
+                {"$or": [{"phone": data.phone}, {"phone_normalized": phone}]}, {"_id": 0}, **kw(session))
+            if existing:
+                name = f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip()
+                raise HTTPException(status_code=409,
+                                    detail=f"Вече съществува лице с телефон {data.phone}: {name}")
+
     name_parts = data.full_name.strip().split(" ", 1)
     first_name = name_parts[0]
     last_name = name_parts[1] if len(name_parts) > 1 else ""
-    
-    now = datetime.now(timezone.utc).isoformat()
     person = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "first_name": first_name.strip(),
         "last_name": last_name.strip(),
         "egn": egn,
@@ -617,18 +612,16 @@ async def create_person_client(
         "address": data.address.strip() if data.address else None,
         "notes": data.notes or "",
         "is_active": True,
-        "created_at": now,
-        "updated_at": now,
     }
-    
-    await tenant.persons.insert_one(person)
-    
-    return {
-        "id": person["id"],
-        "type": "person",
-        "display_name": f"{first_name} {last_name}".strip(),
-        "identifier": mask_egn(egn) if egn else "",
-    }
+    fp = data.model_dump()
+    if fp.get("egn"):
+        import hashlib
+        fp["egn"] = hashlib.sha256(fp["egn"].encode()).hexdigest()   # never stored in clear
+    return await mr.create(db, user, idempotency_key, collection="persons", doc=person,
+                           fingerprint=fp, check=check,
+                           result=lambda row: {"id": row["id"], "type": "person",
+                                               "display_name": f"{first_name} {last_name}".strip(),
+                                               "identifier": mask_egn(egn) if egn else ""})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -669,7 +662,8 @@ async def get_project_client_info(
                     "email": company.get("email", ""),
                     "address": company.get("address", ""),
                     "mol": company.get("mol", ""),
-                    "vat_number": company.get("vat_number", ""),
+                    # FG-482: BG + ЕГН masked for every role
+                    "vat_number": cr.mask_vat_egn({"vat_number": company.get("vat_number", "")})["vat_number"],
                 }
             }
     elif owner_type == "person":
@@ -699,52 +693,62 @@ async def update_project_client_link(
     data: dict,
     user: dict = Depends(require_money_write(
         "project.client_link.update", module="M5", resource_type="project")),  # SEC-01
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
-    """Link or unlink a client to/from a project"""
+    """Link or unlink a client to/from a project.
+
+    R22: the client of a project is changed only by Owner / Admin / Accountant. CP-01: an
+    inactive / archived client is not chosen (422); key (R29), CAS, AuditEvent."""
+    mr.require_writer(user)
+    key = require_key(idempotency_key)
     tenant = _tenant(user)
-    org_id = user["org_id"]
-    
-    project = await tenant.projects.find_one({"id": project_id, "org_id": org_id})
-    if not project:
-        raise HTTPException(status_code=404, detail="Проектът не е намерен")
-    
+    data = data if isinstance(data, dict) else {}
     client_id = data.get("client_id")
     client_type = data.get("client_type")
-    
-    if client_id is None:
-        await tenant.projects.update_one(
-            {"id": project_id},
-            {"$set": {"owner_type": None, "owner_id": None, "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
-        return {"ok": True, "message": "Клиентът е премахнат от проекта"}
-    
-    client = None
-    if client_type == "company":
-        client = await tenant.companies.find_one({"id": client_id, "org_id": org_id})
-    elif client_type == "person":
-        client = await tenant.persons.find_one({"id": client_id, "org_id": org_id})
-    else:
-        client = await tenant.companies.find_one({"id": client_id, "org_id": org_id})
-        if client:
-            client_type = "company"
+
+    async def tx(session):
+        project = await tenant.projects.find_one({"id": project_id}, {"_id": 0}, **kw(session))
+        if not project:
+            raise HTTPException(status_code=404, detail="Проектът не е намерен")
+        now = datetime.now(timezone.utc).isoformat()
+        ctype = client_type
+        if client_id is None:
+            new_type, new_id, message = None, None, "Клиентът е премахнат от проекта"
         else:
-            client = await tenant.persons.find_one({"id": client_id, "org_id": org_id})
-            if client:
-                client_type = "person"
-    
-    if not client:
-        raise HTTPException(status_code=404, detail="Клиентът не е намерен")
-    
-    await tenant.projects.update_one(
-        {"id": project_id},
-        {"$set": {
-            "owner_type": client_type,
-            "owner_id": client_id,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    return {"ok": True, "message": "Клиентът е свързан с проекта"}
+            client = None
+            if ctype == "company":
+                client = await tenant.companies.find_one({"id": client_id}, {"_id": 0}, **kw(session))
+            elif ctype == "person":
+                client = await tenant.persons.find_one({"id": client_id}, {"_id": 0}, **kw(session))
+            else:
+                client = await tenant.companies.find_one({"id": client_id}, {"_id": 0}, **kw(session))
+                if client:
+                    ctype = "company"
+                else:
+                    client = await tenant.persons.find_one({"id": client_id}, {"_id": 0}, **kw(session))
+                    if client:
+                        ctype = "person"
+            if not client:
+                raise HTTPException(status_code=404, detail="Клиентът не е намерен")
+            if not cr.is_selectable(client, "companies" if ctype == "company" else "persons"):
+                raise HTTPException(status_code=422, detail={
+                    "error_code": "COUNTERPARTY_NOT_SELECTABLE",
+                    "message": "Клиентът е неактивен или архивиран — не може да се избира"})
+            new_type, new_id, message = ctype, client_id, "Клиентът е свързан с проекта"
+        version = mr.next_version(project)
+        res = await tenant.projects.update_one(
+            mr.cas_filter(project),
+            {"$set": {"owner_type": new_type, "owner_id": new_id, "updated_at": now, "version": version}},
+            **kw(session))
+        if res.matched_count != 1:
+            raise conflict("VERSION_CONFLICT", "Проектът е променен междувременно — презаредете")
+        await audit(db, session, user, "project.client_link_changed", entity_type="project",
+                    entity_id=project_id, key=key, entity_version=str(version), source_flow="FLOW-010",
+                    diff={"owner_type": {"before": project.get("owner_type"), "after": new_type},
+                          "owner_id": {"before": project.get("owner_id"), "after": new_id}})
+        return {"ok": True, "message": message}
+
+    return await once_in_tx(db, user, key, "project.client_link", {"id": project_id, "body": data}, tx)
 
 
 
@@ -827,7 +831,7 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
             })
 
     return {
-        "client": client,
+        "client": cr.mask_vat_egn(client),       # FG-498
         "projects": project_summaries,
         "totals": {
             "projects_count": len(projects),
@@ -871,4 +875,6 @@ async def get_client_invoices(
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": {"$in": pids}}, {"_id": 0}
     ).sort("issue_date", -1).to_list(200)
+    # CP-01 FG-294 / FG-245: the ЕГН masked for every role; the IBAN by the reader's right
+    invoices = cr.mask_invoice_egn(cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user)))
     return {"items": invoices, "total": len(invoices)}

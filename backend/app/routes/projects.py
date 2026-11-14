@@ -4,7 +4,7 @@ Includes owner (person/company) management merged from Sites module.
 """
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
@@ -25,6 +25,9 @@ from app.deps.auth import (
 from app.deps.modules import enforce_limit
 from app.permissions.money_write import (check_money_write, require_finance_read, strip_money_for_non_finance)
 from app.utils.audit import log_audit
+from app.services import counterparty_rules as cr
+from app.services import master_records as mr
+from app.services.master_write import audit, conflict, forbidden, kw, once_in_tx, require_key
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.services import project_lifecycle as lifecycle
 
@@ -170,6 +173,7 @@ async def list_projects(
     if search:
         s = search.lower()
         projects = [p for p in projects if s in p.get("code", "").lower() or s in p.get("name", "").lower()]
+    full_iban = await cr.full_iban_allowed(user)          # FG-245
     for p in projects:
         if p.get("default_site_manager_id"):
             mgr = await tenant.users.find_one({"id": p["default_site_manager_id"], "org_id": user["org_id"]},
@@ -178,6 +182,7 @@ async def list_projects(
         else:
             p["site_manager_name"] = ""
         p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
+        await _mask_owner_egn(tenant, p, full_iban)   # FG-226 / FG-245 / FG-267 / FG-275
     return projects
 
 @router.post("/projects", status_code=201)
@@ -196,6 +201,7 @@ async def create_project(data: ProjectCreate, request: Request,
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
     if data.type not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be: {', '.join(PROJECT_TYPES)}")
+    await _require_selectable_owner(tenant, data.owner_type, data.owner_id)  # CP-01 R48.4
     if data.type == WARRANTY_TYPE:
         raise _warranty_in_original()
     # Validate owner type if provided
@@ -244,7 +250,10 @@ async def create_project(data: ProjectCreate, request: Request,
         "object_type": data.object_type,
         "structured_address": data.structured_address,
         "contacts": data.contacts,
-        "invoice_details": data.invoice_details,
+        # FG-562: a masked value on CREATE has nothing to echo — refused (422), never stored
+        "invoice_details": await _store_invoice_details(tenant, user, cr.keep_stored_if_masked(
+                                                            data.invoice_details, {}),
+                                                        data.owner_type, data.owner_id),  # CP83-03
         "object_details": data.object_details,
         "created_at": now,
         "updated_at": now,
@@ -257,7 +266,9 @@ async def create_project(data: ProjectCreate, request: Request,
             user_id=data.default_site_manager_id, role_in_project="SiteManager",
             active=True, from_date=data.start_date, to_date=data.end_date)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "project", project["id"], {"code": data.code, "name": data.name})
-    return {k: v for k, v in project.items() if k != "_id"}
+    # FG-266: the create response is a reader too — the stored copy is shown masked
+    return await _mask_owner_egn(tenant, {k: v for k, v in project.items() if k != "_id"},
+                                 await cr.full_iban_allowed(user))
 
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(get_current_user)):
@@ -274,7 +285,109 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     else:
         project["site_manager_name"] = ""
     project["team_count"] = await project_team.active_member_count(_team(user), project_id)
+    await _mask_owner_egn(tenant, project, await cr.full_iban_allowed(user))
     return project
+
+
+async def _company_confirmed(tenant, owner_type, owner_id) -> bool:
+    """FG-267 (pass 28): the owner is a company only when ``owner_id`` is an existing record of
+    this tenant's ``companies`` (TenantData scopes the read). ``owner_type`` alone, an unknown
+    id or an id from another tenant does not count."""
+    if owner_type != "company" or not owner_id:
+        return False
+    return bool(await tenant.companies.get(owner_id, {"_id": 0, "id": 1}))
+
+
+async def _mask_invoice_details(tenant, details, owner_type, owner_id=None):
+    """R48.3 / FG-226 / CP83-03 / FG-267 / FG-275: every reader — Owner and Accountant
+    included — gets the ЕГН copy in ``invoice_details`` masked: always for a person owner and
+    the explicit ``egn`` field, and a 10-digit value unless the owner is a confirmed company
+    of this tenant. The full value only via the audited reveal."""
+    return cr.mask_invoice_details(details, owner_type, owner_id=owner_id,
+                                   company_confirmed=await _company_confirmed(
+                                       tenant, owner_type, owner_id))
+
+
+async def _store_vat_copy(tenant, user, details, owner_type, owner_id):
+    """FG-496 / FG-497 (R48.3, CP83-03): ``invoice_details.vat_number`` is normalised; a
+    BG + ЕГН value is stored MASKED when its canonical record holds the same value (the
+    owner company's ``vat_number``, or the owner person's ``egn``) — the full value stays
+    only there. Without such a record it is kept as typed (readers mask it) and a DQ issue
+    „ЕГН копие без каноничен запис“ is opened."""
+    if not isinstance(details, dict) or not details.get("vat_number"):
+        return details
+    out = dict(details)
+    if "*" in str(out["vat_number"]):
+        # FG-562: reached only with the stored value itself (keep_stored_if_masked put it back:
+        # a redundant copy stored masked) — any other mask was refused there with 422
+        return out
+    out["vat_number"] = cr.canonical_vat_input(out["vat_number"])    # FG-526: 422 if not BG + digits
+    if not cr.vat_is_egn(out["vat_number"]):
+        return out
+    canonical = None
+    if owner_type == "company" and owner_id:
+        co = await tenant.companies.get(owner_id, {"_id": 0, "vat_number": 1})
+        canonical = co and cr.normalize_vat(co.get("vat_number")) == out["vat_number"]
+    elif owner_type == "person" and owner_id:
+        pe = await tenant.persons.get(owner_id, {"_id": 0, "egn": 1})
+        canonical = pe and cr.same_egn(pe.get("egn"), out["vat_number"][2:])
+    if canonical:
+        out["vat_number"] = cr.mask_vat(out["vat_number"])
+        return out
+    from app.services.master_write import dq_issue
+    await dq_issue(tenant, None, code="EGN_COPY_WITHOUT_CANONICAL", severity="warning",
+                   entity_type="project_invoice_details", entity_id=owner_id or None,
+                   message="ЕГН копие без каноничен запис", data={"fields": ["vat_number"]},
+                   created_by=user.get("id"))
+    return out
+
+
+async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
+    """CP83-03 (CLAUDE.md §2: no data destroyed): a full ЕГН typed into ``invoice_details`` is
+    stored masked only when the canonical ``persons`` record of the owner holds the SAME ЕГН
+    (the copy is redundant). Otherwise it is kept as typed — readers still mask it — and a DQ
+    issue „ЕГН копие без каноничен запис“ is opened for the Accountant."""
+    details = await _store_vat_copy(tenant, user, details, owner_type, owner_id)   # FG-496/497
+    fields = cr.egn_copy_fields(details, owner_type, owner_id,   # incl. a possible ЕГН (FG-267)
+                                company_confirmed=await _company_confirmed(tenant, owner_type, owner_id))
+    if not fields:
+        return details
+    person = await tenant.persons.get(owner_id, {"_id": 0, "egn": 1}) if owner_type == "person" else None
+    redundant = [f for f in fields if person and cr.same_egn(details[f], person.get("egn"))]
+    if len(redundant) < len(fields):
+        from app.services.master_write import dq_issue
+        await dq_issue(tenant, None, code="EGN_COPY_WITHOUT_CANONICAL", severity="warning",
+                       entity_type="project_invoice_details", entity_id=owner_id or None,
+                       message="ЕГН копие без каноничен запис",
+                       data={"fields": [f for f in fields if f not in redundant]},
+                       created_by=user.get("id"))
+    return cr.mask_invoice_details(details, owner_type, redundant)
+
+
+async def _mask_owner_egn(tenant, project: dict, full_iban: bool = False) -> dict:
+    """R48.3 / FG-275: every project reader, every role, shows ``invoice_details`` with the ЕГН
+    and a possible ЕГН masked (FG-267); FG-245: and its IBAN as ``****1234`` unless the reader
+    may see a full IBAN (Q005 / D5)."""
+    if isinstance(project, dict) and isinstance(project.get("invoice_details"), dict):
+        project["invoice_details"] = cr.mask_iban_fields(
+            await _mask_invoice_details(tenant, project["invoice_details"],
+                                        project.get("owner_type"), project.get("owner_id")),
+            full_iban)
+    return project
+
+
+async def _require_selectable_owner(tenant, owner_type, owner_id) -> None:
+    """R48.4: an inactive / archived client is not chosen for a project → 422."""
+    if not owner_id:
+        return
+    coll = "companies" if owner_type == "company" else "persons" if owner_type == "person" else None
+    if coll is None:
+        return
+    doc = await tenant.collection(coll).get(owner_id, {"_id": 0})
+    if doc is not None and not cr.is_selectable(doc, coll):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "COUNTERPARTY_NOT_SELECTABLE",
+            "message": "Клиентът е неактивен или архивиран — не може да се избира"})
 
 @router.put("/projects/{project_id}")
 async def update_project(project_id: str, data: ProjectUpdate, request: Request,
@@ -304,6 +417,13 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
         # as PATCH /projects/{id}/client-link, before any write. Unchanged values pass.
         await check_money_write(request, user, "project.client_link.update",
                                 module="M5", resource_type="project")
+    if ("owner_id" in update and update["owner_id"] != project.get("owner_id")) or \
+            ("owner_type" in update and update["owner_type"] != project.get("owner_type")):
+        # R22: the client of a project is changed only by Owner / Admin / Accountant
+        if not cr.can_write_master(user):
+            raise forbidden("Клиентът на обекта се сменя само от Собственик, Админ или Счетоводител (Р22)")
+        await _require_selectable_owner(tenant, update.get("owner_type", project.get("owner_type")),
+                                        update.get("owner_id", project.get("owner_id")))
     if "status" in update and update["status"] not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
     
@@ -327,6 +447,13 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
                 )
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
+    if "invoice_details" in update:        # FG-226: no full ЕГН is ever stored in a project
+        # FG-245: the form sends back what it was shown (****1234 / ******1234) — keep the stored value
+        update["invoice_details"] = cr.keep_stored_if_masked(update["invoice_details"],
+                                                             project.get("invoice_details") or {})
+        update["invoice_details"] = await _store_invoice_details(
+            tenant, user, update["invoice_details"], update.get("owner_type", project.get("owner_type")),
+            update.get("owner_id", project.get("owner_id")))
     if "type" in update and update["type"] != project.get("type"):
         # PRJ-01 / R54 (FG-236): no project becomes a warranty project, and the type is
         # fixed once the project has its first record (else the history is relabelled).
@@ -384,13 +511,18 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
             return await tenant.projects.find_one({"id": project_id}, {"_id": 0},
                                                   session=session)
 
-        return await lifecycle.keyed_transaction(
+        changed = await lifecycle.keyed_transaction(
             user, key, "project.status_change",
             {"project_id": project_id, "update": update, "reason": reason}, work)
+        # CP-01 R48.3 / FG-245 (merge with PRJ-01): this response is a project reader too
+        return await _mask_owner_egn(tenant, changed, await cr.full_iban_allowed(user))
     # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
     await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
-    return await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
+    # FG-266: the legacy audit row never holds a full ЕГН / IBAN (every reader of /audit-logs)
+    await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id,
+                    cr.mask_for_log(update))
+    return await _mask_owner_egn(tenant, await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0}),
+                                 await cr.full_iban_allowed(user))
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin),
@@ -664,10 +796,13 @@ async def get_invoice_details(
         "finance.project_invoice_detail.read", module=None, resource_type="project_invoice_detail")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1, "owner_type": 1, "owner_id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"project_id": project_id, "invoice_details": project.get("invoice_details") or {}}
+    return {"project_id": project_id, "invoice_details": cr.mask_iban_fields(  # FG-226/245/267
+        await _mask_invoice_details(tenant, project.get("invoice_details") or {},
+                                    project.get("owner_type"), project.get("owner_id")),
+        await cr.full_iban_allowed(user))}
 
 
 @router.post("/projects/{project_id}/import-client-invoice")
@@ -714,7 +849,7 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         if person:
             invoice = {
                 "company_name": person.get("full_name") or person.get("fullName") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
-                "eik": person.get("egn") or "",
+                "eik": cr.mask_egn(person.get("egn")) if person.get("egn") else "",  # R48.3
                 "registered_address": person.get("address") or "",
                 "is_vat_registered": False,
             }
@@ -722,10 +857,14 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
     if not invoice:
         raise HTTPException(status_code=404, detail="Client data not found")
 
+    # FG-497 (R48.3): the copy is taken FROM the canonical record — a BG + ЕГН VAT number is
+    # stored masked here; the full value stays only in that record
+    if cr.vat_is_egn(invoice.get("vat_number")):
+        invoice["vat_number"] = cr.mask_vat(cr.normalize_vat(invoice["vat_number"]))
     now = datetime.now(timezone.utc).isoformat()
     await _tenant(user).projects.update_one({"id": project_id, "org_id": user["org_id"]},
                                  {"$set": {"invoice_details": invoice, "updated_at": now}})
-    result = {"ok": True, "invoice_details": invoice}
+    result = {"ok": True, "invoice_details": cr.mask_vat_egn(invoice)}   # FG-482
     # W0-03E: in enforce the imported owner identity also names its Master record.
     from app.master_data.legacy_adapter import annotate_refs
     owner = [{"owner_id": owner_id}]
@@ -957,46 +1096,44 @@ class PersonUpdate(BaseModel):
 
 
 @router.get("/persons")
-async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None):
-    """List all persons in organization"""
+async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None,
+                       include_archived: bool = False):
+    """List all persons in organization — ЕГН always masked (R48.3), archived hidden (R48.4)"""
     tenant = _tenant(user)
-    query = {"org_id": user["org_id"]}
+    query = mr.hide_archived({"org_id": user["org_id"]}, include_archived)
     persons = await tenant.persons.find(query, {"_id": 0}).sort("last_name", 1).to_list(500)
     if q:
         q_lower = q.lower()
         persons = [p for p in persons if q_lower in p.get("first_name", "").lower()
                    or q_lower in p.get("last_name", "").lower()
                    or q_lower in p.get("phone", "").lower()]
-    return persons
+    return [cr.mask_person(p) for p in persons]
 
 
 @router.post("/persons", status_code=201)
-async def create_person(data: PersonCreate, user: dict = Depends(get_current_user)):
-    """Create a new person"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
+async def create_person(data: PersonCreate, user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Create a new person — Accountant/Admin/Owner (R48.5), key (R29), AuditEvent"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     phone = normalize_phone(data.phone)
     if not phone:
         raise HTTPException(status_code=400, detail="Phone number is required")
-    existing = await tenant.persons.find_one({"org_id": org_id, "phone": phone})
-    if existing:
-        raise HTTPException(status_code=400, detail="Person with this phone already exists")
-    now = datetime.now(timezone.utc).isoformat()
+
+    async def check(tenant, session):
+        if await tenant.persons.find_one({"phone": phone}, {"_id": 0, "id": 1}, **kw(session)):
+            raise HTTPException(status_code=400, detail="Person with this phone already exists")
+
     person = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "phone": phone,
         "first_name": data.first_name.strip(),
         "last_name": data.last_name.strip(),
         "email": data.email.strip() if data.email else None,
         "notes": data.notes or "",
-        "created_at": now,
-        "updated_at": now,
+        "is_active": True,
     }
-    await tenant.persons.insert_one(person)
-    await log_audit(org_id, user["id"], user["email"], "created", "person", person["id"], 
-                    {"phone": phone, "name": f"{data.first_name} {data.last_name}"})
-    return {k: v for k, v in person.items() if k != "_id"}
+    return await mr.create(db, user, idempotency_key, collection="persons", doc=person,
+                           fingerprint=data.model_dump(), check=check, result=cr.mask_person)
 
 
 @router.get("/persons/find-by-phone")
@@ -1007,47 +1144,65 @@ async def find_person_by_phone(phone: str, user: dict = Depends(get_current_user
     person = await tenant.persons.find_one({"org_id": user["org_id"], "phone": normalized}, {"_id": 0})
     if not person:
         return {"found": False, "person": None}
-    return {"found": True, "person": person}
+    return {"found": True, "person": cr.mask_person(person)}
 
 
 @router.get("/persons/{person_id}")
 async def get_person(person_id: str, user: dict = Depends(get_current_user)):
-    """Get person by ID"""
+    """Get person by ID — ЕГН masked for every role; the full value only via /egn (R48.3)"""
     tenant = _tenant(user)
     person = await tenant.persons.find_one({"id": person_id, "org_id": user["org_id"]}, {"_id": 0})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    return person
+    return cr.mask_person(person)
+
+
+@router.post("/persons/{person_id}/egn/reveal")
+async def reveal_person_egn(person_id: str, user: dict = Depends(get_current_user),
+                            idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """R48.3: the full ЕГН — Owner / Accountant only; every reveal is an AuditEvent
+    (who, when, whose) committed before the value is returned."""
+    if not cr.can_reveal_egn(user):
+        raise forbidden("Пълното ЕГН се вижда само от Собственик и Счетоводител (Р48.3)")
+    tenant = _tenant(user)
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() \
+        else "reveal-" + uuid.uuid4().hex
+
+    async def tx(session):
+        person = await tenant.persons.find_one({"id": person_id}, {"_id": 0, "id": 1, "egn": 1},
+                                               **kw(session))
+        if not person:
+            raise HTTPException(status_code=404, detail="Person not found")
+        await audit(db, session, user, "person.egn.revealed", entity_type="person",
+                    entity_id=person_id, key=key,
+                    diff={"egn_masked": cr.mask_egn(person.get("egn")),
+                          "revealed_by": user["id"], "role": user.get("role")})
+        return person.get("egn") or ""
+
+    from app.services.master_write import run_tx
+    egn = await run_tx(db, tx)
+    return {"id": person_id, "egn": egn, "revealed": True}
 
 
 @router.put("/persons/{person_id}")
-async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user)):
-    """Update person"""
-    person = await _tenant(user).persons.get(person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Person not found")
+async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Update person — Accountant/Admin/Owner, key, CAS, AuditEvent (CP-01)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     update = {k: v.strip() if isinstance(v, str) else v for k, v in data.model_dump().items() if v is not None}
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await _tenant(user).persons.update_one({"id": person_id}, {"$set": update})
-    return await _tenant(user).persons.get(person_id, {"_id": 0})
+    return await mr.update(db, user, idempotency_key, collection="persons", record_id=person_id,
+                           changes=update, fingerprint={"id": person_id, "body": data.model_dump()},
+                           result=cr.mask_person)
 
 
 @router.delete("/persons/{person_id}")
 async def delete_person(person_id: str, request: Request, user: dict = Depends(require_admin)):
-    """Delete person (admin only)"""
-    person = await _tenant(user).persons.get(person_id)
+    """R48.4: a person is never deleted → 409 COUNTERPARTY_NO_DELETE, nothing written."""
+    person = await _tenant(user).persons.get(person_id, {"_id": 0, "id": 1})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    project_count = await _tenant(user).projects.count({"owner_type": "person", "owner_id": person_id,
-                                                       "org_id": user["org_id"]})
-    if project_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
-    done = await guarded_identity_delete(user, request, db, collection="persons",
-                                         legacy_id=person_id)
-    if done is not None:
-        return done
-    await _tenant(user).persons.delete_one({"id": person_id, "org_id": user["org_id"]})
-    return {"ok": True}
+    raise mr.no_delete("persons")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1076,47 +1231,48 @@ class CompanyUpdate(BaseModel):
 
 
 @router.get("/companies")
-async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None):
-    """List all companies in organization"""
+async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None,
+                         include_archived: bool = False):
+    """List all companies in organization (archived hidden — R48.4)"""
     tenant = _tenant(user)
-    query = {"org_id": user["org_id"]}
+    query = mr.hide_archived({"org_id": user["org_id"]}, include_archived)
     companies = await tenant.companies.find(query, {"_id": 0}).sort("name", 1).to_list(500)
     if q:
         q_lower = q.lower()
         companies = [c for c in companies if q_lower in c.get("name", "").lower() or q_lower in c.get("eik", "").lower()]
-    return companies
+    return cr.mask_vat_egn(companies)            # FG-482
 
 
 @router.post("/companies", status_code=201)
-async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user)):
-    """Create a new company"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
+async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Create a new company — Accountant/Admin/Owner, key; a duplicate ЕИК → 409 (+ DQ)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     eik = normalize_eik(data.eik)
     if not eik:
         raise HTTPException(status_code=400, detail="EIK is required")
-    existing = await tenant.companies.find_one({"org_id": org_id, "eik": eik})
-    if existing:
-        raise HTTPException(status_code=400, detail="Company with this EIK already exists")
-    now = datetime.now(timezone.utc).isoformat()
+    from app.routes.clients import _claim_company_eik, company_duplicate_dq
+
+    async def check(tenant, session):
+        await _claim_company_eik(tenant, session, eik)
+        if await tenant.companies.find_one({"eik": eik}, {"_id": 0, "id": 1}, **kw(session)):
+            raise conflict("EIK_ALREADY_EXISTS", "Company with this EIK already exists")
+
     company = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "eik": eik,
         "name": data.name.strip(),
-        "vat_number": data.vat_number.strip() if data.vat_number else None,
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-496 / FG-526: 422 if not BG + digits
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip() if data.email else None,
         "phone": normalize_phone(data.phone) if data.phone else None,
         "notes": data.notes or "",
-        "created_at": now,
-        "updated_at": now,
+        "is_active": True,
     }
-    await tenant.companies.insert_one(company)
-    await log_audit(org_id, user["id"], user["email"], "created", "company", company["id"], 
-                    {"eik": eik, "name": data.name})
-    return {k: v for k, v in company.items() if k != "_id"}
+    return await company_duplicate_dq(_tenant(user), user, eik, lambda: mr.create(
+        db, user, idempotency_key, collection="companies", doc=company,
+        fingerprint=data.model_dump(), check=check, result=cr.mask_vat_egn))   # FG-482
 
 
 @router.get("/companies/find-by-eik")
@@ -1127,7 +1283,7 @@ async def find_company_by_eik(eik: str, user: dict = Depends(get_current_user)):
     company = await tenant.companies.find_one({"org_id": user["org_id"], "eik": normalized}, {"_id": 0})
     if not company:
         return {"found": False, "company": None}
-    return {"found": True, "company": company}
+    return {"found": True, "company": cr.mask_vat_egn(company)}      # FG-482
 
 
 @router.get("/companies/{company_id}")
@@ -1137,15 +1293,23 @@ async def get_company(company_id: str, user: dict = Depends(get_current_user)):
     company = await tenant.companies.find_one({"id": company_id, "org_id": user["org_id"]}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    return company
+    return cr.mask_vat_egn(company)              # FG-482
+
+
+@router.post("/companies/{company_id}/vat/reveal")
+async def reveal_company_vat(company_id: str, user: dict = Depends(get_current_user),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-482 (R48.3): the full BG + ЕГН VAT number — Owner / Accountant, audited."""
+    return await mr.reveal_vat_egn(db, user, idempotency_key, collection="companies",
+                                   record_id=company_id, entity_type="company")
 
 
 @router.put("/companies/{company_id}")
-async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user)):
-    """Update company"""
-    company = await _tenant(user).companies.get(company_id)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Update company — Accountant/Admin/Owner, key, CAS, AuditEvent (CP-01)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     update = {}
     for k, v in data.model_dump().items():
         if v is not None:
@@ -1155,27 +1319,41 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
                 update[k] = v.strip()
             else:
                 update[k] = v
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await _tenant(user).companies.update_one({"id": company_id}, {"$set": update})
-    return await _tenant(user).companies.get(company_id, {"_id": 0})
+    if "vat_number" in update:     # FG-482 / FG-526 / FG-562: canonical, or the echo of its mask
+        stored = await _tenant(user).companies.get(company_id, {"_id": 0, "vat_number": 1}) or {}
+        action, value = cr.vat_update(update["vat_number"], stored.get("vat_number"))
+        if action == "keep":
+            update.pop("vat_number")
+        else:
+            update["vat_number"] = value
+    return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
+                           changes=update, fingerprint={"id": company_id, "body": data.model_dump()},
+                           result=cr.mask_vat_egn)
 
 
 @router.delete("/companies/{company_id}")
 async def delete_company(company_id: str, request: Request, user: dict = Depends(require_admin)):
-    """Delete company (admin only)"""
-    company = await _tenant(user).companies.get(company_id)
+    """R48.4: a company is never deleted → 409 COUNTERPARTY_NO_DELETE, nothing written."""
+    company = await _tenant(user).companies.get(company_id, {"_id": 0, "id": 1})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    project_count = await _tenant(user).projects.count({"owner_type": "company", "owner_id": company_id,
-                                                       "org_id": user["org_id"]})
-    if project_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
-    done = await guarded_identity_delete(user, request, db, collection="companies",
-                                         legacy_id=company_id)
-    if done is not None:
-        return done
-    await _tenant(user).companies.delete_one({"id": company_id, "org_id": user["org_id"]})
-    return {"ok": True}
+    raise mr.no_delete("companies")
+
+
+def _lifecycle_route(collection: str, action: str):
+    async def handler(record_id: str, body: Dict[str, Any] = Body(default={}),
+                      user: dict = Depends(get_current_user),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+        return await mr.lifecycle(db, user, idempotency_key, collection=collection,
+                                  record_id=record_id, action=action, body=body)
+    handler.__name__ = "%s_%s" % (action, collection)
+    return handler
+
+
+for _coll, _prefix in (("persons", "/persons"), ("companies", "/companies")):
+    for _action in mr.LIFECYCLE_ACTIONS:
+        router.add_api_route("%s/{record_id}/%s" % (_prefix, _action),
+                             _lifecycle_route(_coll, _action), methods=["POST"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1361,7 +1539,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
                 client_data = {
                     "id": p.get("id"),
                     "name": f"{p.get('first_name', '')} {p.get('last_name', '')}".strip(),
-                    "tax_id": p.get("egn", ""),
+                    "tax_id": cr.mask_egn(p.get("egn")) if p.get("egn") else "",  # R48.3
                     "vat_number": "",
                     "responsible_person": "",
                     "address": p.get("address", ""),
@@ -1385,7 +1563,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
 
     return {
         "project": {"id": project["id"], "code": project.get("code", ""), "name": project.get("name", "")},
-        "client": client_data,
+        "client": cr.mask_vat_egn(client_data),                      # FG-482
         "default_currency": "EUR",
         "default_vat_rate": 20,
     }
@@ -1492,7 +1670,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 "type": "company",
                 "name": company.get("name", ""),
                 "eik": company.get("eik", ""),
-                "vat_number": company.get("vat_number", ""),
+                # FG-482: BG + ЕГН masked for every role
+                "vat_number": cr.mask_vat_egn({"vat_number": company.get("vat_number", "")})["vat_number"],
                 "mol": company.get("mol", ""),
                 "phone": company.get("phone", ""),
                 "email": company.get("email", ""),

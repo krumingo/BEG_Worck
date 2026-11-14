@@ -71,12 +71,24 @@ def collection_for(entity_type: str) -> str:
 
 
 def mask_value(kind: Optional[str], value: Any) -> Any:
-    """Personal identifiers are shown as ``12****90`` — enough for a human to find the
-    record, not enough to leak it through a report."""
+    """Personal identifiers are shown as ``******1234`` (R48.3) — enough for a human to find
+    the record, not enough to leak it through a report."""
+    if isinstance(value, str):
+        # CP-01 FG-498 (R71): a VAT key that is BG + ЕГН is personal data too — masked in the
+        # plan and uniqueness reports whatever ``kind`` the caller passes (an organisation's
+        # identifier key carries no sensitive_kind)
+        vkind = kind if kind == "vat" else (value.split(":", 1)[0] if ":" in value else None)
+        if vkind == "vat":
+            from app.services import counterparty_rules as cr
+            raw = value.split(":", 1)[1] if value.startswith("vat:") else value
+            if cr.vat_is_egn(raw):
+                shown = cr.mask_vat(cr.normalize_vat(raw))
+                return "vat:" + shown if value.startswith("vat:") else shown
     if kind not in SENSITIVE_KINDS or not isinstance(value, str):
         return value
     raw = value.split(":", 1)[1] if value.startswith(kind + ":") else value
-    shown = raw[:2] + "****" + raw[-2:] if len(raw) > 4 else "****"
+    # CP-01 R48.3 / FG-227: one ЕГН mask everywhere — ``******`` + the last 4 digits
+    shown = "******" + raw[-4:] if len(raw) > 4 else "****"
     return "%s:%s" % (kind, shown) if value.startswith(kind + ":") else shown
 
 

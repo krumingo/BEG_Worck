@@ -384,7 +384,9 @@ AMOUNT_REQUIRED = {"/api/finance/cash-transactions", "/api/finance/bonus-payment
                    "/api/finance/overhead-transactions", "/api/overhead-snapshots",
                    "/api/labor-entries"}
 # SEC-01-C03-A (R29): its amount is present in PM-01's body, so the missing key decides.
-KEY_REQUIRED = {"/api/projects/{project_id}/material-waste"}
+KEY_REQUIRED = {"/api/projects/{project_id}/material-waste",
+                # CP-01 (R29 / Р48.5): the client link is a master-data write with a key
+                "/api/projects/{project_id}/client-link"}
 
 
 def test_the_pm01_matrix_shows_the_money_write_cells_closed():

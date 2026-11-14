@@ -6,8 +6,8 @@ Phase 3: Subcontractor Acts (Certified Expense)
 Phase 4: Subcontractor Payments
 Phase 5: Profit Integration (extends revenue_expense)
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from typing import Optional, List
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from typing import Any, Dict, Optional, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,10 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.services import master_records as mr
+from app.services import counterparty_rules as cr
+from app.services.bank_account_guard import (check_payment_target, is_cash_account,
+                                             require_selectable_party)
 from app.permissions.money_write import require_money_write, require_finance_read, strip_money_for_non_finance
 from app.permissions.money_input import MoneyWrite, money_value, project_in_tenant  # SEC-01-C03
 
@@ -104,30 +108,80 @@ PKG_STATUSES = ["draft", "confirmed", "in_progress", "partially_certified", "com
 
 
 @router.post("/subcontractors", status_code=201)
-async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    now = datetime.now(timezone.utc).isoformat()
+async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """CP-01 (R48.5): a subcontractor is a counterparty — Accountant/Admin/Owner, key, AuditEvent.
+    FG-229 (R48.6): an ЕИК already held by a subcontractor OR a counterparty → 409 + DQ."""
+    from app.services import counterparty_rules as cr
+    from app.services.master_write import conflict, dq_issue
+    mr.require_writer(user)
+    eik = cr.normalize_eik(data.eik) if data.eik and data.eik.strip() else None
+    if data.eik and data.eik.strip() and not eik:
+        raise HTTPException(status_code=422, detail={"error_code": "EIK_INVALID",
+                                                     "message": "ЕИК съдържа само цифри"})
     sub = {
-        "id": str(uuid.uuid4()), "org_id": user["org_id"],
-        "name": data.name, "eik": data.eik, "vat_number": data.vat_number,
+        "name": data.name, "eik": eik,
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-525 / FG-526: as counterparties
         "contact_person": data.contact_person, "phone": data.phone,
         "email": data.email, "address": data.address, "notes": data.notes,
-        "active": True, "created_at": now, "updated_at": now,
+        "active": True,
     }
-    await tenant.subcontractors.insert_one(sub)
-    return {k: v for k, v in sub.items() if k != "_id"}
+    tenant = _tenant(user)
+
+    async def check(tenant_, session):
+        await mr.claim_eik(tenant_, session, eik)
+        if await mr.eik_holder(tenant_, eik, session=session):
+            raise conflict("EIK_ALREADY_EXISTS", "Контрагент/подизпълнител с този ЕИК вече съществува")
+
+    try:
+        return await mr.create(db, user, idempotency_key, collection="subcontractors", doc=sub,
+                               fingerprint=data.model_dump(), check=check,
+                               result=cr.mask_vat_egn)                       # FG-525
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 409 and detail.get("error_code") == "EIK_ALREADY_EXISTS":
+            holder = await mr.eik_holder(tenant, eik)
+            await dq_issue(tenant, None, code="DUPLICATE_EIK", severity="critical",
+                           entity_type=mr.ENTITIES[holder[0]][0] if holder else "subcontractor",
+                           entity_id=holder[1]["id"] if holder else None,
+                           message="Опит за втори запис със същия ЕИК (подизпълнител)",
+                           data={"eik": eik}, created_by=user["id"])
+        raise
 
 
 @router.get("/subcontractors")
-async def list_subcontractors(user: dict = Depends(require_m2)):
+async def list_subcontractors(user: dict = Depends(require_m2), include_archived: bool = False):
     tenant = _tenant(user)
-    subs = await tenant.subcontractors.find({"org_id": user["org_id"]}, {"_id": 0}).sort("name", 1).to_list(200)
+    subs = await tenant.subcontractors.find(mr.hide_archived({"org_id": user["org_id"]}, include_archived),
+                                            {"_id": 0}).sort("name", 1).to_list(200)
+    from app.services import counterparty_rules as cr
+    subs = cr.mask_iban_fields(subs, await cr.full_iban_allowed(user))       # CP-01 FG-245
     return subs
+
+
+def _sub_lifecycle(action: str):
+    """FG-244 (R48.4): a subcontractor is a counterparty — never deleted; „неактивен“
+    (Accountant / Admin / Owner, reversible) or „архивиран“ (Admin / Owner); reason + AuditEvent;
+    back from the archive its IBANs return to „за проверка“ (R50.3)."""
+    async def handler(sub_id: str, body: Dict[str, Any] = Body(default={}),
+                      user: dict = Depends(require_m2),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+        return await mr.lifecycle(db, user, idempotency_key, collection="subcontractors",
+                                  record_id=sub_id, action=action, body=body)
+    handler.__name__ = "%s_subcontractor" % action
+    return handler
+
+
+for _action in mr.LIFECYCLE_ACTIONS:
+    router.add_api_route("/subcontractors/{sub_id}/%s" % _action, _sub_lifecycle(_action),
+                         methods=["POST"])
 
 
 @router.get("/subcontractors/{sub_id}")
 async def get_subcontractor(sub_id: str, user: dict = Depends(require_m2)):
     sub = await _tenant(user).subcontractors.get(sub_id, {"_id": 0})
+    from app.services import counterparty_rules as cr
+    sub = cr.mask_iban_fields(sub, await cr.full_iban_allowed(user))         # CP-01 FG-245
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
     # W0-03E: additive master_ref in MASTER_DATA_MODE=enforce only.
@@ -155,6 +209,7 @@ async def create_package(data: PackageCreate, user: dict = Depends(require_m2)):
     sub = await tenant.subcontractors.find_one({"id": data.subcontractor_id, "org_id": org_id})
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
+    await require_selectable_party(tenant, "subcontractor", data.subcontractor_id)  # R48.4
 
     now = datetime.now(timezone.utc).isoformat()
     pkg = {
@@ -605,6 +660,21 @@ async def create_subcontractor_payment(
             "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
             "message": "Авансът се приспада по конкретен потвърден акт (act_id)"})
 
+    # CP-01 FG-481 / CP83-M3 (R29): order = role check (dependency) → pure body validation
+    # (above, no read) → the idempotency replay → the state guards. A replay of a completed
+    # key answers with the stored payment BEFORE any state check (an archived payee, a
+    # changed IBAN never turns the original 201 into a refusal); the same key with a
+    # different body → 409.
+    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_payment.create",
+                                               idempotency_key, data)
+    if replay:
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
+
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
@@ -638,19 +708,37 @@ async def create_subcontractor_payment(
     if act_id is not None:
         act = await _confirmed_act(tenant, act_id, pkg_id)
 
+    # CP-01 §1 (FLOW-006 / FLOW-010 §8.1): executed only to a verified bank account of the
+    # subcontractor; an inactive / archived subcontractor is not paid (422). Checked before the key is
+    # reserved, so a refusal writes nothing (no row, no key).
+    # FG-225 (b): the ACCOUNT decides the method — "cash" on a Bank account is a bank
+    # transfer (IBAN check); only a real Cash account is cash (receipt, R50.1).
+    await require_selectable_party(tenant, "subcontractor", pkg["subcontractor_id"])
+    bank_stamp = await check_payment_target(
+        tenant, user, direction="Outflow", method=data.get("payment_method", "bank"),
+        account=account, party_type="subcontractor",
+        party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
+        path="/subcontractor-payments") or {}
+
     mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
     if mw.replay_id:            # the same request again: the original payment, no new row
-        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
 
     payment = {
         "id": mw.new_id("subcontractor_payment"), "org_id": org_id,
         "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
+        **bank_stamp,
         "package_id": pkg_id, "act_id": data.get("act_id"),
         "payment_no": await _get_next_pay_no(org_id),
         "payment_date": data.get("payment_date", now[:10]),
         "amount": amount, "vat_amount": vat_amount, "currency": pkg.get("currency", "EUR"),
         "payment_type": data.get("payment_type", "partial"),
-        "payment_method": data.get("payment_method", "bank"),
+        # CP-01 FG-480 / FG-225: the account decides the method, as for the ledger row
+        "payment_method": "cash" if is_cash_account(account) else "bank",
         "notes": data.get("notes", ""),
         "status": "completed",
         "kind": PAYMENT_KIND,
@@ -667,9 +755,12 @@ async def create_subcontractor_payment(
         await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now,
                                            act=act)
         mw.result_id = payment["id"]
-    # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost the
-    # insert answers with the same payment (same payment_no) as the one that won it.
-    return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
+        # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost
+        # the insert answers with the same payment (same payment_no) as the one that won it.
+        # FG-511 (R29): that response is stored with the key; every replay returns it as is.
+        mw.result_payload = await tenant.subcontractor_payments.find_one({"id": payment["id"]},
+                                                                         {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 _COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
@@ -935,6 +1026,8 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
             "note": "Подизпълнител/бригада плащане",
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
+            **{k: payment[k] for k in ("bank_account_id", "bank_account_iban_masked",
+                                       "cash_receipt_file_id", "cash_recipient_name") if k in payment},
             "created_at": now, "updated_at": now,
         }))
     async with mw.insert_once():
@@ -1065,6 +1158,17 @@ async def create_subcontractor_advance(
     """
     amount = round(money_value(data.get("amount")), 2)
     reason = _reason(data.get("reason"))
+    # CP-01 FG-481 / CP83-M3 (R29): role check → pure validation (above) → the replay → the
+    # state guards. A completed key → the stored advance; the same key with another body → 409.
+    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_advance.create",
+                                               idempotency_key, {**data, "package_id": pkg_id})
+    if replay:
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
@@ -1096,10 +1200,26 @@ async def create_subcontractor_advance(
             "message": "Авансът трябва да мине през платежния регистър: изберете "
                        "сметка (Каса/Банка)"})
 
+    # CP-01 FG-427 (R71): an advance is a payment to the subcontractor — the SAME guards as
+    # every payment, before the key is reserved (a refusal writes nothing): an inactive /
+    # archived subcontractor → 422; the account decides cash vs bank (FG-225); bank only to
+    # a VERIFIED account; cash only with a registered receipt + recipient (R59), and blocked
+    # while the subcontractor has an unverified IBAN (R50.1).
+    await require_selectable_party(tenant, "subcontractor", pkg["subcontractor_id"])
+    bank_stamp = await check_payment_target(
+        tenant, user, direction="Outflow", method=data.get("payment_method", "bank"),
+        account=account, party_type="subcontractor",
+        party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
+        path="/subcontractor-packages/{id}/advances") or {}
+
     mw = await MoneyWrite.begin(user, "finance.subcontractor_advance.create", idempotency_key,
                                 {**data, "package_id": pkg_id})
     if mw.replay_id:
-        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
 
     now = datetime.now(timezone.utc).isoformat()
     advance = {
@@ -1110,10 +1230,13 @@ async def create_subcontractor_advance(
         "payment_no": await _get_next_pay_no(org_id),
         "payment_date": data.get("advance_date") or now[:10],
         "amount": amount, "vat_amount": 0.0, "currency": pkg.get("currency", "EUR"),
-        "payment_method": data.get("payment_method", "bank"),
+        # CP-01 FG-480: the ACCOUNT decides the method (FG-225), as for the ledger row —
+        # never the request's word
+        "payment_method": "cash" if is_cash_account(account) else "bank",
         "reason": reason, "notes": data.get("notes", ""),
         "status": "completed", "account_id": account["id"],
         "created_by": user["id"], "created_at": now,
+        **bank_stamp,                                         # CP-01 FG-427
     }
     ledger_id = mw.new_id("finance_payment")
     advance["finance_payment_id"] = ledger_id
@@ -1137,6 +1260,7 @@ async def create_subcontractor_advance(
                 "project_id": pkg["project_id"],
                 "subcontractor_payment_id": advance["id"],   # FG-45 origin (PR #70)
                 "subcontractor_advance": True,
+                **bank_stamp,                                 # CP-01 FG-427: the proof
                 "created_at": now, "updated_at": now,
             }))
         async with mw.insert_once():
@@ -1152,7 +1276,10 @@ async def create_subcontractor_advance(
                                                                   advance["id"]))
         await _refresh_package_totals(tenant, pkg_id, now)
         mw.result_id = advance["id"]
-    return await tenant.subcontractor_payments.find_one({"id": advance["id"]}, {"_id": 0})
+        # FG-511 (R29): the response is stored with the key; every replay returns it as is
+        mw.result_payload = await tenant.subcontractor_payments.find_one({"id": advance["id"]},
+                                                                         {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 @router.post("/subcontractor-acts/{act_id}/advance-deduction", status_code=201)
@@ -1172,6 +1299,18 @@ async def deduct_advance_on_act(
     and as an AuditEvent. No ledger row: no money moves. Idempotency-Key required (R29)."""
     amount = round(money_value(data.get("amount")), 2)
     reason = _reason(data.get("reason"), required=False)
+    # CP-01 FG-499 (R29, CP83-M3 order): role check → pure validation (above) → the replay →
+    # the state guards (act confirmed, package). A completed key → the stored act; the same
+    # key with another body → 409.
+    replay = await MoneyWrite.completed_replay(user, "subcontract.advance_deduction.execute",
+                                               idempotency_key, {**data, "act_id": act_id})
+    if replay:
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_acts.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
     tenant = _tenant(user)
     act_row = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]},
                                                        {"_id": 0, "package_id": 1})
@@ -1188,7 +1327,9 @@ async def deduct_advance_on_act(
     mw = await MoneyWrite.begin(user, "subcontract.advance_deduction.execute", idempotency_key,
                                 {**data, "act_id": act_id})
     if mw.replay_id:
-        return await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     async with mw:
         reservation_id = mw.new_id("advance_deduction_reservation")
@@ -1198,7 +1339,9 @@ async def deduct_advance_on_act(
                                     reservation_id=reservation_id)
         await _refresh_package_totals(tenant, pkg_id, now)
         mw.result_id = act_id
-    return await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
+        # FG-511 (R29): the response is stored with the key; every replay returns it as is
+        mw.result_payload = await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 # ═══════════════════════════════════════════════════════════════════

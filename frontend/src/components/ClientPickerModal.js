@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,13 +147,13 @@ export default function ClientPickerModal({
       await API.patch(`/projects/${projectId}/client-link`, {
         client_id: client.id,
         client_type: client.type,
-      });
+      }, idempotencyHeaders(newIdempotencyKey()));
       
       toast.success("Клиентът е свързан с проекта!");
       onClientSelected?.();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Грешка при запазване");
+      toast.error(apiErrorText(err, "Грешка при запазване"));
     } finally {
       setSaving(false);
     }
@@ -172,7 +173,7 @@ export default function ClientPickerModal({
           return;
         }
         
-        const res = await API.post("/clients/company", companyForm);
+        const res = await API.post("/clients/company", companyForm, idempotencyHeaders(newIdempotencyKey()));
         newClient = res.data;
       } else {
         if (!personForm.full_name.trim()) {
@@ -181,7 +182,7 @@ export default function ClientPickerModal({
           return;
         }
         
-        const res = await API.post("/clients/person", personForm);
+        const res = await API.post("/clients/person", personForm, idempotencyHeaders(newIdempotencyKey()));
         newClient = res.data;
       }
       
@@ -189,13 +190,13 @@ export default function ClientPickerModal({
       await API.patch(`/projects/${projectId}/client-link`, {
         client_id: newClient.id,
         client_type: newClient.type,
-      });
+      }, idempotencyHeaders(newIdempotencyKey()));
       
       toast.success("Клиентът е създаден и свързан с проекта!");
       onClientSelected?.();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Грешка при създаване");
+      toast.error(apiErrorText(err, "Грешка при създаване"));
     } finally {
       setSaving(false);
     }

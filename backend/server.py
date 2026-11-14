@@ -154,6 +154,10 @@ api_router.include_router(invoice_lines_router)
 from app.routes.counterparties import router as counterparties_router
 api_router.include_router(counterparties_router)
 
+# CP-01: VerifiedBankAccount register (FLOW-010 §3.3, R48)
+from app.routes.bank_accounts import router as bank_accounts_router
+api_router.include_router(bank_accounts_router)
+
 # Import items router (materials/inventory items)
 from app.routes.items import router as items_router
 api_router.include_router(items_router)

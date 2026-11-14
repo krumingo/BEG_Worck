@@ -332,6 +332,9 @@ async def get_counterparty_invoices(
     
     skip = (page - 1) * page_size
     invoices = await _tenant(user).invoices.find(query, {"_id": 0}).sort("issue_date", -1).skip(skip).limit(page_size).to_list(page_size)
+    from app.services import counterparty_rules as _cr
+    invoices = _cr.mask_invoice_egn(                                               # CP-01 FG-294
+        _cr.mask_iban_fields(invoices, await _cr.full_iban_allowed(user)))         # CP-01 FG-245
     
     # Get counterparty name
     counterparty = await _tenant(user).counterparties.get(counterparty_id, {"_id": 0, "name": 1})

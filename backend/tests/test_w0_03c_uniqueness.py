@@ -458,7 +458,7 @@ def test_egn_is_masked_in_the_report():
     r = report_of(db)
     assert "8001011234" not in json.dumps(r, ensure_ascii=False)
     g = index_of(r, "md_person", "md_uq_identifier")["blocking_groups"][0]
-    assert g["key"]["identifiers.key"] == "egn:80****34"
+    assert g["key"]["identifiers.key"] == "egn:******1234"
 
 
 def test_absent_collections_are_reported_as_absent_not_as_clean_data():
@@ -497,7 +497,7 @@ def test_legacy_egn_is_masked_and_only_listed_fields_are_read():
     r = report_of(db, include_legacy=True)
     text = json.dumps(r, ensure_ascii=False)
     assert "8001011234" not in text and "BG00SECRET" not in text
-    assert "egn:80****34" in text
+    assert "egn:******1234" in text
 
 
 # ---------------------------------------------------------------- report from an export (NAS path)
