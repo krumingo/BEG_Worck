@@ -1997,7 +1997,7 @@ def test_r88_restore_needs_a_key_and_a_reason(obs):
 @real
 def test_the_committed_evidence_is_a_run_of_this_harness():
     data = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))
-    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83", "pass46", "pass47"}
+    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83", "pass46", "pass47", "r88"}
 
 
 if __name__ == "__main__":

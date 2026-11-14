@@ -1,34 +1,33 @@
-# MEDIA-SEC-01 gates after FLOW Guard passes 48/49 — code = fdd3ec7 (+ evidence-only 206262a: PM-01 harness re-run); branch from main 3863610 (main unchanged)
+# MEDIA-SEC-01 gates after R88 (restore) + screen „Файлове за преглед“ — code = 98d2d028 (+ a one-line test fix, see MEDIA); branch from main 3863610 (main unchanged)
 # backend: local real MongoDB 7.0 replica set rs0 (docker mongo:7.0, port 27019),
 #   W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27019/?directConnection=true', from backend/:
 #   PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfs <file>   (scratch DBs dropped between files)
 PM-01 harness exit 0
-tests/test_r0_01_billing_p0.py: 83 passed, 1 warning in 11.66s
-tests/test_r0_02_items_tenant_filter.py: 69 passed, 1 warning in 5.74s
-tests/test_r0_03_roles_email.py: 388 passed, 10 warnings in 95.86s (0:01:35)
-tests/test_r0_05_pay_run_selected_only.py: 145 passed, 1 warning in 13.06s
-tests/test_r0_06_paid_pay_run.py: 56 passed, 1 warning in 11.62s
-tests/test_r0_07_dev_reset.py: 73 passed, 1 warning in 5.80s
+tests/test_r0_01_billing_p0.py: 83 passed, 1 warning in 11.67s
+tests/test_r0_02_items_tenant_filter.py: 69 passed, 1 warning in 5.59s
+tests/test_r0_03_roles_email.py: 388 passed, 10 warnings in 94.26s (0:01:34)
+tests/test_r0_05_pay_run_selected_only.py: 145 passed, 1 warning in 12.65s
+tests/test_r0_06_paid_pay_run.py: 56 passed, 1 warning in 11.29s
+tests/test_r0_07_dev_reset.py: 73 passed, 1 warning in 6.26s
 R0 total: 814 passed
-tests/test_sec_01_c01_all_money_writes.py: 7 passed, 10 warnings in 27.94s
-tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed, 10 warnings in 25.36s
-tests/test_sec_01_c03_payment_amount_idempotency.py: 6 passed, 2 warnings in 30.37s
-tests/test_sec_01_money_write_permissions.py: 8 passed, 10 warnings in 14.96s
+tests/test_sec_01_c01_all_money_writes.py: 7 passed, 10 warnings in 27.56s
+tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed, 10 warnings in 26.90s
+tests/test_sec_01_c03_payment_amount_idempotency.py: 6 passed, 2 warnings in 27.21s
+tests/test_sec_01_money_write_permissions.py: 8 passed, 10 warnings in 14.45s
 SEC-01 total: 30 passed
-tests/test_pay_01_c01_amounts_reason.py: 153 passed, 1 warning in 31.77s
-tests/test_pay_01_c01_e_serialisation.py: 108 passed, 1 warning in 25.30s
+tests/test_pay_01_c01_amounts_reason.py: 153 passed, 1 warning in 35.13s
+tests/test_pay_01_c01_e_serialisation.py: 108 passed, 1 warning in 25.83s
 tests/test_pay_01_c01_idempotency.py: 198 passed, 1 warning in 43.49s
-tests/test_pay_01_c01_source_module.py: 80 passed, 1 warning in 17.70s
-tests/test_pay_01_payment_reversal.py: 91 passed, 1 warning in 21.21s
+tests/test_pay_01_c01_source_module.py: 80 passed, 1 warning in 17.41s
+tests/test_pay_01_payment_reversal.py: 91 passed, 1 warning in 22.65s
 PAY total: 630 passed
-tests/test_prj_01_project_lifecycle.py: 9 passed in 9.34s
-tests/test_media_sec_01.py: 55 passed in 10.61s
-tests/test_pm_01_permission_matrix.py: 6 passed, 10 warnings in 153.81s (0:02:33)
-tests/test_sec_02_finance_read.py: 31 passed, 10 warnings in 165.90s (0:02:45)
-W0: 16 failed, 1176 passed, 10 warnings in 119.30s (0:01:59)
+tests/test_prj_01_project_lifecycle.py: 9 passed in 10.33s
+tests/test_pm_01_permission_matrix.py: 6 passed, 10 warnings in 160.55s (0:02:40)
+tests/test_sec_02_finance_read.py: 31 passed, 10 warnings in 166.64s (0:02:46)
+tests/test_media_sec_01.py: on 98d2d028 1 failed, 57 passed — test_the_committed_evidence_is_a_run_of_this_harness pinned the results.json sections without the new r88; the test fixed (one line), re-run: 58 passed
+W0: 16 failed, 1176 passed, 10 warnings in 122.47s (0:02:02)
 W0 failure set IDENTICAL to main's 16 (docs/evidence/PWA-01/main-merge-5e36dc2/w0_failed.txt): w0_failed.txt
 Warehouse canonical (PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, MONGO_URL=rs0): 44 files / 1121 passed, 0 failed, 0 errors — warehouse_suite.txt
-#   (the first full run on fdd3ec7 had 1 setup error in test_warehouse_canonical_c26j_r34_r35_prices.py: 57 passed + 1 error; that file alone 3x → 58 passed; the full suite re-run above → 1121, clean)
 A1 tenant access guard: 498 units, 0 violations; A2C tenant boundary guard: 247 modules, 0 violations; A2B inventory regenerated: unchanged
-frontend: craco test --watchAll=false → Test Suites: 28 passed, 28 total Tests:       259 passed, 259 total build exit 0 
-MEDIA-SEC-01 red before / green after: red_pass48_on_cb19aeb.txt (7 failed), red_pass48_scope_on_35cc099.txt (2 failed), red_pass49_on_700629f.txt (3 failed); on fdd3ec7 → 55 passed
+frontend: craco test --watchAll=false → Test Suites: 29 passed, 29 total Tests:       281 passed, 281 total build exit 0 
+red before / green after: red_r88_on_582eb9d.txt (3 failed); red_pass49_on_700629f.txt, red_pass48_scope_on_35cc099.txt, red_pass48_on_cb19aeb.txt
