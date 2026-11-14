@@ -15,9 +15,9 @@
    "detail": "Записано на телефона — ще се изпрати, когато има връзка"
   },
   {
-   "name": "offline daily report kept on the phone, back to Днес (badge counts it)",
+   "name": "offline daily report kept on the phone, back to Днес (badge: Записано на телефона · 2)",
    "ok": true,
-   "detail": "2"
+   "detail": "Записано на телефона\n· 2"
   },
   {
    "name": "offline photo captured on the site screen",
@@ -33,12 +33,12 @@
      "plain": false
     },
     {
-     "op": "attendance.mark",
+     "op": "media.upload",
      "status": "saved",
      "plain": false
     },
     {
-     "op": "media.upload",
+     "op": "attendance.mark",
      "status": "saved",
      "plain": false
     }
@@ -66,7 +66,7 @@
    "name": "server: today's attendance recorded from the phone",
    "ok": true,
    "detail": {
-    "status": "Late",
+    "status": "Present",
     "source": "offline_sync"
    }
   },
@@ -119,12 +119,12 @@
    "plain": false
   },
   {
-   "op": "attendance.mark",
+   "op": "media.upload",
    "status": "saved",
    "plain": false
   },
   {
-   "op": "media.upload",
+   "op": "attendance.mark",
    "status": "saved",
    "plain": false
   }
@@ -136,24 +136,25 @@
  ],
  "attendance_today": {
   "entry": {
-   "id": "9fa62fa0-b8df-4890-ac80-e759eed28c0f",
-   "org_id": "76cf14ce-dfbe-4893-8581-b6010539e530",
-   "date": "2026-11-13",
+   "id": "79ddf496-2436-4cbb-ad42-9915da1180a6",
+   "org_id": "7850b0fa-a18d-4593-b809-1a3c74997912",
+   "date": "2026-11-14",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
-   "status": "Late",
+   "status": "Present",
    "note": "",
-   "marked_at": "2026-11-13T18:43:40.027924+00:00",
+   "marked_at": "2026-11-14T00:16:28.487721+00:00",
    "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
    "source": "offline_sync",
    "version": 1,
-   "sync_local_id": "6e6a3953-aeb9-4e9c-8ad7-6eaf0e376810",
-   "captured_at": "2026-11-13T18:43:35.776000+00:00",
+   "sync_local_id": "ad16a51a-cb8f-4695-a782-37778f39d900",
+   "captured_at": "2026-11-14T00:16:24.277000+00:00",
    "captured_tz": "UTC",
-   "device_id": "bd71a684-bf25-490b-b0bb-55658761cf5e"
+   "device_id": "73027b5c-edd3-47e2-969b-a6b0592352e1",
+   "attendance_day_key": "7850b0fa-a18d-4593-b809-1a3c74997912|f0cf50a7-9567-582b-8331-2c873a0f9d64|2026-11-14"
   },
-  "date": "2026-11-13",
-  "past_deadline": true,
+  "date": "2026-11-14",
+  "past_deadline": false,
   "deadline": "10:00",
   "active_projects": [
    {
@@ -165,20 +166,22 @@
  },
  "duplicate": {
   "first": [
-   "conflict",
-   "conflict"
+   "synced",
+   "synced"
   ],
   "again": {
-   "local_id": "7d0105f6-8fb8-4a3a-91e4-0e2a7daf728f",
-   "idempotency_key": "4a34630e-1d9d-4aff-bae3-3d4f39099fce",
-   "status": "conflict",
+   "local_id": "30d903b6-2318-4c6a-a8be-31cd90b52787",
+   "idempotency_key": "c67ad509-4b6e-4c81-a3b6-ec772a92a217",
+   "status": "synced",
    "result": {
-    "conflict_id": "d33d6c5a-5482-4808-932a-db3063449d55",
-    "kind": "already_recorded"
+    "entity_type": "attendance",
+    "entity_id": "79ddf496-2436-4cbb-ad42-9915da1180a6",
+    "date": "2026-11-14",
+    "identical": true
    },
    "replay": true,
-   "received_at": "2026-11-13T18:43:44.141281+00:00",
-   "captured_at": "2026-11-13T18:43:44.131000+00:00"
+   "received_at": "2026-11-14T00:16:32.609444+00:00",
+   "captured_at": "2026-11-14T00:16:32.598000+00:00"
   }
  },
  "history_status": 404,

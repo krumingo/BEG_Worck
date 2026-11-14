@@ -48,7 +48,7 @@
 - Всеки запис/решение → canonical AuditEvent (`source_flow FLOW-037`, `source_channel offline_sync`).
 
 ## Доказателства
-### Браузър срещу реалния backend (`e2e/`) — **18 PASS / 0 FAIL** (`e2e-results.json`)
+### Браузър срещу реалния backend (`e2e/`) — **18 PASS / 0 FAIL на 1c6ff5b** (`e2e-results.json`, скрийншотите обновени)
 Реален uvicorn + реален MongoDB 7.0 replica set (локален docker), production build зад `e2e/proxy.js`,
 ST-01 синтетични tenant-и A/B, флагът включен само за tenant A. Предварително инсталиран Chromium.
 Скрийншоти deviceScaleFactor 2: телефон 390×844 (Android), десктоп 1366×860.
