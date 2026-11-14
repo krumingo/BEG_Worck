@@ -7276,3 +7276,15 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | PAY | 630 | 630 |
 | R0 | 814 | 814 |
 | W0 | 16 = main's 16 (`test_r1` order-dependent) | same |
+
+## 2026-11-14 — Working mode change: docs/ops/PROTOCOL.md (Krum, 14.11.2026)
+
+- **Source:** `claude/happy-meitner-bmcnel` `e6b0339e`, §2.4 and the orchestrator's summary. Verified in the repo before applying.
+- **When AUDIT-2 is engaged:** only for medium or high risk, on request.
+- **What a review covers:**
+  - the diff, the acceptance criteria and the risk areas;
+  - logic, missing tests and conformance to the decisions, not only green tests;
+  - one report: PASS or findings.
+- **Level 3 pack, until CI exists:** AUDIT-2 alone runs the full pack (R0, W0, PAY, SEC-01 / 02, PM-01, warehouse, A1 / A2C), once, on the exact commit about to be merged. Programmers run Levels 1–2 only.
+- **No self-wakes and no check-ins.**
+- **Orchestrator:** now `session_01UghxKZh8ft3pLYSmADWU4B`.
