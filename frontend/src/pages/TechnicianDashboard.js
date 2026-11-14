@@ -25,6 +25,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// FG-661: why a worker could not be removed from the day's list (the server keeps the presence)
+export function refusedReasonText(r) {
+  const why = (r && r.relies_on) || "";
+  if (r && r.error_code === "CORRECTION_OR_REVERSAL_REQUIRED") return "денят е затворен (заплати/одобрен отчет)";
+  if (why === "daily_report") return "има отчет";
+  if (why === "offline_sync") return "офлайн запис";
+  if (why === "late_confirmation") return "потвърден закъснял запис";
+  return "присъствието се ползва";
+}
+
 export default function TechnicianDashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -33,6 +43,8 @@ export default function TechnicianDashboard() {
 
   // Navigation state
   const [screen, setScreen] = useState("myDay"); // myDay | object | people | roster | report | review
+  // FG-661: workers the last list save could not remove (their presence is in use / day closed)
+  const [rosterRefused, setRosterRefused] = useState([]);
   const [sites, setSites] = useState([]);
   const [myTools, setMyTools] = useState([]);
   const [todayInfo, setTodayInfo] = useState(null);  // { entry, reportsCount }
@@ -743,7 +755,8 @@ export default function TechnicianDashboard() {
     // === Auto-save helper ===
     const saveRoster = async (workers) => {
       const payload = workers.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name, status: "Present" }));
-      await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers: payload });
+      const saved = await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers: payload });
+      setRosterRefused((saved && saved.data && saved.data.refused) || []);
       try {
         const [detailRes, draftsRes] = await Promise.all([
           API.get(`/technician/site/${selectedSite.project_id}/detail`),
@@ -799,11 +812,21 @@ export default function TechnicianDashboard() {
 
     const todayStr = new Date().toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const dailyIds = new Set(enrichedRoster.map(w => w.worker_id));
+    const refusedWorkerName = (wid) => ((enrichedRoster.find(w => w.worker_id === wid) || {}).worker_name) || wid;
     const shortlistFiltered = siteWorkers.filter(w => w.is_active && !dailyIds.has(w.worker_id));
     const allShownIds = new Set([...dailyIds, ...shortlistFiltered.map(w => w.worker_id)]);
 
     return (
       <div className="p-4 max-w-lg mx-auto space-y-4" data-testid="tech-people">
+        {rosterRefused.length > 0 && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300" role="alert" data-testid="roster-refused">
+            {rosterRefused.map((r) => (
+              <p key={r.worker_id} data-testid="roster-refused-item">
+                {refusedWorkerName(r.worker_id)} не е премахнат: {refusedReasonText(r)}
+              </p>
+            ))}
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => setScreen("object")}><ArrowLeft className="w-4 h-4" /></Button>

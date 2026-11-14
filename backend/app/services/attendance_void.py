@@ -63,6 +63,39 @@ async def attendance_in_use(tenant, entry: Dict[str, Any],
     return None
 
 
+#: FG-659 (R61-4, FLOW-014): pay-run states that close the worker's day for any edit
+CLOSED_PAY_RUN_STATES = ("confirmed", "paying", "paid", "payment_failed")
+
+
+async def correction_locked(tenant, entry: Dict[str, Any]) -> Optional[str]:
+    """The day is closed for a correction or a void: a confirmed / paid / failed pay run covers
+    it, or an APPROVED / SUBMITTED report (or one already in payroll) relies on the entry."""
+    worker, date = entry.get("user_id"), entry.get("date")
+    run = await tenant.pay_runs.find_one(
+        {"status": {"$in": list(CLOSED_PAY_RUN_STATES)}, "period_start": {"$lte": date},
+         "period_end": {"$gte": date}, "employee_rows.employee_id": worker}, {"_id": 0, "status": 1})
+    if run:
+        return "pay_run_%s" % run.get("status")
+    rep = await tenant.employee_daily_reports.find_one(
+        {"worker_id": worker, "date": date, "project_id": entry.get("project_id"),
+         "$or": [{"approval_status": {"$in": ["APPROVED", "SUBMITTED"]}},
+                 {"status": {"$in": ["Approved", "APPROVED", "Submitted", "SUBMITTED"]}},
+                 {"payroll_status": {"$in": ["batched", "paid"]}}]},
+        {"_id": 0, "approval_status": 1, "status": 1, "payroll_status": 1})
+    if rep:
+        if rep.get("payroll_status") in ("batched", "paid"):
+            return "report_in_payroll"
+        st = (rep.get("approval_status") or rep.get("status") or "").upper()
+        return "report_approved" if st == "APPROVED" else "report_submitted"
+    return None
+
+
+def refuse_locked(entry: Dict[str, Any], why: str) -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "error_code": "CORRECTION_OR_REVERSAL_REQUIRED", "closed_by": why, "entry_id": entry.get("id"),
+        "message": "Денят е затворен (%s) — само корекция или сторно през отчета/заплатите" % why})
+
+
 def refuse_in_use(entry: Dict[str, Any], why: str) -> HTTPException:
     return HTTPException(status_code=409, detail={
         "error_code": "ENTRY_IN_USE", "relies_on": why, "entry_id": entry.get("id"),
@@ -161,14 +194,18 @@ async def console_fix(tenant, user: Dict[str, Any], entry_id: str, action: str, 
     entry = await tenant.attendance_entries.find_one({"id": entry_id}, {"_id": 0})
     if not entry:
         done = await tenant.attendance_entries.voided({"id": entry_id, "console_fix_key": key}, {"_id": 0}).to_list(1)
-        if done:                                                   # the same key again: replay
-            return {"replay": True, "entry": done[0]}
+        if done and done[0].get("console_fix_answer"):           # FG-660: the first answer, as it was
+            return done[0]["console_fix_answer"]
         raise HTTPException(status_code=404, detail={"error_code": "NOT_FOUND", "message": "Няма такова присъствие"})
-    if entry.get("console_fix_key") == key:
-        return {"replay": True, "entry": entry}
+    if entry.get("console_fix_key") == key and entry.get("console_fix_answer"):
+        return entry["console_fix_answer"]
     if not (entry.get("sync_local_id") or entry.get("late_confirmed_by")):
         raise HTTPException(status_code=409, detail={
             "error_code": "NOT_FROM_PHONE", "message": "Това присъствие се коригира от обекта/офиса"})
+    # FG-659: a closed day (pay run / approved or submitted report) — never edited here
+    locked = await correction_locked(tenant, entry)
+    if locked:
+        raise refuse_locked(entry, locked)
     version = entry.get("version", 0)
     if base_version is None or int(base_version) != int(version):
         raise HTTPException(status_code=409, detail={"error_code": "CONFLICT_STALE", "version": version,
@@ -205,5 +242,16 @@ async def console_fix(tenant, user: Dict[str, Any], entry_id: str, action: str, 
                        "date": entry.get("date")}, key=key)
     if action == "void":
         await _link_event(tenant, "attendance_entries", entry, ev)
-    return {"replay": False, "action": action, "entry_id": entry_id, "version": version + 1,
-            "audit_event_id": (ev or {}).get("event_id")}
+    answer = {"replay": False, "action": action, "entry_id": entry_id, "version": version + 1,
+              "audit_event_id": (ev or {}).get("event_id")}
+    # FG-660: the first answer is stored; the same Idempotency-Key gets exactly this back
+    await tenant.collection("attendance_entries")._raw.update_one(
+        {"org_id": entry["org_id"], "id": entry_id}, {"$set": {"console_fix_answer": answer}})
+    return answer
+
+
+async def audit_refusal(user: Dict[str, Any], refusal: Dict[str, Any], project_id: str, date: str) -> None:
+    """FG-661: every per-worker refusal of the site list is an AuditEvent."""
+    await _audit(user, "attendance.void_refused", "attendance", refusal.get("entry_id") or "",
+                 None, {"worker_id": refusal.get("worker_id"), "project_id": project_id, "date": date,
+                        "error_code": refusal.get("error_code"), "reason": refusal.get("relies_on")})

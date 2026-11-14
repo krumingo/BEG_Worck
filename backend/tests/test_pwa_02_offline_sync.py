@@ -809,8 +809,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         ok658 = call("POST", fix, role="owner", key=k658, json={
             "action": "correct", "status": "SickLeave", "reason": "болен", "version": e658.get("version") or 0})
         fg["fix_correct"] = {"status": ok658["status"], "version_up": (ok658["body"] or {}).get("version") == (e658.get("version") or 0) + 1}
-        fg["fix_replay"] = (call("POST", fix, role="owner", key=k658, json={
-            "action": "correct", "status": "SickLeave", "reason": "болен", "version": e658.get("version") or 0})["body"] or {}).get("replay")
+        again = call("POST", fix, role="owner", key=k658, json={
+            "action": "correct", "status": "SickLeave", "reason": "болен", "version": e658.get("version") or 0})
+        fg["fix_replay_identical"] = json.dumps(again["body"], sort_keys=True) == json.dumps(ok658["body"], sort_keys=True)
         fg["fix_no_reason"] = call("POST", fix, role="owner", key=str(uuid.uuid4()), json={
             "action": "void", "version": 99})["status"]
         fg["fix_by_technician"] = call("POST", fix, role="technician", key=str(uuid.uuid4()), json={
@@ -824,6 +825,44 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                         for i in (call("GET", "/api/sync/voided?date=%s" % today, role="owner")["body"] or {}).get("items", []))
         fg["fix_events"] = [count("audit_events", {"action": "attendance.corrected", "entity_id": e658.get("id")}),
                             count("audit_events", {"action": "attendance.voided", "entity_id": e658.get("id")})]
+        # FG-659: a closed day is never corrected or voided — paid pay run, approved report
+        yday = local_day(yesterday_dt, sofia)
+        q(lambda: op_db.pay_runs.insert_one({"id": "pr-659", "org_id": A["tenant_id"], "status": "paid",
+                                             "period_start": yday, "period_end": yday,
+                                             "employee_rows": [{"employee_id": tech["id"]}]}))
+        lp = [x for x in call("GET", "/api/sync/presence?date=%s" % yday, role="owner")["body"]
+              if x["user_id"] == tech["id"] and x.get("late_confirmed_by")]
+        e_late = lp[0] if lp else {}
+        def fix659(e, action, **extra):
+            r = call("POST", "/api/sync/presence/%s/fix" % e.get("id"), role="owner", key=str(uuid.uuid4()),
+                     json={"action": action, "reason": "проба", "version": e.get("version") or 0, **extra})
+            return {"status": r["status"], "code": r["error_code"]}
+        fg["fg659_paid_correct"] = fix659(e_late, "correct", status="Absent")
+        fg["fg659_paid_void"] = fix659(e_late, "void")
+        own_p = [x for x in call("GET", "/api/sync/presence?date=%s" % today, role="owner")["body"]
+                 if x["user_id"] == own["id"] and x["project_id"] == P]
+        e_own = own_p[0] if own_p else {}
+        q(lambda: op_db.employee_daily_reports.insert_one({
+            "id": "dr-659", "org_id": A["tenant_id"], "project_id": P, "date": today, "worker_id": own["id"],
+            "hours": 8, "status": "Draft", "approval_status": "APPROVED"}))
+        fg["fg659_approved_correct"] = fix659(e_own, "correct", status="Absent")
+        fg["fg659_approved_void"] = fix659(e_own, "void")
+        fg["fg659_rows_untouched"] = [r.get("status") for r in att_rows(own["id"], today) if r["project_id"] == P] \
+            + [r.get("status") for r in att_rows(tech["id"], yday)]
+        # the site-list path: a confirmed pay run covers the worker → refused per worker, kept, audited
+        w659 = str(uuid.uuid4())
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w659, "status": "Present"}]})
+        q(lambda: op_db.pay_runs.insert_one({"id": "pr-659b", "org_id": A["tenant_id"], "status": "confirmed",
+                                             "period_start": today, "period_end": today,
+                                             "employee_rows": [{"employee_id": w659}]}))
+        before_ref = count("audit_events", {"action": "attendance.void_refused", "structured_diff.worker_id": w659})
+        r659 = call("POST", site4, role="owner", json={"date": today, "workers": [], "removal_reason": "проба"})
+        ref659 = [x for x in (r659["body"] or {}).get("refused", []) if x["worker_id"] == w659]
+        fg["fg659_site"] = {"status": r659["status"], "code": ref659[0]["error_code"] if ref659 else None,
+                            "closed_by": ref659[0]["relies_on"] if ref659 else None}
+        fg["fg659_site_active"] = q(lambda: layer.attendance_entries.count_documents({"user_id": w659}))
+        fg["fg661_refusal_events"] = count("audit_events", {"action": "attendance.void_refused",
+                                                            "structured_diff.worker_id": w659}) - before_ref
         # FG-657: "keep office" when the office entry was voided → RECORD_GONE, conflict stays open
         call("POST", site, role="owner", json={"date": today, "workers": [{"worker_id": adm["id"], "status": "Present"}]})
         c657 = batch([att(adm["id"], status="Absent")], role="admin")["body"]["results"][0]
@@ -1333,11 +1372,25 @@ def test_the_console_corrects_or_voids_a_phone_presence(obs):
     """FG-658: Owner/Admin, reason, Idempotency-Key, version CAS, AuditEvent."""
     f = obs["flowguard"]
     assert f["fix_stale"] == "CONFLICT_STALE"
-    assert f["fix_correct"] == {"status": 200, "version_up": True} and f["fix_replay"] is True
+    assert f["fix_correct"] == {"status": 200, "version_up": True}
+    assert f["fix_replay_identical"] is True                            # FG-660: the first answer
     assert f["fix_no_reason"] == 422 and f["fix_by_technician"] == 403
     assert f["fix_corrected_row"] == {"status": "SickLeave", "correction_reason": "болен"}
     assert f["fix_void"] == 200 and f["fix_void_in_history"] is True
     assert f["fix_events"] == [1, 1]
+
+
+@real
+def test_a_closed_day_is_never_corrected_or_voided(obs):
+    """FG-659 (R61-4, FLOW-014): paid pay run / approved report → 409 for correct and void,
+    on the console and on the site list (per worker, audited — FG-661)."""
+    f = obs["flowguard"]
+    locked = {"status": 409, "code": "CORRECTION_OR_REVERSAL_REQUIRED"}
+    assert f["fg659_paid_correct"] == locked and f["fg659_paid_void"] == locked
+    assert f["fg659_approved_correct"] == locked and f["fg659_approved_void"] == locked
+    assert "voided" not in f["fg659_rows_untouched"] and "Absent" not in f["fg659_rows_untouched"]
+    assert f["fg659_site"] == {"status": 200, "code": "CORRECTION_OR_REVERSAL_REQUIRED", "closed_by": "pay_run_confirmed"}
+    assert f["fg659_site_active"] == 1 and f["fg661_refusal_events"] == 1
 
 
 @real

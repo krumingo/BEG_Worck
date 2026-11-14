@@ -481,10 +481,13 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
     # rest of the list is saved; the answer says per worker what was refused and why
     refused, kept_ids = [], set()
     for e in list(to_void):
-        why = await attendance_void.attendance_in_use(tenant, e)
-        if why:
-            refused.append({"worker_id": e.get("user_id"), "status": 409, "error_code": "ENTRY_IN_USE",
-                            "relies_on": why, "entry_id": e.get("id")})
+        # FG-659: a closed day first (pay run / approved or submitted report), then in use
+        locked = await attendance_void.correction_locked(tenant, e)
+        why = None if locked else await attendance_void.attendance_in_use(tenant, e)
+        if locked or why:
+            refused.append({"worker_id": e.get("user_id"), "status": 409,
+                            "error_code": "CORRECTION_OR_REVERSAL_REQUIRED" if locked else "ENTRY_IN_USE",
+                            "relies_on": locked or why, "entry_id": e.get("id")})
             kept_ids.add(e.get("user_id"))
             to_void.remove(e)
             continue
@@ -541,6 +544,8 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
                 await tenant.attendance_entries.update_one(
                     {"org_id": org_id, "attendance_day_key": day_key}, site_update)
 
+    for r in refused:                            # FG-661: each refusal is on record
+        await attendance_void.audit_refusal(user, r, project_id, d)
     # Workers who were in the previous roster but not in the new list: VOID (FG-650)
     if to_void:
         await attendance_void.void_attendance(tenant, user, to_void, reason)
@@ -1498,6 +1503,9 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
         {"_id": 0}).to_list(50)
     draft_ids = [r["id"] for r in drafts]
     for e in entries:
+        locked = await attendance_void.correction_locked(tenant, e)      # FG-659
+        if locked:
+            raise attendance_void.refuse_locked(e, locked)
         why = await attendance_void.attendance_in_use(tenant, e, ignore_report_ids=draft_ids)
         if why:
             raise attendance_void.refuse_in_use(e, why)
