@@ -158,7 +158,10 @@ def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
         cve = await c.get(f"/api/cash-vs-earned/{P}", headers=_token("owner"))
         assert cve.status_code == 200, cve.text
         cv = cve.json()
-        assert (cv["billed_revenue"], cv["collected_cash"]) == (1100.0, 400.0), cv
+        assert (cv["billed_revenue"], cv["received_net"]) == (1100.0, 400.0), cv
+        assert set(cv["gaps"]) == {"received_vs_earned", "received_vs_billed", "earned_vs_billed"}
+        # FG-711: no field calls the net received amount cash
+        assert "collected_cash" not in cv and "cash_position" not in cv
         assert cv["labels"] == {"billed": "Фактурирано (без ДДС, без проформа)",
                                 "collected": "Получено (без ДДС, без проформа)"}
     run(monkeypatch, scenario, backend)
@@ -195,7 +198,8 @@ def test_fg698b_an_outgoing_credit_note_refund_reduces_the_revenue(monkeypatch, 
              "subtotal": 200.0, "vat_amount": 40.0, "total": 240.0}])
         await _pay(c, "inv-r86", 1200.0, "fg698-b")
         a, _ = await _revenue(c)
-        assert a["pnl"]["revenue"] == 1000.0 and a["pnl"]["invoiced_net"] == 1000.0
+        # FG-712: the credit note lowers the invoiced amount even before any refund
+        assert a["pnl"]["revenue"] == 1000.0 and a["pnl"]["invoiced_net"] == 800.0
         # the seeded refund (the #84 hook): a ledger Outflow allocated to the credit note
         await op.finance_payments.insert_one({"id": "pay-ref", "org_id": ORG, "direction": "Outflow",
                                               "amount": 240.0, "date": "2026-11-12", "account_id": "acc"})
@@ -203,9 +207,94 @@ def test_fg698b_an_outgoing_credit_note_refund_reduces_the_revenue(monkeypatch, 
                                                  "invoice_id": "cn-1", "amount_allocated": 240.0})
         a, pnl = await _revenue(c)
         assert a["pnl"]["revenue"] == 800.0 == pnl["total_revenue"], (a["pnl"], pnl)
-        assert a["pnl"]["invoiced_net"] == 1000.0                              # a credit note is not invoiced
+        assert a["pnl"]["invoiced_net"] == 800.0 and a["pnl"]["awaiting_payment_net"] == 0.0
         # a reversed refund no longer reduces it
         await op.finance_payments.update_one({"id": "pay-ref"}, {"$set": {"status": "reversed"}})
         a, _ = await _revenue(c)
         assert a["pnl"]["revenue"] == 1000.0
+    run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 68 (FG-712 / FG-710 / FG-711)
+
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_fg712_a_credit_note_without_a_refund_lowers_invoiced_and_awaiting(monkeypatch, backend, sign):
+    """FG-712: a −200 net credit note (stored negative or positive) takes 1100 to 900."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-s", **INV},
+            {"id": "inv-o", **INV, "status": "Overdue", "subtotal": 100.0, "vat_amount": 20.0, "total": 120.0,
+             "invoice_no": "R86-O"},
+            {"id": "cn-1", **INV, "kind": "CreditNote", "invoice_no": "CN-1",
+             "subtotal": sign * 200.0, "vat_amount": sign * 40.0, "total": sign * 240.0}])
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["invoiced_net"] == 900.0 == pnl["invoiced_net"], (a["pnl"], pnl)
+        assert a["pnl"]["awaiting_payment_net"] == 900.0 == pnl["awaiting_payment_net"]
+        assert a["invoices"]["total"]["unpaid"] == 1080.0 and a["invoices"]["total"]["invoiced"] == 1080.0
+        assert a["pnl"]["revenue"] == 0.0                                      # no money, no revenue
+    run(monkeypatch, scenario, backend)
+
+
+def _final(**kw):
+    b = {"direction": "Issued", "kind": "Invoice", "project_id": P, "counterparty_name": "Клиент",
+         "counterparty_eik": "", "issue_date": "2026-11-10", "due_date": "2099-01-01", "vat_percent": 20,
+         "lines": [{"description": "СМР", "qty": 1, "unit_price": 1000}]}
+    b.update(kw)
+    return b
+
+
+PF = {**INV, "kind": "Proforma", "subtotal": 500.0, "vat_amount": 100.0, "total": 600.0,
+      "counterparty_name": "Клиент", "counterparty_eik": ""}
+
+
+@pytest.mark.parametrize("_", [0])
+def test_fg710_a_final_invoice_names_its_proforma_advance_through_the_api(monkeypatch, backend, _):
+    """FG-710: advance_proforma_ids in InvoiceCreate / InvoiceUpdate — same project and client,
+    one use; claimed on the proforma, released on removal or cancel; the advance then counts."""
+    async def scenario(c, op):
+        await op.projects.insert_one({"id": "prj-other", "org_id": ORG, "name": "друг", "status": "Active"})
+        await op.invoices.insert_many([
+            {"id": "pf-1", **PF, "invoice_no": "PF-1"},
+            {"id": "pf-other-project", **PF, "invoice_no": "PF-2", "project_id": "prj-other"},
+            {"id": "pf-other-client", **PF, "invoice_no": "PF-3", "counterparty_name": "Друг клиент"},
+            {"id": "pf-draft", **PF, "invoice_no": "PF-4", "status": "Draft"}])
+        await _pay(c, "pf-1", 600.0, "fg710-p")
+        owner = _token("owner")
+        for pid, code in [("pf-other-project", "ADVANCE_PROFORMA_OTHER_PROJECT"),
+                          ("pf-other-client", "ADVANCE_PROFORMA_OTHER_CLIENT"),
+                          ("pf-draft", "ADVANCE_PROFORMA_INVALID"), ("nope", "ADVANCE_PROFORMA_INVALID")]:
+            r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=[pid]), headers=owner)
+            assert r.status_code == 422 and r.json()["detail"]["code"] == code, (pid, r.text)
+        # forbidden: a proforma cannot name an advance
+        r = await c.post("/api/finance/invoices", json=_final(kind="Proforma", advance_proforma_ids=["pf-1"]),
+                         headers=owner)
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "ADVANCE_NOT_A_FINAL_INVOICE", r.text
+        assert await op.invoices.count_documents({"invoice_no": {"$nin": ["PF-1", "PF-2", "PF-3", "PF-4"]}}) == 0
+
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1", "pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        fin = r.json()
+        assert fin["advance_proforma_ids"] == ["pf-1"]
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == fin["id"]
+        # forbidden: no double use
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "ADVANCE_PROFORMA_IN_USE", r.text
+        # issued → the advance counts (FG-698a) and reduces its "чака плащане"
+        await op.invoices.update_one({"id": fin["id"]}, {"$set": {"status": "Sent"}})
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 500.0 and a["pnl"]["awaiting_payment_net"] == 500.0, a["pnl"]
+        # removed on update → released, the advance is a proforma alone again
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=owner)
+        assert r.status_code == 200, r.text
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0 and a["pnl"]["awaiting_payment_net"] == 1000.0
+        # named again on update, then the final invoice is cancelled → released
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": ["pf-1"]}, headers=owner)
+        assert r.status_code == 200 and r.json()["advance_proforma_ids"] == ["pf-1"], r.text
+        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=owner)
+        assert r.status_code == 200, r.text
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text                                    # free to use once more
     run(monkeypatch, scenario, backend)

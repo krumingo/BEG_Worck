@@ -88,11 +88,16 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
         for pid in f.get("advance_proforma_ids") or []:
             if pid in profs and pid not in named:
                 named.append(pid)
-    out = {"invoiced_gross": round(sum(float(i.get("total") or 0) for i in finals.values()), 2),
-           "invoiced_net": issued_revenue_net(finals.values()),
+    # FG-712: an issued credit note lowers the invoiced amount (always, by its absolute amount —
+    # a note may be stored with negative or positive lines), refunded or not
+    cn_gross = sum(abs(float(i.get("total") or 0)) for i in credits.values())
+    cn_net = sum(abs(_net(i)) for i in credits.values())
+    out = {"invoiced_gross": round(sum(float(i.get("total") or 0) for i in finals.values()) - cn_gross, 2),
+           "invoiced_net": round(issued_revenue_net(finals.values()) - cn_net, 2),
+           "credit_notes_net": round(cn_net, 2),
            "received_gross": 0.0, "received_net": 0.0, "advance_net": 0.0, "refunded_net": 0.0,
            "revenue_basis": REVENUE_BASIS}
-    paid_on = {k: 0.0 for k in list(finals) + named}       # gross received per document
+    paid_on = {k: 0.0 for k in list(finals) + named + list(credits)}   # gross received / refunded per document
     docs = {**finals, **{k: profs[k] for k in named}, **credits}
     if docs:
         allocs = await tenant.payment_allocations.find(
@@ -116,8 +121,7 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
                 continue
             gross = abs(float(a.get("amount_allocated") or 0))
             net = gross * abs(_ratio(inv))
-            if not refund:
-                paid_on[a["invoice_id"]] += gross
+            paid_on[a["invoice_id"]] += gross
             d = (pay.get("date") or "")[:10]
             if (date_from and d < date_from) or (date_to and d >= date_to):
                 continue
@@ -141,6 +145,13 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
                 left -= take
         await_gross += left
         await_net += left * _ratio(f)
+    # FG-712: a credit note not (yet) refunded lowers what the client still owes; a refunded
+    # one is settled by the money paid back (and lowers the revenue instead, FG-698b)
+    for cn in credits.values():
+        open_g = max(0.0, abs(float(cn.get("total") or 0)) - paid_on[cn["id"]])
+        await_gross -= open_g
+        await_net -= open_g * abs(_ratio(cn))
+    await_gross, await_net = max(0.0, await_gross), max(0.0, await_net)
     for k in ("received_gross", "received_net", "advance_net", "refunded_net"):
         out[k] = round(out[k], 2)
     out["awaiting_payment_gross"] = round(await_gross, 2)

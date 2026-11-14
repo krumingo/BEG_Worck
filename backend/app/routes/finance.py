@@ -842,6 +842,74 @@ async def list_subcontractor_documents(
     return docs
 
 
+# ── FG-710 (FG-698a, R86 interim default — Krum to confirm): proforma advances ─────────────
+ADVANCE_USED_BY = "advance_used_by_invoice_id"
+
+
+def _client_key(inv: dict) -> tuple:
+    eik = (inv.get("counterparty_eik") or "").strip()
+    return ("eik", eik) if eik else ("name", (inv.get("counterparty_name") or "").strip().lower())
+
+
+async def _check_advance_proformas(tenant: TenantData, target: dict, ids, session=None) -> list:
+    """The proformas a FINAL invoice may name as its advance: issued (not draft / cancelled)
+    Proformas of the same tenant, project and client, not named by another invoice.
+    Returns the canonical list; refuses 422 / 409 before any write."""
+    ids = list(dict.fromkeys(i for i in (ids or []) if i))
+    if not ids:
+        return []
+    if target.get("direction") != "Issued" or (target.get("kind") or "Invoice") != "Invoice":
+        raise HTTPException(status_code=422, detail={
+            "code": "ADVANCE_NOT_A_FINAL_INVOICE",
+            "message": "Аванс по проформа се посочва само в издадена окончателна фактура"})
+    if not target.get("project_id"):
+        raise HTTPException(status_code=422, detail={
+            "code": "ADVANCE_NEEDS_PROJECT", "message": "Фактурата трябва да е към обект"})
+    for pid in ids:
+        pf = await tenant.invoices.find_one({"id": pid}, {"_id": 0}, session=session)
+        if not pf or pf.get("direction") != "Issued" or (pf.get("kind") or "Invoice") != "Proforma" \
+                or pf.get("status") in ("Draft", "Cancelled"):
+            raise HTTPException(status_code=422, detail={
+                "code": "ADVANCE_PROFORMA_INVALID", "proforma_id": pid,
+                "message": "Посочената проформа не е издадена проформа"})
+        if pf.get("project_id") != target["project_id"]:
+            raise HTTPException(status_code=422, detail={
+                "code": "ADVANCE_PROFORMA_OTHER_PROJECT", "proforma_id": pid,
+                "message": "Проформата е към друг обект"})
+        if _client_key(pf) != _client_key(target) or not _client_key(pf)[1]:
+            raise HTTPException(status_code=422, detail={
+                "code": "ADVANCE_PROFORMA_OTHER_CLIENT", "proforma_id": pid,
+                "message": "Проформата е към друг клиент"})
+        used = pf.get(ADVANCE_USED_BY)
+        other = await tenant.invoices.find_one(
+            {"id": {"$ne": target.get("id")}, "advance_proforma_ids": pid, "status": {"$ne": "Cancelled"}},
+            {"_id": 0, "id": 1, "invoice_no": 1}, session=session)
+        if (used and used != target.get("id")) or other:
+            raise HTTPException(status_code=409, detail={
+                "code": "ADVANCE_PROFORMA_IN_USE", "proforma_id": pid,
+                "invoice_id": used or other["id"],
+                "message": "Авансът по тази проформа вече е посочен в друга фактура"})
+    return ids
+
+
+async def _claim_advance_proformas(tenant: TenantData, invoice_id: str, ids: list, previous: list,
+                                   session=None) -> None:
+    """Mark each named proforma as used by ``invoice_id`` (a write on the proforma, so two
+    invoices claiming it concurrently conflict — one wins, the other gets 409); release the
+    proformas the invoice no longer names."""
+    for pid in ids:
+        res = await tenant.invoices.update_one(
+            {"id": pid, "kind": "Proforma", "$or": [{ADVANCE_USED_BY: None}, {ADVANCE_USED_BY: invoice_id}]},
+            {"$set": {ADVANCE_USED_BY: invoice_id}}, session=session)
+        if not res.matched_count:
+            raise HTTPException(status_code=409, detail={
+                "code": "ADVANCE_PROFORMA_IN_USE", "proforma_id": pid,
+                "message": "Авансът по тази проформа вече е посочен в друга фактура"})
+    for pid in set(previous or []) - set(ids):
+        await tenant.invoices.update_one({"id": pid, ADVANCE_USED_BY: invoice_id},
+                                         {"$set": {ADVANCE_USED_BY: None}}, session=session)
+
+
 @router.post("/finance/invoices", status_code=201)
 async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -917,6 +985,9 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         "created_at": now,
         "updated_at": now,
     }
+    advance_ids = await _check_advance_proformas(_tenant(user), invoice, data.advance_proforma_ids)
+    if advance_ids:
+        invoice["advance_proforma_ids"] = advance_ids
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
@@ -932,6 +1003,9 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     await ensure_chain_index(tenant._db)
 
     async def _create(session):
+        if advance_ids:                            # FG-710: re-checked and claimed in the transaction
+            await _check_advance_proformas(tenant, invoice, advance_ids, session=session)
+            await _claim_advance_proformas(tenant, invoice["id"], advance_ids, [], session=session)
         await tenant.invoices.insert_one(dict(invoice), session=session)
         for ch in stamped:
             await audit_allocation_change(tenant, user, ch["line_id"], ch["before"], ch["after"],
@@ -940,7 +1014,8 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         await refresh_invoice_dq(tenant, invoice["id"], actor=user, session=session)
     await run_transaction(tenant, _create)
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
-                    {"invoice_no": data.invoice_no, "direction": data.direction})
+                    {"invoice_no": data.invoice_no, "direction": data.direction,
+                     "advance_proforma_ids": advance_ids})
     
     return {k: v for k, v in invoice.items() if k != "_id"}
 
@@ -1033,6 +1108,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     version_id = str(uuid.uuid4())
+    advance_change = "advance_proforma_ids" in update
+    if advance_change:                             # FG-710: validated before any write
+        update["advance_proforma_ids"] = await _check_advance_proformas(
+            tenant, {**invoice, **{k: v for k, v in update.items() if k != "advance_proforma_ids"}},
+            update["advance_proforma_ids"])
 
     async def _body(session):
         # FG-140: the editable status is decided in the transaction (CAS on
@@ -1053,6 +1133,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
                 "edited_at": update["updated_at"],
             }, session=session)
 
+        if advance_change:                         # FG-710: re-checked and claimed in the transaction
+            target = {**current, **{k: v for k, v in update.items() if k != "advance_proforma_ids"}}
+            await _check_advance_proformas(tenant, target, update["advance_proforma_ids"], session=session)
+            await _claim_advance_proformas(tenant, invoice_id, update["advance_proforma_ids"],
+                                           current.get("advance_proforma_ids") or [], session=session)
         await tenant.invoices.update_one({"id": invoice_id}, {"$set": update}, session=session)
 
         # Recompute if vat changed
@@ -1072,7 +1157,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     from app.audit.store import ensure_chain_index
     await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
-    
+    if advance_change:
+        await log_audit(user["org_id"], user["id"], user["email"], "invoice_advance_proformas_set", "invoice",
+                        invoice_id, {"before": invoice.get("advance_proforma_ids") or [],
+                                     "after": update["advance_proforma_ids"]})
+
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
@@ -1265,6 +1354,9 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
             "status": "Cancelled",
             "updated_at": now,
         }}, session=session)
+        # FG-710: a cancelled final invoice releases its proforma advances
+        await _claim_advance_proformas(tenant, invoice_id, [], invoice.get("advance_proforma_ids") or [],
+                                       session=session)
     await run_transaction(tenant, _body)
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
