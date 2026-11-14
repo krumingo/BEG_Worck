@@ -2279,10 +2279,7 @@ def test_r84_partial_refund_settles_40_and_leaves_8_open_d21_d22(monkeypatch, mo
         mismatch = r.json()["id"]
         dq = await op.dq_issues.find_one({"type": "CREDIT_NOTE_DIFFERENCE", "entity_id": mismatch})
         assert dq["status"] == "open" and dq["details"]["refunded_before"] == 24.0
-        # D23: the Owner cannot book that difference as a cost — 409, nothing changes
-        r = await c.post("/api/finance/credit-notes/%s/accept-difference" % mismatch, headers=hdr("owner-a"),
-                         json={"reason": "приемам"})
-        assert r.status_code == 409 and code(r) == "DIFFERENCE_AFTER_REFUND_UNSUPPORTED", r.text
+        assert dq["owner_role"] == "accountant"             # the Accountant asks for a corrected note
         r = await note(c, bill, number="CN-24", lines=r84_line(bill, 2), expected_credit_note_ids=["ecn-r84"])
         assert r.status_code == 201 and r.json()["applied"] is True, r.text            # 24 = refunded
         assert (await op.dq_issues.find_one({"id": dq["id"]}))["status"] == "resolved"
@@ -2375,4 +2372,60 @@ def test_r84_a_reversed_refund_reopens_the_expectation(monkeypatch, mode):
         assert r.status_code == 201 and r.json()["applied"] is True, r.text
         inv = await get_inv(c, bill["id"])
         assert (inv["credited_amount"], inv["refunded_amount"], inv["credit_balance"]) == (36.0, 0.0, 36.0)
+    run(monkeypatch, mode, scenario)
+
+
+@pytest.mark.parametrize("note_qty, balance", [(3, 12.0), (1, 0.0)])
+def test_r84_d22_owner_accepts_a_note_higher_or_lower_than_the_refund(monkeypatch, mode, note_qty, balance):
+    """D22 + Р52(2) (FLOW Guard): refunded 24 of an awaited 36. A note of 36 (higher) or of
+    12 (lower) ≠ 24 → DQ for the Accountant; the Owner (not the registrant) accepts the
+    difference with a reason + AuditEvent. The row closes, the limit is recomputed with
+    the note's REAL amount, the whole refund counts: higher → the supplier still owes the
+    unrefunded 12 (a real balance, refunded the ordinary way); lower → we owe the supplier
+    the 12 refunded beyond the note — never a second credit balance."""
+    async def scenario(c, op):
+        bill = await r84_setup(c, op)                                  # paid 240, awaits 36
+        assert (await r84_refund(c, bill, [{"id": "ecn-r84", "amount": 24.0}], 24.0)).status_code == 201
+        r = await note(c, bill, number="CN-D22", lines=r84_line(bill, note_qty), expected_credit_note_ids=["ecn-r84"])
+        assert r.status_code == 201 and r.json()["applied"] is False, r.text
+        nid = r.json()["id"]
+        url = "/api/finance/credit-notes/%s/accept-difference" % nid
+        assert (await c.post(url, headers=hdr("acct-a"), json={"reason": "приемам"})).status_code == 403
+        assert (await c.post(url, headers=hdr("owner-a"), json={})).status_code == 400
+        r = await c.post(url, headers=hdr("owner-a"), json={"reason": "доставчикът не коригира"})
+        assert r.status_code == 200, r.text
+        assert (await op.dq_issues.find_one({"type": "CREDIT_NOTE_DIFFERENCE", "entity_id": nid}))["status"] == "resolved"
+        ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_accepted", "entity_id": nid})
+        assert ev and ev["reason"] == "доставчикът не коригира"
+        view, row = await r84_cov(c, bill)
+        assert row["status"] == "fulfilled_with_difference" and row["coverage"]["open"] == 0.0
+        inv = await get_inv(c, bill["id"])
+        gross = 12.0 * note_qty
+        assert (inv["credited_amount"], inv["refunded_amount"]) == (gross, 24.0)
+        assert (view["credit_balance"], view["remaining_amount"]) == (balance, 12.0 - balance)
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        assert await ic.awaited_credit(tenant, bill["id"]) == Decimal("0.00")
+        if balance:
+            r = await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+                "amount": balance + 0.01, "reason": "повече", "account_id": BANK_A, "method": "BankTransfer"})
+            assert r.status_code == 409 and code(r) == "REFUND_EXCEEDS_BALANCE", r.text
+    run(monkeypatch, mode, scenario)
+
+
+def test_r84_d20_the_refund_is_a_dated_bank_inflow_and_the_rest_stays_escalated(monkeypatch, mode):
+    """D20 (a)-(d) + D21 (FLOW Guard): the refund is a real Inflow on a bank account with
+    a date; the open rest stays visible and under the 14-day Р49(8) escalation."""
+    async def scenario(c, op):
+        bill = await r84_setup(c, op)
+        await op.expected_credit_notes.update_one(
+            {"id": "ecn-r84"}, {"$set": {"created_at": (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()}})
+        r = await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+            "amount": 20.0, "reason": "банка", "account_id": BANK_A, "method": "BankTransfer",
+            "date": "2026-11-12", "expected_credit_rows": [{"id": "ecn-r84", "amount": 20.0}]})
+        assert r.status_code == 201, r.text
+        pay = await op.finance_payments.find_one({"id": r.json()["payment_id"]}, {"_id": 0})
+        assert (pay["direction"], pay["account_id"], pay["date"], pay["method"]) == (
+            "Inflow", BANK_A, "2026-11-12", "BankTransfer")
+        _, row = await r84_cov(c, bill)
+        assert row["coverage"]["open"] == 16.0 and row["status"] == "open" and row["escalate_to_owner"] is True
     run(monkeypatch, mode, scenario)

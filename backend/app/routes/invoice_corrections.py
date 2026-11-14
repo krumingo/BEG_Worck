@@ -418,13 +418,9 @@ async def accept_difference(note_id: str, body: dict = Body(...), _sec: dict = D
                                   "Регистрирал известието не може да приеме разликата — нужен е друг човек")
             rows = link.get("rows") or []
             await _claim(tenant, note["original_invoice_id"], session)
-            coverage = await ic.expected_coverage(tenant, note["original_invoice_id"], session=session)
-            if any(coverage.get(r, {}).get("refunded") or coverage.get(r, {}).get("noted") for r in rows):
-                # D23 (debt): a difference on rows a refund already settled is not booked
-                # as a company / project cost here; a corrected note resolves it (Р52(2a))
-                raise ic.conflict(ic.DIFFERENCE_AFTER_REFUND,
-                                  "Разлика по очаквано известие с получено връщане не се приема — "
-                                  "нужно е коригиращо известие")
+            # R84 / D22 (FLOW Guard): after a refund the same Р52(2) path — the Owner accepts
+            # the difference with a reason; the row closes, the invoice counts the note's
+            # real amount and the whole refund (``expected_coverage``), so no second balance
             open_rows = await tenant.expected_credit_notes.count_documents(
                 {"id": {"$in": rows}, "status": "open"}, session=session)
             if open_rows != len(rows):
