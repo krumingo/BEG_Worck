@@ -1,0 +1,47 @@
+# L02AA gates (2026-11-14) — head 3f06e702 — real mongo:7.0 rs0 (fresh container), pytest -rs — Level 1+2 (Krum protocol 14.11.2026: module + SEC-01 + SEC-02 + PAY + PM-01; R0/W0/warehouse pack by AUDIT-2 before merge)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 0
+  changed cells vs. main's committed matrix:
+    changed cells: 237
+    - GET /api/labor-quantities/pending: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/labor-quantities/pending: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/labor-terms: status —→200, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - GET /api/labor-terms: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/aggregate: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/approve: status —→428, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-quantities/approve: status —→403, wrote —→no — 15 cells: roles accountant, driver, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-quantities/approve: status —→428, wrote —→no — 9 cells: roles admin, owner, requester × modes enforce, off, shadow
+    - POST /api/labor-quantities/classify: status —→403, wrote —→no — 15 cells: roles accountant, driver, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-quantities/classify: status —→422, wrote —→no — 9 cells: roles admin, owner, requester × modes enforce, off, shadow
+    - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - PUT /api/labor-quantities/entry: status —→404, wrote —→no — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - PUT /api/labor-terms/{package_id}: status —→428, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - PUT /api/labor-terms/{package_id}: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
+## PM-01 tests
+6 passed, 10 warnings in 228.99s (0:03:48)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 247 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 498 unit(s) checked, 0 violation(s)
+## LAB suites
+376 passed, 1 warning in 98.89s (0:01:38)
+## SEC-01 (money_write_permissions + c01 + c02 + c03)
+30 passed, 10 warnings in 139.18s (0:02:19)
+## SEC-02 (test_sec_02_finance_read.py)
+31 passed, 10 warnings in 286.57s (0:04:46)
+## PAY-01
+630 passed, 1 warning in 186.74s (0:03:06)
+## frontend (head 3f06e702)
+Test Suites: 33 passed, 33 total
+Tests:       269 passed, 269 total
+Done in 38.88s.
