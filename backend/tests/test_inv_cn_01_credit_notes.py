@@ -2429,3 +2429,48 @@ def test_r84_d20_the_refund_is_a_dated_bank_inflow_and_the_rest_stays_escalated(
         _, row = await r84_cov(c, bill)
         assert row["coverage"]["open"] == 16.0 and row["status"] == "open" and row["escalate_to_owner"] is True
     run(monkeypatch, mode, scenario)
+
+
+@pytest.mark.parametrize("path", ["expected", "balance"])
+def test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice(monkeypatch, mode, path):
+    """FG-708: on BOTH refund routes (against an expectation, R84; of a credit balance,
+    Р49.6 а) the date is an ISO date, not after today in Europe/Sofia, not before the
+    invoice's date → else 422 with a code and nothing written; absent → today (Sofia)."""
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Europe/Sofia")).date()
+
+    async def scenario(c, op):
+        if path == "expected":
+            bill = await r84_setup(c, op)
+            extra = lambda amt: {"expected_credit_rows": [{"id": "ecn-r84", "amount": amt}]}   # noqa: E731
+        else:
+            bill = await sent(c)
+            assert (await quick_pay(c, bill["id"], 240.0)).status_code == 201
+            n = (await note(c, bill)).json()
+            assert (await approve(c, n["id"])).status_code == 200                       # balance 36
+            extra = lambda amt: {}                                                     # noqa: E731
+        issued = (await op.invoices.find_one({"id": bill["id"]}))["issue_date"][:10]
+
+        async def refund(amount, **kw):
+            return await c.post("/api/finance/invoices/%s/refund" % bill["id"], headers=hdr("acct-a"), json={
+                "amount": amount, "reason": "връщане", "account_id": BANK_A, "method": "BankTransfer",
+                **extra(amount), **kw})
+        before = await op.finance_payments.count_documents({})
+        day_before = (datetime.fromisoformat(issued) - timedelta(days=1)).date().isoformat()
+        for value, err in (("14.11.2026", "REFUND_DATE_INVALID"), ("2026-13-01", "REFUND_DATE_INVALID"),
+                           ("2026-11-14T10:00:00", "REFUND_DATE_INVALID"), (20261114, "REFUND_DATE_INVALID"),
+                           ("", "REFUND_DATE_INVALID"),
+                           ((today + timedelta(days=1)).isoformat(), "REFUND_DATE_IN_FUTURE"),
+                           (day_before, "REFUND_DATE_BEFORE_INVOICE")):
+            r = await refund(10.0, date=value)
+            assert r.status_code == 422 and code(r) == err, (value, r.text)
+        assert await op.finance_payments.count_documents({}) == before
+        r = await refund(10.0, date=issued)                                            # the boundary
+        assert r.status_code == 201, r.text
+        r = await refund(10.0, date=today.isoformat())                                 # today, Sofia
+        assert r.status_code == 201, r.text
+        r = await refund(10.0)                                                         # absent → today
+        assert r.status_code == 201, r.text
+        pay = await op.finance_payments.find_one({"id": r.json()["payment_id"]})
+        assert pay["date"] == today.isoformat()
+    run(monkeypatch, mode, scenario)

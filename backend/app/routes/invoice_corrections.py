@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import List, Optional
 
@@ -842,6 +843,7 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
         from app.services.auth_tx import run_in_transaction
         tenant = fin._tenant(user)
         invoice = _correctable(await tenant.invoices.get(invoice_id, {"_id": 0}))
+        refund_date = _refund_date(body.get("date"), invoice)                   # FG-708
         method = body.get("method") or "BankTransfer"
         account_id = await fin._resolve_payment_account(tenant, method, body.get("account_id"))
         if not await tenant.financial_accounts.get(account_id):
@@ -852,7 +854,8 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
             current = await _claim(tenant, invoice_id, session)
             if links is not None:
                 return await _register_expected_refund(tenant, user, current, links, amount, reason,
-                                                       body, method, account_id, payment_id, key, session)
+                                                       refund_date, method, account_id, payment_id, key,
+                                                       session)
             balance = -(await ic.current_open(tenant, current, session=session))
             if ic.cents(amount) > balance:
                 raise ic.conflict(ic.REFUND_EXCEEDS_BALANCE, "Сумата надвишава кредитното салдо",
@@ -862,7 +865,7 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
                 "id": payment_id, "org_id": user["org_id"],
                 "direction": "Outflow" if current.get("direction") == "Issued" else "Inflow",
                 "amount": ic.money(ic.cents(amount)), "currency": current.get("currency", "EUR"),
-                "date": body.get("date") if isinstance(body.get("date"), str) else at[:10],
+                "date": refund_date,
                 "method": method, "account_id": account_id,
                 "counterparty_name": current.get("counterparty_name", ""),
                 "reference": current.get("invoice_no"), "project_id": current.get("project_id"),
@@ -880,6 +883,38 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
 
     return await fin._once(user, key, "finance.invoice.refund", {"invoice_id": invoice_id, "body": body},
                            work)
+
+
+REFUND_TZ = ZoneInfo("Europe/Sofia")
+REFUND_DATE_INVALID = "REFUND_DATE_INVALID"
+REFUND_DATE_IN_FUTURE = "REFUND_DATE_IN_FUTURE"
+REFUND_DATE_BEFORE_INVOICE = "REFUND_DATE_BEFORE_INVOICE"
+
+
+def _refund_date(raw, invoice: dict) -> str:
+    """FG-708: the refund's date — an ISO date (YYYY-MM-DD), not after today in
+    Europe/Sofia, not before the invoice's date; absent → today in Europe/Sofia."""
+    today = datetime.now(REFUND_TZ).date()
+    if raw is None:
+        return today.isoformat()
+    try:
+        if not isinstance(raw, str) or len(raw) != 10:
+            raise ValueError
+        value = date.fromisoformat(raw)
+    except ValueError:
+        raise ic.unprocessable(REFUND_DATE_INVALID, "Датата на връщането трябва да е във формат ГГГГ-ММ-ДД")
+    if value > today:
+        raise ic.unprocessable(REFUND_DATE_IN_FUTURE, "Датата на връщането е в бъдещето",
+                               today=today.isoformat())
+    issued = str(invoice.get("issue_date") or "")[:10]
+    try:
+        issued_on = date.fromisoformat(issued) if issued else None
+    except ValueError:
+        issued_on = None
+    if issued_on and value < issued_on:
+        raise ic.unprocessable(REFUND_DATE_BEFORE_INVOICE, "Датата на връщането е преди датата на фактурата",
+                               issue_date=issued)
+    return value.isoformat()
 
 
 def _refund_links(raw, amount) -> Optional[List[dict]]:
@@ -902,7 +937,7 @@ def _refund_links(raw, amount) -> Optional[List[dict]]:
     return out
 
 
-async def _register_expected_refund(tenant, user, current, links, amount, reason, body, method,
+async def _register_expected_refund(tenant, user, current, links, amount, reason, refund_date, method,
                                     account_id, payment_id, key, session):
     """R84, inside the invoice's transaction (the claim serialises it with a note, an
     offset or another refund of the same invoice)."""
@@ -936,7 +971,7 @@ async def _register_expected_refund(tenant, user, current, links, amount, reason
     res = await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": {
         "id": payment_id, "org_id": user["org_id"], "direction": "Inflow",
         "amount": ic.money(ic.cents(amount)), "currency": current.get("currency", "EUR"),
-        "date": body.get("date") if isinstance(body.get("date"), str) else at[:10],
+        "date": refund_date,
         "method": method, "account_id": account_id,
         "counterparty_name": current.get("counterparty_name", ""),
         "reference": current.get("invoice_no"), "project_id": current.get("project_id"),
