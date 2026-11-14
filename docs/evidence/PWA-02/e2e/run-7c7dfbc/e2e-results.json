@@ -1,0 +1,170 @@
+{
+ "checks": [
+  {
+   "name": "device registered at login (flag ON for tenant A)",
+   "ok": true
+  },
+  {
+   "name": "roster saved online before the signal is lost",
+   "ok": true,
+   "detail": 200
+  },
+  {
+   "name": "offline attendance: Записано на телефона",
+   "ok": true,
+   "detail": "Записано на телефона — ще се изпрати, когато има връзка"
+  },
+  {
+   "name": "offline daily report kept on the phone, back to Днес (badge: Записано на телефона · 2)",
+   "ok": true,
+   "detail": "Записано на телефона\n· 2"
+  },
+  {
+   "name": "offline photo captured on the site screen",
+   "ok": true
+  },
+  {
+   "name": "queue holds the records, payload not in clear",
+   "ok": true,
+   "detail": [
+    {
+     "op": "technician.daily_report",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "attendance.mark",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "media.upload",
+     "status": "saved",
+     "plain": false
+    }
+   ]
+  },
+  {
+   "name": "online: attendance Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "online: photo Чака качване на файл (no File Registry)",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "server: today's attendance recorded from the phone",
+   "ok": false,
+   "detail": null
+  },
+  {
+   "name": "online: daily report Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "same key twice + resend: identical, never duplicated",
+   "ok": true
+  },
+  {
+   "name": "differing mark → Конфликт",
+   "ok": true
+  },
+  {
+   "name": "yesterday's mark → Закъснял",
+   "ok": true
+  },
+  {
+   "name": "console lists the conflict with both versions",
+   "ok": true
+  },
+  {
+   "name": "console lists the late record",
+   "ok": true
+  },
+  {
+   "name": "console shows the device blocked",
+   "ok": true
+  },
+  {
+   "name": "phone: Устройството е блокирано",
+   "ok": true
+  },
+  {
+   "name": "phone: local queue, keys and device id wiped",
+   "ok": true
+  }
+ ],
+ "queue_offline": [
+  {
+   "op": "technician.daily_report",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "attendance.mark",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "media.upload",
+   "status": "saved",
+   "plain": false
+  }
+ ],
+ "statuses_online": [
+  "Чака качване на файл",
+  "Синхронизирано",
+  "Синхронизирано"
+ ],
+ "attendance_today": {
+  "entry": null,
+  "date": "2026-11-13",
+  "past_deadline": true,
+  "deadline": "10:00",
+  "active_projects": [
+   {
+    "id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+    "code": "ST01-A-001",
+    "name": "ST01 A — синтетичен обект"
+   }
+  ]
+ },
+ "duplicate": {
+  "first": [
+   "conflict",
+   "conflict"
+  ],
+  "again": {
+   "local_id": "3efbc5ad-94d9-4185-8633-e2ef9d93c00a",
+   "idempotency_key": "9335a35f-ad36-409d-930f-b8644f9a63c8",
+   "status": "conflict",
+   "result": {
+    "conflict_id": "2f71dac3-e46b-45d5-a009-73a8fcf5232c",
+    "kind": "already_recorded"
+   },
+   "replay": true,
+   "received_at": "2026-11-13T23:38:17.454943+00:00",
+   "captured_at": "2026-11-13T23:38:17.443000+00:00"
+  }
+ },
+ "history_status": 404,
+ "summary": {
+  "passed": 17,
+  "failed": 1
+ }
+}
