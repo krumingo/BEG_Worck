@@ -1,0 +1,83 @@
+# INV-CN-01 proof on main cd03324: tests/test_inv_cn_01_credit_notes.py run against main (real Mongo mongo:7.0 rs0)
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+>       assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+>       assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+>       assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_lines_are_locked[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_lines_are_locked[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_lines_are_locked[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_partially_paid_and_paid_invoice_header_locked[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_partially_paid_and_paid_invoice_header_locked[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_partially_paid_and_paid_invoice_header_locked[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_numbered_invoice_is_never_deleted[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_numbered_invoice_is_never_deleted[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_numbered_invoice_is_never_deleted[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_is_not_cancelled_use_credit_note[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_is_not_cancelled_use_credit_note[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_sent_invoice_is_not_cancelled_use_credit_note[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_draft_has_no_number_until_issued[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_draft_has_no_number_until_issued[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_main_draft_has_no_number_until_issued[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_cancel_issued_unsent_invoice_keeps_its_number[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_cancel_issued_unsent_invoice_keeps_its_number[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_cancel_issued_unsent_invoice_keeps_its_number[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_partial_credit_by_line_owner_approves_shared_number[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_partial_credit_by_line_owner_approves_shared_number[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_partial_credit_by_line_owner_approves_shared_number[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_full_credit_then_new_invoice[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_full_credit_then_new_invoice[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_full_credit_then_new_invoice[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_act_invoice_frees_the_act_hard_cap[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_act_invoice_frees_the_act_hard_cap[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_act_invoice_frees_the_act_hard_cap[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_paid_invoice_is_a_balance_refund_through_the_ledger[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_paid_invoice_is_a_balance_refund_through_the_ledger[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_on_paid_invoice_is_a_balance_refund_through_the_ledger[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_above_invoiced_including_six_concurrent[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_above_invoiced_including_six_concurrent[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_credit_above_invoiced_including_six_concurrent[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_debit_note_requires_an_approved_act[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_debit_note_requires_an_approved_act[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_debit_note_requires_an_approved_act[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_author_cannot_approve_only_owner_exact_version[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_author_cannot_approve_only_owner_exact_version[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_author_cannot_approve_only_owner_exact_version[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_roles_and_tenants_and_missing_key[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_roles_and_tenants_and_missing_key[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_roles_and_tenants_and_missing_key[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_act_cannot_be_over_invoiced_concurrently[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_act_cannot_be_over_invoiced_concurrently[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_act_cannot_be_over_invoiced_concurrently[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_six_concurrent_numbers_are_unique_one_sequence[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_six_concurrent_numbers_are_unique_one_sequence[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_six_concurrent_numbers_are_unique_one_sequence[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_pnl_takes_the_note_in_its_own_period_on_the_original_project[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_pnl_takes_the_note_in_its_own_period_on_the_original_project[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_pnl_takes_the_note_in_its_own_period_on_the_original_project[enforce]
+57 failed, 3 warnings in 29.72s
+
+## why the five test_main_* cases fail on main ([off] shown)
+E       AssertionError: {"id":"3042e962-3010-4f00-9335-ec35d14cc355","org_id":"ORG-INVCN-A","direction":"Issued","kind":"Invoice","invoice_no":"TYPED-1","status":"Sent","project_id":"prj-1","counterparty_name":"Клиент ООД","counterparty_eik":"175074752","counterparty_vat_no":null,"counterparty_address":null,"counterparty_mol":null,"counterparty_email":null,"counterparty_phone":null,"issue_date":"2026-11-08","due_date":"2099-12-31","currency":"EUR","vat_percent":20.0,"lines":[{"id":"01d7a10d-3058-49fa-b28f-f3cd1aa19e57","description":"x","unit":null,"qty":1.0,"unit_price":1.0,"project_
+E       assert 200 == 409
+E        +  where 200 = <Response [200 OK]>.status_code
+E       AssertionError: {"id":"b905fa11-e784-4c09-9ca4-5b04f1ea2bcc","org_id":"ORG-INVCN-A","direction":"Issued","kind":"Invoice","invoice_no":"TYPED-1","status":"PartiallyPaid","project_id":"prj-1","counterparty_name":"Клиент ООД","counterparty_eik":"175074752","counterparty_vat_no":null,"counterparty_address":null,"counterparty_mol":null,"counterparty_email":null,"counterparty_phone":null,"issue_date":"2026-11-08","due_date":"2099-12-31","currency":"EUR","vat_percent":0.0,"lines":[{"id":"1e290dad-9f25-4225-b4e9-7a86d5ff117a","description":"Кофраж","unit":"m2","qty":10.0,"unit_
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       AssertionError: {"ok":true}
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       AssertionError: {"id":"4ccb1418-11cc-43d9-b6b4-dd7b910e2174","org_id":"ORG-INVCN-A","direction":"Issued","kind":"Invoice","invoice_no":"TYPED-1","status":"Cancelled","project_id":"prj-1","counterparty_name":"Клиент ООД","counterparty_eik":"175074752","counterparty_vat_no":null,"counterparty_address":null,"counterparty_mol":null,"counterparty_email":null,"counterparty_phone":null,"issue_date":"2026-11-08","due_date":"2099-12-31","currency":"EUR","vat_percent":20.0,"lines":[{"id":"c62ef9ef-bd62-4b8e-acf0-fb164435a385","description":"Кофраж","unit":"m2","qty":10.0,"unit_pri
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       AssertionError: {'counterparty_address': None, 'counterparty_eik': '175074752', 'counterparty_email': None, 'counterparty_mol': None, ...}
+E       assert not 'TYPED-1'
+E        +  where 'TYPED-1' = <built-in method get of dict object at 0x7fb155783fc0>('invoice_no')
+E        +    where <built-in method get of dict object at 0x7fb155783fc0> = {'counterparty_address': None, 'counterparty_eik': '175074752', 'counterparty_email': None, 'counterparty_mol': None, ...}.get

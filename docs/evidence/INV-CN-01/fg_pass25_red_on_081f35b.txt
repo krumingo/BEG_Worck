@@ -1,0 +1,6 @@
+# INV-CN-01 FLOW Guard pass 25: the current tests run against the previous head 081f35b, real Mongo, -k enforce
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r52_d8_unlinked_supplier_credit_reduces_project_cost_once_linked_does_not[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg248_before_the_migration_a_legacy_supplier_number_still_blocks_a_duplicate[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg246_an_invoice_in_an_offset_is_not_cancelled_and_the_offset_supersedes_a_proposal[enforce]
+3 failed, 36 passed, 78 deselected, 1 warning in 26.39s
+tests/test_inv_cn_01_fg233_receipt_race.py: ImportError on 081f35b (InvoiceCancelledError does not exist — no receipt/cancel serialisation there)

@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { formatDateTime, money } from "@/lib/i18nUtils";
 import {
   Users, FolderKanban, PlayCircle, CheckCircle2, ArrowUpRight, Clock,
@@ -283,6 +284,7 @@ export default function DashboardPage() {
               </TableBody>
             </Table>
           </div>
+          <CompanyLossesLine block={pnlOverview.company_losses} finalProfit={pnlOverview.totals.final_profit} className="mt-3" />
         </div>
       )}
 

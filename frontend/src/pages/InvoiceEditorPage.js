@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
-import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
+import { apiErrorText, createKeyHolder, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,9 +48,11 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import SmartAutocomplete from "@/components/common/SmartAutocomplete";
+import InvoiceCorrectionsPanel from "@/components/InvoiceCorrectionsPanel";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Issued: "bg-sky-500/20 text-sky-400 border-sky-500/30",
   Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PartiallyPaid: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   Paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -60,7 +62,8 @@ const STATUS_COLORS = {
 
 const STATUS_BG_LABELS = {
   Draft: "Чернова",
-  Sent: "Издадена",
+  Issued: "Издадена",
+  Sent: "Изпратена",
   PartiallyPaid: "Частично платена",
   Paid: "Платена",
   Overdue: "Просрочена",
@@ -106,6 +109,7 @@ export default function InvoiceEditorPage() {
   const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
   const [counterpartyEik, setCounterpartyEik] = useState("");
+  const [foreignTaxNo, setForeignTaxNo] = useState("");   // Р55(1): a foreign supplier's tax number
   const [counterpartyVatNo, setCounterpartyVatNo] = useState("");
   const [counterpartyAddress, setCounterpartyAddress] = useState("");
   const [counterpartyMol, setCounterpartyMol] = useState("");
@@ -191,6 +195,7 @@ export default function InvoiceEditorPage() {
         setProjectId(inv.project_id || "");
         setCounterpartyName(inv.counterparty_name || "");
         setCounterpartyEik(inv.counterparty_eik || "");
+        setForeignTaxNo(inv.counterparty_foreign_tax_no || "");
         setCounterpartyVatNo(inv.counterparty_vat_no || "");
         setCounterpartyAddress(inv.counterparty_address || "");
         setCounterpartyMol(inv.counterparty_mol || "");
@@ -285,7 +290,11 @@ export default function InvoiceEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!invoiceNo.trim()) { alert(t("validation.required")); return; }
+    // INV-CN-01 / Р49.1: an outgoing invoice gets its number when it is issued
+    if (direction !== "Issued" && !invoiceNo.trim()) { alert(t("validation.required")); return; }
+    if (direction === "Received" && !counterpartyEik.trim() && !foreignTaxNo.trim()) {
+      alert("ЕИК на доставчика е задължителен (за чуждестранен — данъчният му номер)"); return;
+    }
     if (!issueDate || !dueDate) { alert(t("validation.required")); return; }
     if (dueDate < issueDate) { alert("Падежът не може да бъде преди датата на издаване"); return; }
     setSaving(true);
@@ -293,6 +302,7 @@ export default function InvoiceEditorPage() {
       const payload = {
         direction, kind, invoice_no: invoiceNo, project_id: projectId || null,
         counterparty_name: counterpartyName || null, counterparty_eik: counterpartyEik || null,
+        counterparty_foreign_tax_no: foreignTaxNo || null,
         counterparty_vat_no: counterpartyVatNo || null, counterparty_address: counterpartyAddress || null,
         counterparty_mol: counterpartyMol || null, counterparty_email: counterpartyEmail || null,
         counterparty_phone: counterpartyPhone || null, issue_date: issueDate, due_date: dueDate,
@@ -309,6 +319,7 @@ export default function InvoiceEditorPage() {
         await API.put(`/finance/invoices/${invoiceId}`, {
           invoice_no: invoiceNo, kind, counterparty_name: counterpartyName || null,
           counterparty_eik: counterpartyEik || null, counterparty_vat_no: counterpartyVatNo || null,
+          counterparty_foreign_tax_no: foreignTaxNo || null,
           counterparty_address: counterpartyAddress || null, counterparty_mol: counterpartyMol || null,
           counterparty_email: counterpartyEmail || null, counterparty_phone: counterpartyPhone || null,
           project_id: projectId || null, issue_date: issueDate, due_date: dueDate,
@@ -324,7 +335,7 @@ export default function InvoiceEditorPage() {
         setEditing(false);
       }
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally { setSaving(false); }
   };
 
@@ -335,18 +346,39 @@ export default function InvoiceEditorPage() {
       await API.post(`/finance/invoices/${invoiceId}/send`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.sendFailed"));
+      alert(apiErrorText(err, t("toast.sendFailed")));
     } finally { setSaving(false); }
   };
 
   const handleCancel = async () => {
     if (!window.confirm(t("finance.confirmCancel"))) return;
+    // INV-CN-01 / Р49.2: cancellation needs a reason; the number stays as "Анулирана"
+    const reason = (window.prompt("Причина за анулиране:") || "").trim();
+    if (!reason) return;
     setSaving(true);
     try {
-      await API.post(`/finance/invoices/${invoiceId}/cancel`);
+      await API.post(`/finance/invoices/${invoiceId}/cancel`, { reason },
+        { headers: { "Idempotency-Key": newIdempotencyKey() } });
+      // Р51(1): an outgoing invoice is cancelled only after the Owner approves the proposal
+      if (invoice?.direction === "Issued") alert("Предложението за анулиране чака одобрение от Собственика");
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(apiErrorText(err, t("toast.saveFailed")));
+    } finally { setSaving(false); }
+  };
+
+  const handleCancelDecision = async (approveIt) => {
+    const req = invoice?.cancellation_request;
+    if (!req) return;
+    const body = approveIt ? { version: req.version } : { reason: (window.prompt("Причина:") || "").trim() };
+    if (!approveIt && !body.reason) return;
+    setSaving(true);
+    try {
+      await API.post(`/finance/invoices/${invoiceId}/cancel/${approveIt ? "approve" : "reject"}`, body,
+        { headers: { "Idempotency-Key": newIdempotencyKey() } });
+      await fetchData();
+    } catch (err) {
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally { setSaving(false); }
   };
 
@@ -356,7 +388,7 @@ export default function InvoiceEditorPage() {
       await API.delete(`/finance/invoices/${invoiceId}`);
       navigate("/finance/invoices");
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(apiErrorText(err, t("toast.deleteFailed")));
     }
   };
 
@@ -411,13 +443,22 @@ export default function InvoiceEditorPage() {
   };
 
   const isDraft = !invoice || invoice.status === "Draft";
-  // Allow editing: Draft, Sent, PartiallyPaid, Overdue. Not: Paid, Cancelled
-  const canEdit = canManage && (!invoice || !["Paid", "Cancelled"].includes(invoice.status));
+  // INV-CN-01 / Р49.1: only a Draft is edited; an issued invoice is corrected with a note
+  const canEdit = canManage && (!invoice || invoice.status === "Draft");
   const isAdmin = ["Admin", "Owner"].includes(user?.role);
   const locked = !(canEdit && (isNew || editing));
-  const canSend = isDraft && !isNew && canManage;
-  const canDeleteDraft = isDraft && !isNew && canManage;
-  const canCancel = invoice && ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status) && canManage;
+  const canSend = (isDraft || invoice?.status === "Issued") && !isNew && canManage;
+  const canDeleteDraft = isDraft && !isNew && canManage && !invoice?.invoice_no;   // Р49 / Р51(3)
+  // Р49.2: an outgoing invoice is cancelled only while issued and not sent
+  // Р51(3): a supplier invoice entered by mistake is cancelled too (not paid, not received)
+  // Р53(2): Accountant / Admin propose (the Owner approves); Р51(3): a supplier invoice — Accountant only
+  const canCancel = invoice && !(invoice.cancellation_request?.status === "pending_approval") &&
+    (invoice.direction === "Issued"
+      ? ["Accountant", "Admin"].includes(user?.role) && invoice.status === "Issued"
+      : user?.role === "Accountant" && ["Draft", "Sent", "Overdue"].includes(invoice.status) && !(invoice.paid_amount > 0));
+  const pendingCancel = invoice?.cancellation_request?.status === "pending_approval";
+  const canDecideCancel = pendingCancel && user?.role === "Owner" && invoice.cancellation_request.requested_by !== user?.id;
+  const canWithdrawCancel = pendingCancel && invoice.cancellation_request.requested_by === user?.id;
   const canPay = invoice && !["Draft", "Cancelled", "Paid"].includes(invoice.status) && canManage && (invoice.remaining_amount > 0);
   const hasProject = invoice && invoice.project_id;
 
@@ -473,7 +514,7 @@ export default function InvoiceEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && !isNew && !editing && (
+          {isAdmin && !isNew && !editing && isDraft && (
             <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-btn">
               <Pencil className="w-4 h-4 mr-1" /> Редакция
             </Button>
@@ -499,9 +540,24 @@ export default function InvoiceEditorPage() {
               <Download className="w-4 h-4 mr-1" /> PDF
             </Button>
           )}
-          {canCancel && isAdmin && (
+          {canCancel && (
             <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleCancel} disabled={saving} data-testid="cancel-btn">
               <X className="w-4 h-4 mr-1" /> {t("finance.cancelInvoice")}
+            </Button>
+          )}
+          {pendingCancel && (
+            <Badge variant="outline" className="text-xs text-amber-400" data-testid="cancel-pending-badge">
+              Чака одобрение за анулиране: {invoice.cancellation_request.reason}
+            </Badge>
+          )}
+          {canDecideCancel && (
+            <Button size="sm" onClick={() => handleCancelDecision(true)} disabled={saving} data-testid="approve-cancel-btn">
+              Одобри анулирането
+            </Button>
+          )}
+          {(canDecideCancel || canWithdrawCancel) && (
+            <Button size="sm" variant="outline" onClick={() => handleCancelDecision(false)} disabled={saving} data-testid="reject-cancel-btn">
+              Отхвърли
             </Button>
           )}
           {canDeleteDraft && (
@@ -635,6 +691,14 @@ export default function InvoiceEditorPage() {
                       placeholder="ЕИК на фирмата" disabled={locked}
                       className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-eik-input" />
                   </div>
+                  {direction === "Received" && (
+                    <div className="space-y-2">
+                      <Label>Данъчен номер (чуждестранен доставчик)</Label>
+                      <Input value={foreignTaxNo} onChange={(e) => setForeignTaxNo(e.target.value)}
+                        placeholder="Ако доставчикът няма ЕИК" disabled={locked}
+                        className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-foreign-tax-input" />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>ДДС номер</Label>
                     <Input value={counterpartyVatNo} onChange={(e) => setCounterpartyVatNo(e.target.value)}
@@ -777,6 +841,11 @@ export default function InvoiceEditorPage() {
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("common.notes")}
               disabled={locked} className="bg-background min-h-[80px]" data-testid="notes-textarea" />
           </div>
+
+          {/* INV-CN-01: credit / debit notes */}
+          {invoice && !isNew && (
+            <InvoiceCorrectionsPanel invoice={invoice} user={user} onChanged={fetchData} />
+          )}
 
           {/* Payment History */}
           {!isNew && invoice && invoice.status !== "Draft" && (

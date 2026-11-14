@@ -1095,6 +1095,12 @@ class CommandService:
             await self._check_invoice_line_delivery(tenant_db, tenant_collection, inp,
                                                     session=session)
             await self._check_invoice_line_total(tenant_collection, inp, session=session)
+        # INV-CN-01 FG-233: a supplier receipt that names the INVOICE writes the invoice
+        # lock (the same document a cancel of that invoice writes in its transaction) and
+        # refuses a cancelled invoice — a receipt and a cancel can never both commit.
+        if action in (CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                      CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT) and inp.invoice_id:
+            await self._lock_invoice(tenant_collection, session=session, invoice_id=inp.invoice_id)
 
         # ------------------------------------------------------------
         # Resolve allocations + value per action type.
@@ -1875,6 +1881,19 @@ class CommandService:
                 context={"invoice_line_id": inp.invoice_line_id,
                          "allocated": str(allocated), "delivered": str(delivered),
                          "quantity": str(inp.quantity)})
+
+    @staticmethod
+    async def _lock_invoice(tenant_collection, *, session, invoice_id: str) -> None:
+        """INV-CN-01 FG-233 — the per-invoice lock of a receipt that names the invoice."""
+        from app.services.invoice_line_lock import bump_invoice_lock
+        from app.services.warehouse_movements.errors import InvoiceCancelledError
+        tenant = tenant_collection.tenant
+        await bump_invoice_lock(tenant, invoice_id, session=session)
+        invoice = await tenant.invoices.find_one({"id": invoice_id}, {"_id": 0, "status": 1},
+                                                 session=session)
+        if invoice is not None and invoice.get("status") == "Cancelled":
+            raise InvoiceCancelledError("the supplier invoice is cancelled",
+                                        context={"invoice_id": invoice_id})
 
     @staticmethod
     async def _bind_invoice_line_price(tenant_db, inp: CommandInput, *, session) -> None:

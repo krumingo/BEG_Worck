@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { money } from "@/lib/i18nUtils";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, AlertTriangle, Clock, TrendingUp, Loader2 } from "lucide-react";
 
@@ -23,14 +24,15 @@ export default function FinancePulseCard() {
       API.get("/finance/aging-report").catch(() => ({ data: { totals: {} } })),
     ]).then(([sRes, pRes, aRes]) => {
       setStats(sRes.data);
-      setPnl(pRes.data?.totals || {});
+      setPnl({ ...(pRes.data?.totals || {}), losses: pRes.data?.company_losses });
       setAging(aRes.data?.totals || {});
     }).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-center h-24"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
-  const profit = pnl?.profit || 0;
+  // FG-271 / FLOW-015: "Текущ фирмен резултат" = projects − company losses (final_profit)
+  const profit = pnl?.final_profit ?? pnl?.profit ?? 0;
   const profitCls = profit > 0 ? "text-emerald-400" : profit < 0 ? "text-red-400" : "text-gray-400";
   const overdueCount = aging?.overdue_count || 0;
   const overdueAmount = aging?.overdue_amount || 0;
@@ -47,8 +49,9 @@ export default function FinancePulseCard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* P&L */}
         <button onClick={() => navigate("/finance")} className="text-left rounded-lg border border-border p-3 hover:bg-muted/20 transition-colors">
-          <p className="text-[10px] text-muted-foreground">Печалба (общо)<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1">без ДДС</span></p>
-          <p className={`text-lg font-bold font-mono ${profitCls}`}>{money(profit)}</p>
+          <p className="text-[10px] text-muted-foreground">Текущ фирмен резултат<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 ml-1">без ДДС</span></p>
+          <p className={`text-lg font-bold font-mono ${profitCls}`} data-testid="pulse-final-profit">{money(profit)}</p>
+          {pnl?.company_losses ? <p className="text-[9px] text-muted-foreground" data-testid="pulse-profit-split">Обекти: {money(pnl.profit)} · Фирмени загуби: −{money(pnl.company_losses)}</p> : null}
           <p className="text-[9px] text-muted-foreground">Марж: {pnl?.margin_pct || 0}%</p>
         </button>
 
@@ -76,6 +79,7 @@ export default function FinancePulseCard() {
           <p className="text-[9px] text-muted-foreground">Каса: {stats?.cash_balance || 0} · Банка: {stats?.bank_balance || 0}</p>
         </div>
       </div>
+      <CompanyLossesLine block={pnl?.losses} finalProfit={pnl?.final_profit} className="mt-3" />
     </div>
   );
 }

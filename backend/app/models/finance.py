@@ -72,12 +72,14 @@ class InvoiceCreate(BaseModel):
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None  # Bulgarian company ID (ЕИК)
     counterparty_vat_no: Optional[str] = None  # VAT number (ДДС номер)
+    counterparty_foreign_tax_no: Optional[str] = None  # INV-CN-01 Р55(1): a foreign supplier's tax number
     counterparty_address: Optional[str] = None  # Address
     counterparty_mol: Optional[str] = None  # Contact person (МОЛ)
     counterparty_email: Optional[str] = None  # Email
     counterparty_phone: Optional[str] = None  # Phone
     supplier_counterparty_id: Optional[str] = None  # Reference to counterparties collection
     scan_doc_id: Optional[str] = None  # Reference to scanned document
+    act_id: Optional[str] = None  # INV-CN-01 / Р49.5: outgoing invoice from an approved client act
     issue_date: str
     due_date: str
     currency: str = "EUR"
@@ -86,11 +88,13 @@ class InvoiceCreate(BaseModel):
     lines: List[InvoiceLineInput] = []
 
 class InvoiceUpdate(BaseModel):
+    reason: Optional[str] = None  # INV-CN-01 Р49(1): required to change the due date after issue
     invoice_no: Optional[str] = None
     kind: Optional[str] = None
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None
     counterparty_vat_no: Optional[str] = None
+    counterparty_foreign_tax_no: Optional[str] = None  # INV-CN-01 Р55(1): a foreign supplier's tax number
     counterparty_address: Optional[str] = None
     counterparty_mol: Optional[str] = None
     counterparty_email: Optional[str] = None

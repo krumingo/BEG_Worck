@@ -461,7 +461,27 @@ def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
     SUB-ADV-01's (R39; checked in tests/test_sub_adv_01_subcontractor_advance.py)."""
     c02 = set(_c02_routes()) | {
         ("POST", "/api/subcontractor-packages/{pkg_id}/advances"),
-        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")}
+        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")} | {
+        # INV-CN-01 (#84, Codex F-84-01): the note / refund / offset / journal writes,
+        # INVOICE_CORRECTION_ACTIONS — checked in tests/test_inv_cn_01_credit_notes.py
+        # INV-CN-01 FG-572: the invoice edit (due date after issue) and the cancellation
+        ("PUT", "/api/finance/invoices/{invoice_id}"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel/approve"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel/reject"),
+        ("POST", "/api/finance/credit-notes"),
+        ("POST", "/api/finance/credit-notes/{note_id}/approve"),
+        ("POST", "/api/finance/credit-notes/{note_id}/reject"),
+        ("POST", "/api/finance/credit-notes/{note_id}/accept-difference"),
+        ("POST", "/api/finance/credit-notes/{note_id}/difference-lines/{line_id}/resolve"),
+        ("POST", "/api/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/approve"),
+        ("POST", "/api/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/reject"),
+        ("POST", "/api/finance/credit-notes/{note_id}/reverse-difference"),
+        ("POST", "/api/finance/invoices/{invoice_id}/refund"),
+        ("POST", "/api/finance/offsets"),
+        ("POST", "/api/finance/offsets/{offset_id}/approve"),
+        ("POST", "/api/finance/offsets/{offset_id}/reject"),
+    }
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]

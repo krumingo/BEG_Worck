@@ -101,13 +101,30 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
     }
 
 
+def company_result_project_filter(org_id: str) -> dict:
+    """FG-278 (09.11): THE one project scope of every company-result reader
+    (/org/pnl-attribution, /org/pnl-overview): EVERY project of the org — each on its own
+    P&L (``compute_project_pnl`` counts only that project's records, so a subproject is
+    counted once, never inside its parent) — of EVERY status: a Completed (archived,
+    cancelled …) project's result is part of the company result (FLOW-015: archived
+    projects stay in the historical reports). One scope, so the project sums, the company
+    losses and final_profit agree between the readers."""
+    return {"org_id": org_id}
+
+
+COMPANY_RESULT_SCOPE = {"projects": "all", "project_statuses": "all"}
+COMPANY_RESULT_PROJECT_LIMIT = 500
+
+
+async def company_result_projects(tenant, org_id: str, fields: dict) -> list:
+    return await tenant.projects.find(company_result_project_filter(org_id), fields).to_list(
+        COMPANY_RESULT_PROJECT_LIMIT)
+
+
 async def compute_org_profit_attribution(org_id: str) -> dict:
     """Identifies WHY org is in profit/loss — top contributors and detractors."""
     tenant = TenantData.for_resolved_org(db, org_id)
-    projects = await tenant.projects.find(
-        {"org_id": org_id, "parent_project_id": {"$in": [None, ""]}},
-        {"_id": 0, "id": 1, "name": 1, "code": 1},
-    ).to_list(200)
+    projects = await company_result_projects(tenant, org_id, {"_id": 0, "id": 1, "name": 1, "code": 1})
 
     project_pnls = []
     total_labor = total_materials = total_overhead = total_subcontractor = 0
@@ -143,13 +160,24 @@ async def compute_org_profit_attribution(org_id: str) -> dict:
     winners = [p for p in sorted_by_profit if p["gross_profit"] > 0][:3]
     losers = [p for p in reversed(sorted_by_profit) if p["gross_profit"] < 0][:3]
 
+    # Р58 / FLOW-024 (Q007): company losses are NOT distributed to projects and NOT in the
+    # overhead allocation base — a separate line of the final company result, with drill-down
+    # and a label saying what it includes. Derived from the accepted notes (no second ledger).
+    from app.services.invoice_corrections import company_losses_block
+    losses = await company_losses_block(tenant)
+    company_losses = losses["amount"]
+
     return {
         "totals": {
             "revenue": round(total_revenue, 2),
             "expense": round(total_expense, 2),
             "profit": round(total_profit, 2),
             "margin_pct": round(total_profit / total_revenue * 100, 1) if total_revenue else 0,
+            "company_losses": company_losses,
+            "final_profit": round(total_profit - company_losses, 2),
         },
+        "company_losses": losses,
+        "scope": COMPANY_RESULT_SCOPE,
         "top_winners": winners,
         "top_losers": losers,
         "expense_breakdown": {

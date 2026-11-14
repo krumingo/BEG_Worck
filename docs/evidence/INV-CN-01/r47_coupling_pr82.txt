@@ -1,0 +1,13 @@
+# FG-196 / Р47 coupling with PR #82 (WH-REV-01), 2026-11-08
+# Local trial merge: this branch (7446d85 + the coupling test) + origin/claude/wh-rev-01-receipt-reversal @ 1622f62
+# Conflicts: backend/app/tenancy/ownership.py (expected_credit_notes listed by both; one entry kept),
+#            and the generated files (PM-01 run_meta.json, A1 inventory) — to be regenerated on the real merge.
+# real Mongo mongo:7.0 rs0; WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1 so #82's real-Mongo suite runs (no skips)
+PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider tests/test_inv_cn_01_credit_notes.py tests/test_wh_rev_01_receipt_reversal.py -rs
+161 passed, 5 warnings in 70.37s (0:01:10)
+# test_r47_registration_releases_the_pr82_cap (x3 modes), on the merge:
+#   expected_credit_notes row in #82's exact shape, invoice awaiting_credit_note=True
+#   quick-pay 205.00 -> 409 INVOICE_AWAITS_CREDIT_NOTE (#82 cap: 240 - 36 awaited)
+#   POST /finance/credit-notes (incoming, CN-R47, 36.00) -> 201 applied; row fulfilled, DQ closed
+#   invoice remaining 204.00, awaiting_credit_note False; quick-pay 204.00 -> 201; status Paid
+# On this branch alone (#82 absent) the same test runs without the "refused before" step: 60 passed.

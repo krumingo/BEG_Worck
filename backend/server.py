@@ -106,6 +106,9 @@ api_router.include_router(hr_router)
 # Import finance router - includes accounts, invoices, payments, finance stats/enums
 from app.routes.finance import router as finance_router
 api_router.include_router(finance_router)
+# INV-CN-01: credit / debit notes, refunds and offsets (FLOW-006 §Корекции, Р49)
+from app.routes.invoice_corrections import router as invoice_corrections_router
+api_router.include_router(invoice_corrections_router)
 
 # Import overhead router - includes dashboard/stats, overhead categories/costs/assets/snapshots/allocations
 from app.routes.overhead import router as overhead_router
@@ -577,9 +580,21 @@ async def startup():
     await db.smr_groups.create_index([("org_id", 1), ("project_id", 1), ("sort_order", 1)])
 
 
-    # Invoice unique number index (prevents duplicates)
+    # Invoice unique number index (prevents duplicates).
+    # INV-CN-01 FG-217: partial and per direction — a draft has no number, and a supplier
+    # number never blocks our own series. The legacy unique+sparse (org_id, invoice_no)
+    # index is dropped only by scripts/inv_cn_01_migrate.py (dry run, then --apply).
     try:
-        await db.invoices.create_index([("org_id", 1), ("invoice_no", 1)], unique=True, sparse=True)
+        from app.services.invoice_corrections import INVOICE_NO_INDEX, SUPPLIER_NO_INDEX
+        await db.invoices.create_index(INVOICE_NO_INDEX[1], **INVOICE_NO_INDEX[2])
+    except Exception:
+        pass
+    try:
+        # FG-231 / Р53(1), FG-248, FG-264: the per-supplier index is built here wherever the
+        # data allows (a fresh / new tenant, a migrated one). A legacy database whose rows
+        # collide refuses the build: there the create / edit check runs under the
+        # (supplier, number) lock until scripts/inv_cn_01_migrate.py backfills and builds it.
+        await db.invoices.create_index(SUPPLIER_NO_INDEX[1], **SUPPLIER_NO_INDEX[2])
     except Exception:
         pass  # Index may already exist or have conflicts with existing data
 

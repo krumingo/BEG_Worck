@@ -227,6 +227,34 @@ SUBCONTRACTOR_ADVANCE_ACTIONS: Set[str] = {"finance.subcontractor_advance.create
 # same holders as the subcontractor payment it accompanies (Owner/Admin/Accountant, R14).
 SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS: Set[str] = {"subcontract.advance_deduction.execute"}
 
+# INV-CN-01 (#84, Codex F-84-01; Р49 / Р51 / Р55 / Р58 / Р63 / Р64 / Р74): the credit / debit
+# note, refund, offset and accepted-difference journal writes go through the Permission
+# Service like every money write (R14: Owner / Admin / Accountant, company scope); the
+# narrower rules (Owner-only approvals, two different people) stay in the routes on top.
+# Kept apart from MONEY_WRITE_ACTIONS (SEC-01-C01's frozen set); checked in
+# tests/test_inv_cn_01_credit_notes.py.
+INVOICE_CORRECTION_ACTIONS: Set[str] = {
+    # FG-572 (CLAUDE.md §14): the invoice edit (incl. the due date after issue) and the
+    # cancellation proposal / approval / rejection
+    "finance.invoice.update",
+    "finance.invoice_cancellation.create",
+    "finance.invoice_cancellation.approve",
+    "finance.invoice_cancellation_reject.execute",
+    "finance.credit_note.approve",
+    "finance.credit_note.create",
+    "finance.credit_note_difference.approve",
+    "finance.credit_note_difference_line.execute",
+    "finance.credit_note_difference_proposal.approve",
+    "finance.credit_note_difference_proposal_reject.execute",
+    "finance.credit_note_difference_reversal.execute",
+    "finance.credit_note_reject.execute",
+    "finance.invoice_offset.approve",
+    "finance.invoice_offset.create",
+    "finance.invoice_offset_reject.execute",
+    "finance.invoice_refund.create",
+}
+ACTIONS |= INVOICE_CORRECTION_ACTIONS
+
 # SEC-01-C01 (R16, Krum 06.11.2026): labor entries and material waste. Owner/Admin/
 # Accountant everywhere (company scope, above); SiteManager and Technician ONLY on the
 # projects they are members of — granted on the project-scope assignment that mirrors
@@ -344,7 +372,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "budget.read",
                                                                       # SUB-ADV-01 (R39): the advance and its deduction
                                                                       *SUBCONTRACTOR_ADVANCE_ACTIONS,
-                                                                      *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS}},
+                                                                      *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS,
+                                                                      # INV-CN-01 (F-84-01): notes, refunds, offsets
+                                                                      *INVOICE_CORRECTION_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",

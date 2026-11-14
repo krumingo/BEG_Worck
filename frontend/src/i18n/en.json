@@ -801,6 +801,7 @@
     },
     "status": {
       "draft": "Draft",
+      "issued": "Issued",
       "sent": "Sent",
       "partiallyPaid": "Partially Paid",
       "paid": "Paid",

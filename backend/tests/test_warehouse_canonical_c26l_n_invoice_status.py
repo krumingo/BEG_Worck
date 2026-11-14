@@ -208,6 +208,9 @@ async def test_fg140_send_and_delete_are_conditional(canonical_mongo_db, allow_a
     from app.tenancy.data_access import TenantCollection
     real_get = TenantCollection.get
     stale = await db["invoices"].find_one({"id": INV}, {"_id": 0})
+    # INV-CN-01 (Р49, Р51(3)): only a draft WITHOUT a number may be deleted at all, so the
+    # stale pre-check read is an unnumbered Draft — the conditional write must still refuse
+    stale.pop("invoice_no", None)
 
     async def stale_get(self, record_id, *a, **kw):        # the pre-check sees Draft
         if self.name == "invoices" and not kw.get("session"):
@@ -230,20 +233,30 @@ async def test_fg140_claim_honours_the_pay01_invoice_lock(canonical_mongo_db, al
                                                           monkeypatch, mode):
     """While a PAY-01 payment / allocation holds the invoice row lock
     (finance._invoice_lock), a claiming writer (here: cancel) gets 409
-    INVOICE_BUSY and writes nothing; once released it proceeds."""
+    INVOICE_BUSY and writes nothing; once released it proceeds.
+
+    INV-CN-01 (INV84-01): the cancel follows the current path — Р49.2 a reason and
+    an Idempotency-Key; the invoice here is a SUPPLIER (Received) invoice, so by
+    Р51(3) the Accountant cancels it in one step (Р51(1) proposal + Owner approval
+    is for outgoing invoices). The lock assertion is unchanged."""
     from datetime import datetime, timezone
     from app.services.invoice_state import ROW_LOCK_FIELD
     db, lines, finance = await _invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    accountant = {**OWNER, "id": "u-c26l-acct", "role": "Accountant"}
+
+    async def cancel(key):
+        return await finance.cancel_invoice(INV, body={"reason": "въведена по грешка"}, reason=None,
+                                            idempotency_key=key, user=accountant)
     await db["invoices"].update_one({"id": INV}, {"$set": {ROW_LOCK_FIELD: {
         "token": "t", "at": datetime.now(timezone.utc).isoformat()}}})
     before = await _header(db)
     with pytest.raises(HTTPException) as exc:
-        await finance.cancel_invoice(INV, user=OWNER)
+        await cancel("c26l-cancel-1")
     assert exc.value.status_code == 409 and exc.value.detail["error_code"] == "INVOICE_BUSY"
     with pytest.raises(HTTPException) as exc:
         await _edit(lines)
     assert exc.value.status_code == 409 and exc.value.detail["error_code"] == "INVOICE_BUSY"
     assert await _header(db) == before
     await db["invoices"].update_one({"id": INV}, {"$unset": {ROW_LOCK_FIELD: ""}})
-    out = await finance.cancel_invoice(INV, user=OWNER)
-    assert out["status"] == "Cancelled"
+    out = await cancel("c26l-cancel-2")
+    assert out["status"] == "Cancelled" and out["cancel_reason"] == "въведена по грешка"

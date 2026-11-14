@@ -343,6 +343,9 @@ async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
             total += vat * min(sum(a["qty"] for a in mine), qty) / qty
         else:
             total += vat
+    # INV-CN-01 FG-247(c): supplier credit / debit notes correct the input VAT pro rata
+    from app.services.invoice_corrections import supplier_note_input_vat
+    total += float(await supplier_note_input_vat(tenant, project_id))
     return round(total, 2)
 
 
@@ -772,8 +775,11 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
     invoice_cost = invoice_linked_excluded = invoice_path_a = 0.0
     path_b_warnings: List[dict] = []
     counted_invoice: List[dict] = []
+    counted_by_line: Dict[str, float] = {}
     for il in inv_rows:
         split = path_b_split(il, project_id, links.get(il.get("id"), []))
+        if il.get("id"):
+            counted_by_line[il["id"]] = max(split["counted_value"], 0.0)
         invoice_linked_excluded += split["covered_value"]
         invoice_path_a += split["path_a_value"]
         if split["warning"]:
@@ -802,6 +808,14 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         }
         lines.append(line)
         counted_invoice.append(line)
+
+    # INV-CN-01 / Р52(1) (D8, FG-247): supplier credit / debit notes WITHOUT a receipt
+    # reversal, on Path B lines of this project — dated by the note (its period), never
+    # below the line's counted value. Here, so every reader sees the same cost.
+    from app.services.invoice_corrections import supplier_note_cost_lines
+    note_lines = await supplier_note_cost_lines(tenant, project_id, counted_by_line)
+    lines.extend(note_lines)
+    supplier_note_cost = sum(ln["value"] for ln in note_lines)
 
     # 5C-C26l (F-55-C26-02) — the destination side of a cross-project link.
     seen_conflicts = {(w["code"], w.get("invoice_line_id")) for w in path_b_warnings}
@@ -895,6 +909,7 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         "accepted_cost": round(accepted_cost, 2),
         "returned_cost": round(returned_cost, 2),
         "invoice_cost": round(invoice_cost, 2),
+        "supplier_note_cost": round(supplier_note_cost, 2),     # INV-CN-01 Р52(1): − credit, + debit
         "invoice_linked_excluded_cost": round(invoice_linked_excluded, 2),
         # 5C-C26 — selected lines' quantity allocated elsewhere (warehouse →
         # Path A, cost at ACCEPT; client); never project cost here.
@@ -973,7 +988,7 @@ def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
             "partial_cost_data",
             # 5C-C25 (Р17, FG-17)
             "cost_rule", "accepted_cost", "returned_cost", "invoice_cost",
-            "invoice_linked_excluded_cost", "allocated_cost",
+            "invoice_linked_excluded_cost", "allocated_cost", "supplier_note_cost",
             # 5C-C26 (FG-17 per D-04)
             "invoice_path_a_cost", "path_b_rule", "path_b_warnings",
             "unallocated_cost", "consumed_value")

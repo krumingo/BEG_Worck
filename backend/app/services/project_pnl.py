@@ -30,7 +30,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
-    _rev_statuses = ["Sent", "Paid", "PartiallyPaid"]
+    # INV-CN-01: Issued is official; D15 — an Overdue invoice is issued revenue too
+    _rev_statuses = ["Issued", "Sent", "Paid", "PartiallyPaid", "Overdue"]
     # Gross (с ДДС) — invoiced / received, the cash view
     invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in _rev_statuses)
     # Net (без ДДС) — management revenue basis
@@ -55,6 +56,19 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         {"_id": 0, "ai_estimated_price": 1},
     ).to_list(200)
     additional_offered = sum(m.get("ai_estimated_price") or 0 for m in additional)
+
+    # INV-CN-01 / Р49.7: an approved credit / debit note to a client changes the revenue
+    # of the ORIGINAL invoice's project, in the note's own period (its issue_date) —
+    # the original invoice and earlier periods are never rewritten.
+    notes_net = 0.0
+    async for n in tenant.credit_debit_notes.find(
+            {"project_id": project_id, "direction": "outgoing", "status": "approved",
+             "applied": True}, {"_id": 0, "kind": 1, "net": 1, "vat": 1, "gross": 1}):
+        sign = -1 if n.get("kind") == "credit" else 1
+        notes_net += sign * (n.get("net") or 0)
+        invoiced_total += sign * (n.get("gross") or 0)
+        output_vat += sign * (n.get("vat") or 0)
+    invoiced_net += notes_net
 
     total_revenue = round(invoiced_net, 2)  # NET basis (без ДДС) for management P&L / margin
 
@@ -92,6 +106,9 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     # line: material_cost + material_waste_cost == the helper's total.
     material_waste_cost = round(wh.get("waste_cost", 0.0) or 0.0, 2)
     material_cost = round(material_total - material_waste_cost, 2)
+    # INV-CN-01 / Р52(1) (D8, FG-247): supplier notes are INSIDE the helper's total (one
+    # cost source for every reader); shown here only as provenance.
+    supplier_notes_cost = -float(wh.get("supplier_note_cost", 0.0) or 0.0)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
     # SUB-ADV-01-A (FG-115, FLOW-006): an advance is cash, not cost — the cost is recognised
@@ -163,6 +180,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "overtime_cost": overtime_cost,
             "material_cost": material_cost,
             "material_waste_cost": material_waste_cost,   # „фира" (5C-C21 F-12)
+            "supplier_notes_cost_reduction": round(supplier_notes_cost, 2),   # Р52(1)
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,

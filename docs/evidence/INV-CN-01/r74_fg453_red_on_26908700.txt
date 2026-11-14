@@ -1,0 +1,15 @@
+# Р74 / FG-453 red proof — the new test run against 26908700 (real Mongo, 3 modes)
+# On 26908700 an offset settling a supplier (Received) invoice skipped the payment rules: a line WITHOUT final allocation (Р44) -> 201, must be 409 INVOICE_NOT_FULLY_ALLOCATED
+# (and with no Р47 cap — the test stops at the first refusal).
+E       AssertionError: {"amount":10.0,"contract_scope":["Received","prj-1","175074752"],"created_at":"2026-11-09T10:02:44.476266+00:00","created_by":"acct-a","file_id":"file-offset-1","id":"c12de65d-a372-52d6-a19d-3fd30
+E       assert (201 == 409)
+E        +  where 201 = <Response [201 Created]>.status_code
+E       AssertionError: {"amount":10.0,"contract_scope":["Received","prj-1","175074752"],"created_at":"2026-11-09T10:02:45.103474+00:00","created_by":"acct-a","file_id":"file-offset-1","id":"f6a9a859-e297-5997-8d42-0e43e
+E       assert (201 == 409)
+E        +  where 201 = <Response [201 Created]>.status_code
+E       AssertionError: {"amount":10.0,"contract_scope":["Received","prj-1","175074752"],"created_at":"2026-11-09T10:02:45.749160+00:00","created_by":"acct-a","file_id":"file-offset-1","id":"6beaf0ed-4891-5df1-a3b4-1d7c7
+E       assert (201 == 409)
+E        +  where 201 = <Response [201 Created]>.status_code
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r74_fg453_an_offset_of_a_supplier_invoice_follows_the_payment_rules[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r74_fg453_an_offset_of_a_supplier_invoice_follows_the_payment_rules[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r74_fg453_an_offset_of_a_supplier_invoice_follows_the_payment_rules[enforce]

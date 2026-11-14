@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,6 +77,9 @@ export default function FinanceOverviewPage() {
           </div>
         )}
       </div>
+
+      {/* Q007 / FG-271: company losses (not distributed) — same line as the company result */}
+      <CompanyLossesLine block={stats?.company_losses} className="rounded-xl border border-border bg-card p-3 mb-4" />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

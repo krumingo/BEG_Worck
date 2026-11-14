@@ -1,0 +1,41 @@
+# FLOW Guard pass 27 red proofs — the new tests run against the code of ef7cddd (real Mongo rs0, 3 modes)
+
+## FG-269: a DIRECT delivery to a project was classified as a warehouse receipt -> company cost (the project lost its Р55(3) cost)
+E       AssertionError: {'il-269': {'net': 5.0, 'original_line_id': 'il-269', 'target': 'company'}}
+E       assert ('company', 5.0) == ('project', 5.0)
+E         
+E         At index 0 diff: 'company' != 'project'
+E         Use -v to get more diff
+E       AssertionError: {'il-269': {'net': 5.0, 'original_line_id': 'il-269', 'target': 'company'}}
+E       assert ('company', 5.0) == ('project', 5.0)
+E         
+E         At index 0 diff: 'company' != 'project'
+E         Use -v to get more diff
+E       AssertionError: {'il-269': {'net': 5.0, 'original_line_id': 'il-269', 'target': 'company'}}
+E       assert ('company', 5.0) == ('project', 5.0)
+
+## FG-270: one receipt linked only by invoice_id turned ALL lines into company cost, including the line allocated to a project
+E       AssertionError: {'il-270p': {'net': 5.0, 'original_line_id': 'il-270p', 'target': 'company'}, 'il-270x': {'net': 5.0, 'original_line_id': 'il-270x', 'target': 'company'}}
+E       assert 'company' == 'project'
+E         
+E         - project
+E         + company
+E       AssertionError: {'il-270p': {'net': 5.0, 'original_line_id': 'il-270p', 'target': 'company'}, 'il-270x': {'net': 5.0, 'original_line_id': 'il-270x', 'target': 'company'}}
+
+## FG-271 (+ the new split fields): the full tests on ef7cddd
+E   KeyError: 'basis'
+E   KeyError: 'basis'
+E   KeyError: 'basis'
+E       KeyError: 'basis'
+E       KeyError: 'basis'
+E       KeyError: 'basis'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination[enforce]
+6 failed, 129 deselected, 1 warning in 4.97s
+
+## FG-271 on ef7cddd: /org/pnl-overview and /finance/stats had no company_losses:
+(0 matches in project_pnl.py and finance.py)

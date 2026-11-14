@@ -93,6 +93,10 @@ ORG_KEYED: Dict[str, str] = {
               "change_orders", "client_acts", "client_act_line_totals", "contract_payments",
               "invoices",
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
+              # INV-CN-01 / Р49: credit / debit notes and offsets (FLOW-006);
+              # expected_credit_notes is also added by PR #82 (WH-REV-01, Р47) —
+              # whichever merges second keeps one entry.
+              "credit_debit_notes", "invoice_offsets", "expected_credit_notes",
               "invoice_line_allocation_versions",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),
@@ -128,6 +132,7 @@ ORG_KEYED: Dict[str, str] = {
               "asset_counters"),
     **_family(FAMILY_TASKS,
               "worker_calendar", "alarm_rules", "alarm_events",
+              # INV-CN-01 FG-249 / Р55(1): canonical data-quality issues (one per kind + entity)
               # WH-FIX-01 A2/A3: the deduplicated DQ issues (per tenant, org_id).
               "dq_issues"),
     **_family(FAMILY_FILES,

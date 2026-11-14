@@ -103,6 +103,13 @@ MONEY_VALUES_READ = "finance.money_values.read"
 _E = FinanceRead
 FINANCE_READS: List[FinanceRead] = [
     # ── R20-1: company finance ───────────────────────────────────────────────
+    # INV-CN-01 (#84, Codex F-84-01): credit / debit notes, corrections, offsets, the
+    # Р58 company losses — finance only, through the Permission Service.
+    _E("GET", "/api/finance/credit-notes", "finance.credit_note.read", R20_1, CANON_COMPANY),
+    _E("GET", "/api/finance/credit-notes/{note_id}", "finance.credit_note_detail.read", R20_1, CANON_COMPANY),
+    _E("GET", "/api/finance/invoices/{invoice_id}/corrections", "finance.invoice_corrections.read", R20_1, CANON_COMPANY),
+    _E("GET", "/api/finance/company-costs/accepted-differences", "finance.company_accepted_difference.read", R20_1, CANON_COMPANY),
+    _E("GET", "/api/finance/offsets", "finance.invoice_offset.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/billing/subscription", "finance.billing_subscription.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/billing/usage", "finance.billing_usage.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/cashflow/forecast", "finance.cashflow_forecast.read", R20_1, CANON_COMPANY),

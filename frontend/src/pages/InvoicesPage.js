@@ -45,6 +45,7 @@ import { toast } from "sonner";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Issued: "bg-sky-500/20 text-sky-400 border-sky-500/30",
   Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PartiallyPaid: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   Paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -224,6 +225,7 @@ export default function InvoicesPage() {
   const getStatusKey = (status) => {
     const map = {
       Draft: "draft",
+      Issued: "issued",
       Sent: "sent",
       PartiallyPaid: "partiallyPaid",
       Paid: "paid",

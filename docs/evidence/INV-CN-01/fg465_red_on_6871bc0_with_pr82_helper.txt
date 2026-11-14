@@ -1,0 +1,27 @@
+# FG-465 red proof — the updated tests run against 6871bc0 WITH #82's invoice_allocation.py helper (sync_credit_note_issue) copied in, i.e. #84 + #82 combined, real Mongo rs0
+# On 6871bc0 the registration of the credit note never called sync_credit_note_issue: the Р47 issue 'очаква кредитно известие' (#82) stays OPEN
+# ('open' == 'resolved'), and the mismatch DQ lived in a phantom expected_credit_notes.dq_mismatch field, not in dq_issues.
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+        assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+E       AssertionError: assert ('open' == 'open'
+E         
+E           open and 'dq_mismatch' not in {'_id': ObjectId('6af1967fbedcd5bc888fb944'), 'amount': 36.0, 'created_at': '2026-10-25T09:46:39.647403+00:00', 'dq_mi...535+00:00', 'credit_note_id': '828129
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+        assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+E       AssertionError: assert ('open' == 'open'
+E         
+E           open and 'dq_mismatch' not in {'_id': ObjectId('6af19680bedcd5bc888fb977'), 'amount': 36.0, 'created_at': '2026-10-25T09:46:40.242943+00:00', 'dq_mi...643+00:00', 'credit_note_id': '8657e0
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+        assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+E       AssertionError: assert ('open' == 'open'
+E         
+E           open and 'dq_mismatch' not in {'_id': ObjectId('6af19680bedcd5bc888fb9aa'), 'amount': 36.0, 'created_at': '2026-10-25T09:46:40.791317+00:00', 'dq_mi...069+00:00', 'credit_note_id': '4bb94c
+E       AssertionError: assert ('open' == 'resolved'
+E         
+E         - resolved
+E         + open)
+E       AssertionError: assert ('open' == 'resolved'
+E         
+E         - resolved
+E         + open)
+E       AssertionError: assert ('open' == 'resolved'

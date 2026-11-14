@@ -1,0 +1,14 @@
+# FG-708 red proof: tests/test_inv_cn_01_credit_notes.py -k fg708 with app/ at 3d3f8b2b, real Mongo
+E           assert (201 == 422)
+E           assert (201 == 422)
+E           assert (201 == 422)
+E           assert (201 == 422)
+E           assert (201 == 422)
+E           assert (201 == 422)
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[off-expected]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[off-balance]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[shadow-expected]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[shadow-balance]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[enforce-expected]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg708_refund_date_is_an_iso_date_not_in_the_future_not_before_the_invoice[enforce-balance]
+6 failed, 213 deselected, 1 warning in 7.53s

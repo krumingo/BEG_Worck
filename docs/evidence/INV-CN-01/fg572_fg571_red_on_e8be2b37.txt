@@ -1,0 +1,19 @@
+# FG-572 + FG-571 red proof — the new tests run against e8be2b37 (real Mongo, 3 modes)
+# FG-572: in ENFORCE an Admin whose RoleAssignment is revoked / expired / missing PROPOSED a cancellation: 200, must be 403 (the route used only finance_permission).
+# FG-571: there was no single payable-net function (AttributeError); the raw view (total − paid) the test pins shows 48 'left' where 0 is owed, and 0 where 24 is payable.
+E               AssertionError: ('admin-a', '/api/finance/invoices/8a3ee30f-8d52-4243-b191-ecee9cd553ae/cancel', '{"cancellation_request":{"id":"0ae0d...,"subtotal":200.0,"total":240.0,"updated_at":"2
+E               assert (200 == 403)
+E                +  where 200 = <Response [200 OK]>.status_code
+E               AssertionError: ('admin-a', '/api/finance/invoices/d86cfc38-f1e6-4d08-910f-21fb724b7264/cancel', '{"cancellation_request":{"id":"e3859...,"subtotal":200.0,"total":240.0,"updated_at":"2
+E               assert (200 == 403)
+E                +  where 200 = <Response [200 OK]>.status_code
+E               AssertionError: ('admin-a', '/api/finance/invoices/f3670811-f908-4102-91d1-abde7a7571c5/cancel', '{"cancellation_request":{"id":"49b28...,"subtotal":200.0,"total":240.0,"updated_at":"2
+E               assert (200 == 403)
+E                +  where 200 = <Response [200 OK]>.status_code
+E       AttributeError: module 'app.services.invoice_corrections' has no attribute 'payable_net'
+E       AttributeError: module 'app.services.invoice_corrections' has no attribute 'payable_net'
+E       AttributeError: module 'app.services.invoice_corrections' has no attribute 'payable_net'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg572_cancellation_and_due_date_go_through_the_permission_service[enforce-revoked]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg572_cancellation_and_due_date_go_through_the_permission_service[enforce-expired]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg572_cancellation_and_due_date_go_through_the_permission_service[enforce-missing]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg571_one_payable_net_after_credit_and_debit_notes[off]

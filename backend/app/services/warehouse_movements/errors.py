@@ -63,6 +63,12 @@ class InvoiceLineFullyLinkedError(InvoiceLineQuantityExceededError):
     error_code = "INVOICE_LINE_FULLY_LINKED"
 
 
+class InvoiceCancelledError(InvariantViolationError):
+    """INV-CN-01 FG-233: a supplier receipt names an invoice that is (or, under the
+    shared invoice lock, has just been) cancelled — nothing is received against it."""
+    error_code = "INVOICE_CANCELLED"
+
+
 class InvoiceLineUnitMismatchError(InvariantViolationError):
     """5C-C26l (audit WH55-L-1): a linked receipt in a unit other than the
     invoice line's — no unit conversion is defined, so the quantity cannot
