@@ -678,6 +678,46 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "project_id": P3, "entries": [{"smr_type": "Собствен", "hours": 1}]})
         fg["own_report_new_object"] = {"status": own3["status"], "code": own3["error_code"]}
         fg["own_report_presence_created"] = [r.get("source") for r in att_rows(vw["id"], today) if r["project_id"] == P3]
+        # FG-646: "correct" moves an entry A → B: the day key follows in the same write; a later
+        # site save on A creates A's entry, B is kept. B already taken → 409, nothing merged.
+        # (the site save replaces the roster and removes workers left out — existing behaviour —
+        # so the office entry on A is written here again)
+        call("POST", site, role="owner", json={"date": today, "workers": [{"worker_id": adm["id"], "status": "Present"}]})
+        ca = batch([att(adm["id"], status="Late")], role="admin")["body"]["results"][0]
+        fg["fg646_conflict"] = ca["status"]
+        fix = call("POST", "/api/sync/conflicts/%s/resolve" % ca["result"].get("conflict_id"), role="owner",
+                   key=str(uuid.uuid4()), json={"decision": "correct", "reason": "друг обект",
+                                                "payload": {"status": "Present", "project_id": P3}})
+        fg["fg646_correct"] = fix["status"]
+        moved = [r for r in att_rows(adm["id"], today) if r["project_id"] == P3]
+        fg["fg646_key_follows"] = bool(moved) and moved[0].get("attendance_day_key", "").split("|")[2] == P3
+        fg["fg646_site_save_A"] = call("POST", site, role="owner", json={
+            "date": today, "workers": [{"worker_id": adm["id"], "status": "Present"}]})["status"]
+        fg["fg646_rows"] = sorted(r["project_id"] == P3 for r in att_rows(adm["id"], today))
+        ct = batch([att(tech["id"], status="Vacation")])["body"]["results"][0]
+        taken = call("POST", "/api/sync/conflicts/%s/resolve" % ct["result"].get("conflict_id"), role="owner",
+                     key=str(uuid.uuid4()), json={"decision": "correct", "reason": "друг обект",
+                                                  "payload": {"status": "Present", "project_id": P2}})
+        fg["fg646_target_taken"] = {"status": taken["status"], "code": taken["error_code"]}
+        fg["fg646_tech_rows"] = sorted((r["project_id"] == P2, r["status"]) for r in att_rows(tech["id"], today))
+        fg["fg646_conflict_open"] = q(lambda: op_db.sync_conflicts.find_one(
+            {"id": ct["result"].get("conflict_id")}, {"_id": 0, "status": 1}))["status"]
+        # FG-647: my-today lists every object; the counts are worker-days / workers, not entries
+        mt = call("GET", "/api/attendance/my-today", role="viewer")["body"]
+        fg["my_today_entries"] = sorted(e["project_id"] for e in mt.get("entries", []))
+        fg["my_today_expected"] = sorted(r["project_id"] for r in att_rows(vw["id"], today))
+        fg["my_today_entry_compat"] = bool(mt.get("entry"))
+        stats = call("GET", "/api/dashboard/stats", role="owner")["body"]
+        utc_day = datetime.now(timezone.utc).strftime("%Y-%m-%d")           # the route's own day (D7)
+        fg["stats_marked"] = stats.get("today_marked")
+        fg["stats_expected"] = len(q(lambda: op_db.attendance_entries.distinct(
+            "user_id", {"org_id": A["tenant_id"], "date": utc_day})))
+        fg["stats_entries"] = count("attendance_entries", {"org_id": A["tenant_id"], "date": utc_day})
+        emp = call("GET", "/api/employees/%s/dashboard" % vw["id"], role="owner")["body"]
+        fg["hr_month_days"] = (emp.get("hours_summary") or {}).get("current_month_days")
+        fg["hr_expected"] = len(q(lambda: op_db.attendance_entries.distinct(
+            "date", {"user_id": vw["id"], "date": {"$gte": utc_day[:8] + "01"}, "status": "Present"}))) + count(
+            "employee_daily_reports", {"employee_id": vw["id"], "report_date": {"$gte": utc_day[:8] + "01"}})
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
             body = call("GET", "/api/technician/my-sites", role=role)["body"]
@@ -1111,6 +1151,30 @@ def test_a_report_needs_presence_on_that_object(obs):
 
 
 @real
+def test_a_correction_to_another_object_moves_its_day_key_and_never_merges(obs):
+    """FG-646."""
+    f = obs["flowguard"]
+    assert f["fg646_conflict"] == "conflict" and f["fg646_correct"] == 200
+    assert f["fg646_key_follows"] is True
+    assert f["fg646_site_save_A"] == 200 and f["fg646_rows"] == [False, True]   # A new, B kept
+    assert f["fg646_target_taken"] == {"status": 409, "code": "CONFLICT_TARGET_EXISTS"}
+    assert f["fg646_conflict_open"] == "open"
+    assert [x[0] for x in f["fg646_tech_rows"]] == [False, True]                # nothing merged
+
+
+@real
+def test_my_today_lists_every_object_and_the_counts_are_people_and_days(obs):
+    """FG-647."""
+    f = obs["flowguard"]
+    assert len(f["my_today_entries"]) >= 2 and f["my_today_entries"] == f["my_today_expected"]
+    assert f["my_today_entry_compat"] is True
+    assert f["stats_marked"] == f["stats_expected"]
+    if f["stats_entries"] > f["stats_expected"]:
+        assert f["stats_marked"] < f["stats_entries"]
+    assert f["hr_month_days"] == f["hr_expected"]
+
+
+@real
 def test_concurrent_marks_one_entry_per_object(obs):
     """FG-640: same object concurrently → 1; different objects → one each."""
     f = obs["flowguard"]
@@ -1233,8 +1297,9 @@ def test_existing_duplicates_never_crash_the_startup_and_the_dry_run_finds_them(
             assert len(alarms) == 1 and alarms[0]["index"] == "pwa02_attendance_day_unique"
             assert alarms[0]["status"] == "open" and alarms[0]["database"] == name
             h = await health()
-            assert h["status"] == "ok" and h["alarms"]["pwa02_unique_index_skipped"] >= 1
-            assert name not in str(h)                                            # no names leak
+            assert h == {"status": "ok", "degraded": True}                       # a boolean only
+            ops = await osync.ops_alarms(sysdb)
+            assert ops["open"] == 1 and ops["alarms"][0]["index"] == "pwa02_attendance_day_unique"
             osync.INDEX_ALARMS.clear()
             await c.drop_database(name + "_sys")
         finally:

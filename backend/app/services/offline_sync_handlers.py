@@ -163,15 +163,32 @@ async def attendance_apply(user: Dict[str, Any], conflict: Dict[str, Any],
         raise sync.refuse(409, "CORRECTION_OR_REVERSAL_REQUIRED",
                           "Записът е одобрен/платен — промяна само чрез корекция или сторно", kind=kind)
     version = current.get("version", 0)
+    new_project = values.get("project_id", current.get("project_id"))
+    changes = {"status": status, "project_id": new_project,
+               "note": values.get("note", current.get("note")), "version": version + 1,
+               "updated_at": sync.iso(sync.now_utc()), "updated_by": user["id"],
+               "update_source": "offline_conflict_resolution"}
+    if new_project != current.get("project_id"):
+        # FG-646: moving the entry to another object recomputes its day key in the SAME write;
+        # an entry already there for this worker and day is a conflict, never a silent merge
+        from app.routes.attendance import attendance_day_key
+        taken = await tenant.attendance_entries.find_one(
+            {"org_id": org, "user_id": current["user_id"], "date": current["date"],
+             "project_id": new_project, "id": {"$ne": current["id"]}}, {"_id": 0, "id": 1})
+        if taken:
+            raise sync.refuse(409, "CONFLICT_TARGET_EXISTS",
+                              "На този обект вече има присъствие за деня — решете в конзолата",
+                              existing_id=taken["id"])
+        changes["attendance_day_key"] = attendance_day_key(org, current["user_id"], new_project, current["date"])
     # CAS on the whole snapshot the decision was made on, in the same write as the bump
     flt = {"org_id": org, "id": current["id"], "status": current.get("status"),
            "project_id": current.get("project_id"), "note": current.get("note")}
     flt["$or"] = [{"version": version}] + ([{"version": {"$exists": False}}] if version == 0 else [])
-    res = await tenant.attendance_entries.update_one(
-        flt, {"$set": {"status": status, "project_id": values.get("project_id", current.get("project_id")),
-                       "note": values.get("note", current.get("note")), "version": version + 1,
-                       "updated_at": sync.iso(sync.now_utc()), "updated_by": user["id"],
-                       "update_source": "offline_conflict_resolution"}})
+    try:
+        res = await tenant.attendance_entries.update_one(flt, {"$set": changes})
+    except DuplicateKeyError:
+        raise sync.refuse(409, "CONFLICT_TARGET_EXISTS",
+                          "На този обект вече има присъствие за деня — решете в конзолата")
     if res.modified_count != 1:
         raise sync.refuse(409, "CONFLICT_STALE", "Офисът промени записа междувременно")
     return {"entity_type": "attendance", "entity_id": current["id"], "version": version + 1}

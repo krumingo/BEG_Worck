@@ -180,6 +180,17 @@ export default function MyDayPage() {
                 {data.entry.note && (
                   <p className="text-sm text-muted-foreground mt-3 italic">"{data.entry.note}"</p>
                 )}
+                {/* FG-647: one entry per object (FLOW-013 — a person may be on two objects) */}
+                {(data.entries || []).length > 1 && (
+                  <ul className="mt-4 space-y-1 text-sm text-left" data-testid="attendance-entries">
+                    {data.entries.map((e) => (
+                      <li key={e.id} className="flex justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                        <span className="text-foreground">{e.project_name || e.project_code || e.project_id || "—"}</span>
+                        <span className="text-muted-foreground">{t(`attendance.statusLabels.${(e.status || "").toLowerCase()}`, e.status)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </>
             );
           })()}

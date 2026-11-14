@@ -101,6 +101,13 @@ async def resolve_conflict(conflict_id: str, body: Dict[str, Any] = Body(...),
                                        _require_reason(body.get("reason")), body.get("payload"), key)
 
 
+@router.get("/ops/alarms")
+async def get_ops_alarms(user: dict = Depends(require_platform_admin)):
+    """FG-642: the PWA-02 index alarms (platform administrator only)."""
+    from app.tenancy import registry
+    return await sync.ops_alarms(registry.system_db)
+
+
 @router.put("/flag")
 async def set_flag(body: Dict[str, Any] = Body(...), user: dict = Depends(require_platform_admin)):
     """Switch the offline queue on/off for the tenant (platform administrator only, like the

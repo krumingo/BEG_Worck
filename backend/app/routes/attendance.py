@@ -455,7 +455,18 @@ async def mark_attendance_for_user(data: AttendanceMarkForUser, user: dict = Dep
 async def get_my_attendance_today(user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     date = today_str()
-    entry = await tenant.attendance_entries.find_one({"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0})
+    # FG-647: one entry per object (FLOW-013) — all of today's, ``entry`` stays the first one
+    entries = await tenant.attendance_entries.find(
+        {"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0}
+    ).sort("marked_at", 1).to_list(50)
+    if entries:
+        pids = list({e.get("project_id") for e in entries if e.get("project_id")})
+        names = {p["id"]: p for p in await tenant.projects.find(
+            {"id": {"$in": pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(50)} if pids else {}
+        for e in entries:
+            pr = names.get(e.get("project_id")) or {}
+            e["project_name"], e["project_code"] = pr.get("name", ""), pr.get("code", "")
+    entry = entries[0] if entries else None
     past_deadline = await is_past_deadline(user["org_id"])
     active_pids = await get_user_active_project_ids(user["id"], user["org_id"])
     projects = []
@@ -463,7 +474,8 @@ async def get_my_attendance_today(user: dict = Depends(get_current_user)):
         projs = await tenant.projects.find({"id": {"$in": active_pids}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(100)
         projects = projs
     _, end = await get_org_attendance_window(user["org_id"])
-    return {"entry": entry, "date": date, "past_deadline": past_deadline, "deadline": end, "active_projects": projects}
+    return {"entry": entry, "entries": entries, "date": date, "past_deadline": past_deadline, "deadline": end,
+            "active_projects": projects}
 
 @router.get("/attendance/my-range")
 async def get_my_attendance_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):

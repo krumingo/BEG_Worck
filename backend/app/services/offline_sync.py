@@ -150,6 +150,22 @@ async def ensure_sync_indexes(database) -> List[str]:
 INDEX_ALARMS: List[Dict[str, Any]] = []
 
 
+async def _audit_index_alarm(tenant_ids: List[str], database_name: str, index: str) -> None:
+    """FG-642: a SYSTEM AuditEvent in every tenant's chain whose data lives in that database."""
+    from app.audit.envelope import ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    for tid in tenant_ids:
+        try:
+            await record_event(db, build_event(
+                tenant_id=tid, actor_type=ACTOR_SYSTEM, actor_id="startup", action="sync.index_skipped",
+                source_flow="FLOW-037", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+                entity_type="index", entity_id=index, reason="duplicate rows exist",
+                structured_diff={"index": index, "database": database_name},
+                effective_role_assignments=[], idempotency_key=None, source_channel="startup"))
+        except Exception:                                      # noqa: BLE001 — the alarm record stays
+            logger.exception("ALARM PWA-02: could not write the index AuditEvent")
+
+
 async def _raise_index_alarm(system_db, database_name: str, index: str) -> None:
     doc = {"id": str(uuid.uuid4()), "kind": "pwa02_unique_index_skipped", "status": "open",
            "database": database_name, "index": index, "raised_at": iso(now_utc()),
@@ -164,23 +180,34 @@ async def _raise_index_alarm(system_db, database_name: str, index: str) -> None:
         logger.exception("ALARM PWA-02: could not record the index alarm")
 
 
-def health_flags() -> Dict[str, Any]:
-    """For /api/health (no names of databases or tenants — unauthenticated endpoint)."""
-    return {"pwa02_unique_index_skipped": len(INDEX_ALARMS)} if INDEX_ALARMS else {}
+def is_degraded() -> bool:
+    """For the unauthenticated /api/health: a boolean only (FG-642) — no counts, no names."""
+    return bool(INDEX_ALARMS)
+
+
+async def ops_alarms(system_db) -> Dict[str, Any]:
+    """For the authenticated ops endpoint (platform administrator)."""
+    open_alarms = await system_db["ops_alarms"].find(
+        {"kind": "pwa02_unique_index_skipped", "status": "open"}, {"_id": 0}).to_list(500)
+    return {"this_process": len(INDEX_ALARMS), "open": len(open_alarms), "alarms": open_alarms}
 
 
 async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:
     names = [op_db.name]
     records = await system_db["tenant_registry"].find(
-        {}, {"_id": 0, "database_name": 1}).to_list(None)
+        {}, {"_id": 0, "id": 1, "database_name": 1}).to_list(None)
+    tenants_of: Dict[str, List[str]] = {}
     for r in records:
         name = r.get("database_name")
         if name and name not in names:
             names.append(name)
+        if name and r.get("id"):
+            tenants_of.setdefault(name, []).append(r["id"])
     for name in names:
         skipped = await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name])
         for index in skipped:
             await _raise_index_alarm(system_db, name, index)
+            await _audit_index_alarm(tenants_of.get(name, []), name, index)
     return names
 
 
