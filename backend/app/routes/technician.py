@@ -476,11 +476,13 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         workers.append({"worker_id": wid, "worker_name": wname, "status": status})
         submitted_ids.add(wid)
 
-        # Upsert attendance_entry (source of truth)
+        # Upsert attendance_entry (source of truth) — FG-640: per worker, OBJECT and day, so
+        # saving this site never moves the worker's entry on another object to this one
         existing_att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": d, "user_id": wid}
+            {"org_id": org_id, "date": d, "user_id": wid, "project_id": project_id}
         )
-        day_key = "%s|%s|%s" % (org_id, wid, d)   # FG-635: the same unique day key (PWA-02)
+        from app.routes.attendance import attendance_day_key
+        day_key = attendance_day_key(org_id, wid, project_id, d)   # FG-635/640 (PWA-02)
         site_update = {"$inc": {"version": 1}, "$set": {
             "status": status, "project_id": project_id, "updated_at": now, "note": ""}}
         if existing_att:
@@ -1002,10 +1004,10 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
             draft_ids.append(draft["id"])
 
             # Auto-create attendance_entry if not exists (report = present).
-            # FG-635: one entry per worker and day (the unique day key) — an entry on another
-            # project the same day counts as already marked (HANDOFF D19 / FG-628 for Krum).
+            # FG-640 (FLOW-013): per worker, OBJECT and day — a report on a second object
+            # creates that object's entry (4 h here + 4 h there = two entries, 8 h summed).
             existing_att = await tenant.attendance_entries.find_one(
-                {"org_id": org_id, "date": today, "user_id": wid}, **kw
+                {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}, **kw
             )
             if not existing_att:
                 await _insert_auto_attendance(tenant, kw, {
@@ -1019,7 +1021,7 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
                     "marked_at": now,
                     "marked_by_user_id": user["id"],
                     "source": "DailyReport",
-                    "attendance_day_key": "%s|%s|%s" % (org_id, wid, today),
+                    "attendance_day_key": "%s|%s|%s|%s" % (org_id, wid, data.project_id or "", today),
                 })
 
             # Check if SMR type is unknown → create missing_smr

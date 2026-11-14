@@ -110,13 +110,21 @@ async def is_past_deadline(org_id: str):
     end_hour = int(end.split(":")[0])
     return now_hour() >= end_hour
 
+def attendance_day_key(org_id, user_id, project_id, date) -> str:
+    """FG-640: org | worker | object | local day (FLOW-013: a worker may be on two objects)."""
+    return "%s|%s|%s|%s" % (org_id, user_id, project_id or "", date)
+
+
 async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source,
                                   extra=None):
     """``extra`` (PWA-02, additive): fields the offline sync stamps on the entry it creates
     (``version``, ``sync_local_id``, ``captured_at``, ``device_id``…); never overrides the
     fields below."""
     tenant = TenantData.for_resolved_org(db, org_id)
-    existing = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
+    # FG-640 (FLOW-013 „Един човек на няколко обекта“): one entry per worker, OBJECT and day —
+    # 4 h on one object and 4 h on another are two entries; the hours are summed elsewhere.
+    existing = await tenant.attendance_entries.find_one(
+        {"org_id": org_id, "date": date, "user_id": user_id, "project_id": project_id})
     if existing:
         raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
     if status not in ATTENDANCE_STATUSES:
@@ -137,9 +145,9 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
     }
     for k, v in (extra or {}).items():
         entry.setdefault(k, v)
-    # FG-627: one entry per worker and day, enforced by a partial unique index (PWA-02,
-    # ``ensure_sync_indexes``) — the check above alone is check-then-insert.
-    entry["attendance_day_key"] = "%s|%s|%s" % (org_id, user_id, date)
+    # FG-627/640: one entry per worker, object and day, enforced by a partial unique index
+    # (PWA-02, ``ensure_sync_indexes``) — the check above alone is check-then-insert.
+    entry["attendance_day_key"] = attendance_day_key(org_id, user_id, project_id, date)
     try:
         await tenant.attendance_entries.insert_one(entry)
     except DuplicateKeyError:

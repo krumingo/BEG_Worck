@@ -612,6 +612,36 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg["site3_http"] = sorted({o["status"] for o in outs635})
         fg["site3_rows"] = len(att_rows(w635, today))
         fg["site3_key"] = bool(att_rows(w635, today)[0].get("attendance_day_key"))
+        # FG-640 (FLOW-013 „Един човек на няколко обекта“): per worker, OBJECT and day
+        P2 = str(uuid.uuid4())
+        q(lambda: op_db.projects.insert_one({"id": P2, "org_id": A["tenant_id"], "name": "ST01 A — втори обект",
+                                             "code": "ST01-A-002", "status": "Active"}))
+        # the canon case: present on A, 4 h on A + 4 h on B → two entries, 8 h for the day
+        fg["canon_report_A"] = call("POST", "/api/technician/daily-report", role="viewer", json={
+            "project_id": P, "entries": [{"smr_type": "Канон А", "hours": 4}]})["status"]
+        fg["canon_report_B"] = call("POST", "/api/technician/daily-report", role="viewer", json={
+            "project_id": P2, "entries": [{"smr_type": "Канон Б", "hours": 4}]})["status"]
+        vrows = att_rows(vw["id"], today)
+        fg["canon_entries"] = sorted((r["project_id"] == P2, r.get("source")) for r in vrows)
+        from app.routes.daily_reports import check_employee_hours
+        hours = q(lambda: check_employee_hours(A["tenant_id"], vw["id"], today))
+        fg["canon_total_hours"] = hours.get("total_hours")
+        fg["canon_by_project"] = sorted(round(x["hours"], 2) for x in hours.get("projects_breakdown", []))
+        # concurrent offline marks: 3 on A + 3 on B for one worker → one entry per object
+        own = A["users"]["owner"]
+        call("POST", "/api/sync/devices/register", role="owner", json={"device_id": DEVICE_A})
+        marks = [envelope(own["id"], A["tenant_id"], "attendance.mark",
+                          {"status": "Present", "project_id": pid, "note": "офлайн"}) for pid in (P, P, P, P2, P2, P2)]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            outs640 = list(pool.map(lambda e: batch([e], role="owner"), marks))
+        fg["two_objects_http"] = sorted({o["status"] for o in outs640})
+        orows = att_rows(own["id"], today)
+        fg["two_objects_rows"] = sorted(r["project_id"] == P2 for r in orows)
+        fg["two_objects_statuses"] = sorted(o["body"]["results"][0]["status"] for o in outs640)
+        # a different status on another object is not a duplicate and not a conflict
+        fg["other_object_absent"] = batch([envelope(A["users"]["technician"]["id"], A["tenant_id"], "attendance.mark",
+                                                    {"status": "Absent", "project_id": P2, "note": ""})])["body"]["results"][0]["status"]
+        fg["tech_objects"] = sorted(r["project_id"] == P2 for r in att_rows(tech["id"], today))
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
             body = call("GET", "/api/technician/my-sites", role=role)["body"]
@@ -1015,6 +1045,26 @@ def test_three_concurrent_site_saves_make_one_entry(obs):
 
 
 @real
+def test_a_person_on_two_objects_gets_one_entry_per_object_and_the_hours_are_summed(obs):
+    """FG-640 / FLOW-013 gate „човек на два обекта → коректен сбор на часовете“:
+    present on A, 4 h on A + 4 h on B → two entries (B created by the report), 8 h total."""
+    f = obs["flowguard"]
+    assert f["canon_report_A"] == 200 and f["canon_report_B"] == 200
+    assert f["canon_entries"] == [[False, "offline_sync"], [True, "DailyReport"]]
+    assert f["canon_total_hours"] == 8 and f["canon_by_project"] == [4, 4]
+
+
+@real
+def test_concurrent_marks_one_entry_per_object(obs):
+    """FG-640: same object concurrently → 1; different objects → one each."""
+    f = obs["flowguard"]
+    assert f["two_objects_http"] == [200]
+    assert f["two_objects_rows"] == [False, True]
+    assert f["two_objects_statuses"] == ["synced"] * 6
+    assert f["other_object_absent"] == "synced" and f["tech_objects"] == [False, True]
+
+
+@real
 def test_the_site_list_hides_the_photo_where_the_server_refuses_it(obs):
     """FG-639: keep today's guard; the phone only hides the button."""
     f = obs["flowguard"]
@@ -1101,9 +1151,9 @@ def test_existing_duplicates_never_crash_the_startup_and_the_dry_run_finds_them(
         try:
             for i in range(2):
                 await d.attendance_entries.insert_one({"id": "a%d" % i, "org_id": "o", "user_id": "u",
-                                                       "date": "2026-11-13", "attendance_day_key": "o|u|2026-11-13"})
-            await d.attendance_entries.insert_one({"id": "old1", "org_id": "o", "user_id": "v", "date": "2026-11-12"})
-            await d.attendance_entries.insert_one({"id": "old2", "org_id": "o", "user_id": "v", "date": "2026-11-12"})
+                                                       "date": "2026-11-13", "project_id": "p", "attendance_day_key": "o|u|p|2026-11-13"})
+            await d.attendance_entries.insert_one({"id": "old1", "org_id": "o", "user_id": "v", "project_id": "p", "date": "2026-11-12"})
+            await d.attendance_entries.insert_one({"id": "old2", "org_id": "o", "user_id": "v", "project_id": "p", "date": "2026-11-12"})
             before = await d.attendance_entries.count_documents({})
             skipped = await ensure_sync_indexes(d)
             assert skipped == ["pwa02_attendance_day_unique"]

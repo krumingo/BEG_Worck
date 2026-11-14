@@ -34,7 +34,7 @@ async def _dupes(coll, keys: List[str], field: str, limit: int = 50) -> List[Dic
 async def _attendance_backfill(coll, limit: int = 50) -> Dict[str, Any]:
     without = await coll.count_documents({"attendance_day_key": {"$exists": False}})
     pipeline = [
-        {"$group": {"_id": {"org_id": "$org_id", "user_id": "$user_id", "date": "$date"},
+        {"$group": {"_id": {"org_id": "$org_id", "user_id": "$user_id", "project_id": "$project_id", "date": "$date"},
                     "n": {"$sum": 1}, "ids": {"$push": "$id"}, "projects": {"$addToSet": "$project_id"},
                     "sources": {"$addToSet": "$source"}}},
         {"$match": {"n": {"$gt": 1}}},

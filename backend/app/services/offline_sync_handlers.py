@@ -94,8 +94,9 @@ async def _attendance(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, 
         {"org_id": org, "sync_local_id": env["local_id"]}, {"_id": 0})
     if mine:  # an interrupted earlier attempt already wrote it
         return {"entity_type": "attendance", "entity_id": mine["id"], "date": date, "already": True}
+    # FG-640: per worker, OBJECT and day — a mark on another object is not this one
     existing = await tenant.attendance_entries.find_one(
-        {"org_id": org, "date": date, "user_id": user["id"]}, {"_id": 0})
+        {"org_id": org, "date": date, "user_id": user["id"], "project_id": project_id}, {"_id": 0})
     if existing:
         if existing.get("project_id") == project_id and existing.get("status") == status:
             # Q3: identical → idempotent confirmation, nothing written
