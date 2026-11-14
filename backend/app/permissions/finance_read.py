@@ -279,6 +279,20 @@ FINANCE_READS: List[FinanceRead] = [
     _E("POST", "/api/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot", MONEY_VALUES_READ, R20_5M, CANON_PAY + "; SEC-02-E sweep"),
     _E("POST", "/api/offers/{offer_id}/send", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; SEC-02-E sweep"),
     _E("PUT", "/api/offers/{offer_id}", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; SEC-02-E sweep"),
+    # OFF-02 (FLOW Guard FG-350): every offer WRITE answers like the offer READ — the money
+    # is stripped for a caller without the finance right; who may write is unchanged.
+    _E("POST", "/api/offers", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("PUT", "/api/offers/{offer_id}/lines", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/accept", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/reject", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/new-version", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/cancel", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/import-preview", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/import-confirm", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/versions", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/offers/{offer_id}/versions/{version_number}/restore", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/extra-works/create-offer", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
+    _E("POST", "/api/projects/{project_id}/smr-to-offer", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; OFF-02 FG-350"),
     _E("POST", "/api/warehouse/batches", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; SEC-02-E sweep (echo of the entered unit cost)"),
     _E("GET", "/api/ocr-invoice", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/activity-reports/{smr_type}", MONEY_VALUES_READ, R20_5M, CANON_B),
@@ -418,16 +432,27 @@ def is_money_key(key: str, siblings=(), keep=()) -> bool:
     return bool(_MONEY_WORDS.search(k)) and not _NOT_MONEY.search(k)
 
 
+#: OFF-02 F-89-01 [P1] (Codex, PR #89; R20, R67): the public review link of an offer is a
+#: BEARER secret — whoever holds ``/offers/review/{review_token}`` sees the client prices
+#: (public GET) and can make the offer Accepted (public approve). A caller who may not see
+#: the money may not hold the link: every non-finance view loses these keys, at any depth,
+#: whatever the route (the offer, a list, a version, the project dashboard ...). Finance
+#: keeps them (the offer editor, the send answer); ``keep`` never brings them back.
+BEARER_LINK_KEYS: FrozenSet[str] = frozenset({"review_token", "review_url"})
+
+
 def strip_money(value, keep=()):
     """A copy of a JSON-like value with every money key removed, at any depth.
 
     ``keep``: key names that are NOT money in this one response (e.g. a ``total`` that
     counts warnings), declared next to the route.
-    SEC-02-G (SEC71-03): alert / warning texts lose their amounts too (``money_free_alert``)."""
+    SEC-02-G (SEC71-03): alert / warning texts lose their amounts too (``money_free_alert``).
+    OFF-02 F-89-01: the bearer review link (``BEARER_LINK_KEYS``) goes too."""
     if isinstance(value, dict):
         keys = list(value)
         return money_free_alert({k: strip_money(v, keep) for k, v in value.items()
-                                 if not (isinstance(k, str) and is_money_key(k, keys, keep))})
+                                 if not (isinstance(k, str) and (k in BEARER_LINK_KEYS
+                                                                 or is_money_key(k, keys, keep)))})
     if isinstance(value, list):
         return [strip_money(v, keep) for v in value]
     return value

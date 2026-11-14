@@ -78,8 +78,9 @@ export default function OfferEditorPage() {
   // SEC-02-A (R20): the backend strips client prices for roles without the finance right;
   // editing an offer whose prices you cannot see would save it without them. So only
   // Admin/Owner manage offers here (SiteManager reads quantities/statuses).
-  const canManage = ["Admin", "Owner"].includes(user?.role);
-  const canAcceptReject = ["Admin", "Owner"].includes(user?.role);
+  // R67 (Krum 09.11.2026): offers are written only by Owner / Admin / Accountant
+  const canManage = ["Admin", "Owner", "Accountant"].includes(user?.role);
+  const canAcceptReject = ["Admin", "Owner", "Accountant"].includes(user?.role);
 
   const [offer, setOffer] = useState(null);
   const [projects, setProjects] = useState([]);

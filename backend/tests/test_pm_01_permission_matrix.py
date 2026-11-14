@@ -682,6 +682,17 @@ ENFORCE_EXTRA_WRITES = {
     # confirm / PUT / from-offer are listed above under SEC-01-C02 / SEC-02-E.
     ("POST", "/api/client-acts"): "denial",
 }
+# OFF-02 (R67, Krum 09.11.2026): the offer writes refuse every non-finance role in all three
+# modes (require_money_write); in enforce the refusal is audited, like SEC-01's.
+def _r67_routes():
+    spec = importlib.util.spec_from_file_location(
+        "off02_r67", str(BACKEND / "tests" / "test_off_02_offer_money_strip.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.R67_ROUTES
+
+
+ENFORCE_EXTRA_WRITES.update({route: "denial" for route in _r67_routes()})
 
 
 def test_enforce_answers_like_off_and_differs_only_by_audit_and_role_sync_writes():

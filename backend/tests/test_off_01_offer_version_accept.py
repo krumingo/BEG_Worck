@@ -46,6 +46,9 @@ PRJ_A, PRJ_B = "prj-off01-a", "prj-off01-b"
 TOKEN = "tok" + "a" * 21
 COLLS = ("offers", "offer_events", "offer_versions", "audit_events", "audit_logs", "audit_idempotency",
          "media_files")
+#: OFF-02 R67: in enforce a role refused an offer write leaves a permission-denied audit event
+#: (offer writes are significant actions) — "nothing written" compares the business data.
+BIZ = ("offers", "offer_events", "offer_versions", "audit_logs", "media_files")
 
 REAL = pytest.param("real", marks=pytest.mark.skipif(bool(_real_refusal()),
                                                      reason=_real_refusal() or "ok"))
@@ -341,12 +344,14 @@ def test_03_sent_offer_is_never_deleted(monkeypatch, any_backend, mode):
         r = await c.delete("/api/offers/o-draft", headers=hdr("admin-a"))
         assert r.status_code == 200, r.text
         assert await get(op, "o-draft") is None
-        # roles: unchanged — only Admin/Owner
+        # roles: R67 (Krum 09.11.2026) — Owner / Admin / Accountant; every other role 403
         await op.offers.insert_one(offer_doc("o-draft2", status="Draft"))
-        for who in ("site-a", "viewer-a", "acct-a"):
+        for who in ("site-a", "viewer-a", "tech-a"):
             r = await c.delete("/api/offers/o-draft2", headers=hdr(who))
             assert r.status_code == 403, (who, r.text)
         assert await get(op, "o-draft2") is not None
+        r = await c.delete("/api/offers/o-draft2", headers=hdr("acct-a"))
+        assert r.status_code == 200, r.text
     run(monkeypatch, any_backend, mode, scenario)
 
 
@@ -444,7 +449,7 @@ def test_06_sent_offer_is_cancelled_not_deleted(monkeypatch, backend, mode):
         assert r.status_code == 400 and code(r) == "REASON_REQUIRED", r.text
         r = await cancel(c, "o1", reason="   ")
         assert r.status_code == 400 and code(r) == "REASON_REQUIRED", r.text
-        for who in ("viewer-a", "site-a", "acct-a", "tech-a"):
+        for who in ("viewer-a", "site-a", "tech-a"):                   # R67: not a writer
             r = await cancel(c, "o1", who=who)
             assert r.status_code == 403, (who, r.text)
         assert (await get(op, "o1"))["status"] == "Sent"
@@ -595,17 +600,18 @@ def test_12_forbidden_roles_and_other_tenant(monkeypatch, backend, mode):
     async def scenario(c, op):
         await op.offers.insert_one(offer_doc("o1", token=TOKEN))
         await op.offers.insert_one(offer_doc("ob", org=ORG_B, project=PRJ_B))
-        before = await snap(op)
-        for who in ("site-a", "viewer-a", "acct-a", "tech-a"):        # unchanged: Admin/Owner
+        before = await snap(op, BIZ)
+        # R67 (Krum 09.11.2026): offers are written only by Owner / Admin / Accountant
+        for who in ("site-a", "viewer-a", "tech-a"):
             assert (await accept(c, "o1", who=who)).status_code == 403, who
-        for who in ("site-x", "viewer-a", "acct-a", "tech-a"):        # unchanged: managers
+        for who in ("site-a", "site-x", "viewer-a", "tech-a"):        # the project manager too
             assert (await new_version(c, "o1", who=who)).status_code == 403, who
         for r in (await accept(c, "o1", who="admin-b"), await new_version(c, "o1", who="admin-b"),
                   await accept(c, "ob"), await new_version(c, "ob"), await cancel(c, "ob")):
             assert r.status_code == 404, r.text
-        assert await snap(op) == before
-        # the project manager may still version (unchanged rule)
-        r = await new_version(c, "o1", who="site-a")
+        assert await snap(op, BIZ) == before
+        # the Accountant may version (R67)
+        r = await new_version(c, "o1", who="acct-a")
         assert r.status_code == 200, r.text
     run(monkeypatch, backend, mode, scenario)
 
@@ -1089,9 +1095,11 @@ def test_25_internal_reject_is_one_cas_with_key_and_audit_event(monkeypatch, bac
         before = await snap(op)
         r = await reject(c, "o1", key=False)
         assert r.status_code == 428 and code(r) == "IDEMPOTENCY_KEY_REQUIRED", r.text
-        for who in ("site-a", "viewer-a", "acct-a"):
+        for who in ("site-a", "viewer-a", "tech-a"):                  # R67: not a writer
             assert (await reject(c, "o1", who=who)).status_code == 403, who
-        assert await snap(op) == before
+        after = await snap(op)
+        for coll in BIZ:
+            assert after[coll] == before[coll], coll
         r = await reject(c, "o1", key="rj-1")
         assert r.status_code == 200 and r.json()["status"] == "Rejected", r.text
         doc = await get(op, "o1")
