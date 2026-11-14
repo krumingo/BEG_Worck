@@ -1,0 +1,66 @@
+PRIV-01 gate evidence (WIP, paused by orchestrator). main=3863610, branch=127d8a0.
+Runner: pytest --noconftest -q, mongomock + real Mongo 7.0 rs0.
+
+== sec01: main
+tests/test_sec_01_c01_all_money_writes.py: 7 passed, 12 warnings in 26.63s
+tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed, 12 warnings in 23.17s
+tests/test_sec_01_c03_payment_amount_idempotency.py: 6 passed, 4 warnings in 23.90s
+tests/test_sec_01_money_write_permissions.py: 8 passed, 12 warnings in 13.87s
+== sec01: branch
+tests/test_sec_01_c01_all_money_writes.py: 7 passed, 12 warnings in 29.07s
+tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed, 12 warnings in 26.16s
+tests/test_sec_01_c03_payment_amount_idempotency.py: 6 passed, 4 warnings in 25.68s
+tests/test_sec_01_money_write_permissions.py: 8 passed, 12 warnings in 14.56s
+
+== sec02: main
+tests/test_sec_02_finance_read.py: 31 passed, 12 warnings in 148.00s (0:02:28)
+== sec02: branch
+tests/test_sec_02_finance_read.py: 31 passed, 12 warnings in 149.44s (0:02:29)
+
+== pay: main
+tests/test_pay_01_c01_amounts_reason.py: 153 passed, 3 warnings in 31.87s
+tests/test_pay_01_c01_e_serialisation.py: 108 passed, 3 warnings in 22.93s
+tests/test_pay_01_c01_idempotency.py: 198 passed, 3 warnings in 29.37s
+tests/test_pay_01_c01_source_module.py: 80 passed, 3 warnings in 11.21s
+tests/test_pay_01_payment_reversal.py: 91 passed, 3 warnings in 14.84s
+== pay: branch
+tests/test_pay_01_c01_amounts_reason.py: 153 passed, 3 warnings in 24.95s
+tests/test_pay_01_c01_e_serialisation.py: 108 passed, 3 warnings in 24.31s
+tests/test_pay_01_c01_idempotency.py: 198 passed, 3 warnings in 33.98s
+tests/test_pay_01_c01_source_module.py: 80 passed, 3 warnings in 16.73s
+tests/test_pay_01_payment_reversal.py: 91 passed, 3 warnings in 19.94s
+
+== pm01: main
+tests/test_pm_01_permission_matrix.py: 6 passed, 12 warnings in 145.29s (0:02:25)
+== pm01: branch
+tests/test_pm_01_permission_matrix.py: 6 passed, 12 warnings in 139.99s (0:02:19)
+
+== r0: main
+tests/test_r0_01_billing_p0.py: 83 passed, 3 warnings in 8.94s
+tests/test_r0_02_items_tenant_filter.py: 69 passed, 3 warnings in 5.26s
+tests/test_r0_03_roles_email.py: 388 passed, 12 warnings in 72.06s (0:01:12)
+tests/test_r0_05_pay_run_selected_only.py: 145 passed, 3 warnings in 9.27s
+tests/test_r0_06_paid_pay_run.py: 56 passed, 3 warnings in 9.55s
+tests/test_r0_07_dev_reset.py: 73 passed, 3 warnings in 3.38s
+== r0: branch
+tests/test_r0_01_billing_p0.py: 83 passed, 1 warning in 11.60s
+tests/test_r0_02_items_tenant_filter.py: 69 passed, 1 warning in 4.30s
+tests/test_r0_03_roles_email.py: 388 passed, 10 warnings in 81.41s (0:01:21)
+tests/test_r0_05_pay_run_selected_only.py: 145 passed, 1 warning in 11.08s
+tests/test_r0_06_paid_pay_run.py: 56 passed, 1 warning in 10.82s
+tests/test_r0_07_dev_reset.py: 73 passed, 1 warning in 3.27s
+
+== a1: main
+rc=0 lines=396
+W0-03E-A1 tenant access guard: 490 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 243 module(s) checked, 0 violation(s)
+== a1: branch
+rc=0 lines=396
+W0-03E-A1 tenant access guard: 492 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 244 module(s) checked, 0 violation(s)
+
+== A1 inventory: main vs branch byte-identical (cmp rc=0)
+
+NOT DONE: W0 and warehouse branch-vs-main comparison.
+- Main W0 (one run): 16 failed, 1176 passed, 12 warnings in 112.21s (0:01:52); failed set in w0_failed_main.txt. Branch W0 not run yet.
+- Warehouse: the test Mongo crashed (WiredTiger panic in __posix_directory_sync) during the run; restarted on tmpfs; re-run interrupted by pause. No valid warehouse counts yet.
