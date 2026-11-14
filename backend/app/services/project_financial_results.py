@@ -33,17 +33,24 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "kind": 1,
          "due_date": 1, "advance_proforma_ids": 1},
     ).to_list(5000)
-    cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
+    # R89 (Krum 14.11.2026, FG-696): the cash card reads the ONE rule of the project report
+    # (FLOW-006 ledger) — "получено" = the money received (with VAT; proforma advances
+    # included, credit-note refunds deducted, R90), "фактурирано" = final invoices − credit
+    # notes (no proforma), "чака плащане" = what is invoiced and not yet received
+    from app.services.project_pnl import CREDIT_NOTE, PROFORMA, _kind, received_revenue
+    rec = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    cash_in = rec["received_gross"]
 
     # Invoice breakdown: invoiced vs paid vs unpaid vs overdue
     today_str = _dt.now(_tz.utc).strftime("%Y-%m-%d")
-    total_invoiced = round(sum(i.get("total", 0) for i in invoices if i.get("status") not in ["Draft", "Cancelled"]), 2)
+    total_invoiced = rec["invoiced_gross"]
     total_paid = cash_in
-    total_unpaid = round(total_invoiced - total_paid, 2)
+    total_unpaid = rec["awaiting_payment_gross"]
     total_overdue = round(sum(
         (i.get("total", 0) - (i.get("paid_amount") or 0))
         for i in invoices
         if i.get("status") not in ["Draft", "Cancelled", "Paid"]
+        and _kind(i) not in (PROFORMA, CREDIT_NOTE)
         and (i.get("due_date") or "9999") < today_str
     ), 2)
 
@@ -116,6 +123,10 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
             "unpaid": total_unpaid,
             "overdue": total_overdue,
         },
+        # R89: the columns say what they are
+        "labels": {"invoiced": "Фактурирано (с ДДС, без проформа)", "cash_in": "Получено (с ДДС)",
+                   "unpaid": "Фактурирано, чака плащане (с ДДС)"},
+        "revenue_basis": rec["revenue_basis"],
         "breakdown": {
             "paid_labor": effective_cash_labor,
             "paid_materials": paid_materials,
@@ -145,11 +156,10 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # B) OPERATING RESULT
     # ══════════════════════════════════════════════════════════════
 
-    # FG-696 (R86, interim default — Krum to confirm): "оперативен приход" = the payments
-    # RECEIVED (FLOW-006 ledger), net, no proforma — the one shared rule of the project P&L;
-    # the invoiced amount = issued (Overdue included), net, no proforma
-    from app.services.project_pnl import received_revenue
-    rec = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    # R89 (Krum 14.11.2026, FG-696 — final): "оперативен приход" = the payments RECEIVED
+    # (FLOW-006 ledger), net — the one shared rule of the project report (R90: paid proforma
+    # advances in, credit-note refunds out); the invoiced amount = final invoices − credit
+    # notes, net, no proforma
     invoiced_revenue = rec["invoiced_net"]
     earned_revenue = rec["received_net"]
     revenue_mode = "cash"

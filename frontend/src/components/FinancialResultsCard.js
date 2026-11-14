@@ -74,7 +74,7 @@ export default function FinancialResultsCard({ projectId }) {
           </div>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between"><span className="text-muted-foreground">Фактурирано (без ДДС, без проформа)</span><span className="font-mono">{fmt(operating.invoiced_revenue)}</span></div>
-            <div className="flex justify-between"><span className="text-emerald-400" data-testid="op-revenue-label">Получено — приход (без ДДС)</span><span className="font-mono text-emerald-400">{fmt(operating.earned_revenue)}</span>{/* FG-696 (R86) */}</div>
+            <div className="flex justify-between"><span className="text-emerald-400" data-testid="op-revenue-label">Получено — приход (без ДДС)</span><span className="font-mono text-emerald-400">{fmt(operating.earned_revenue)}</span>{/* R89 (Krum 14.11.2026): приход = получено */}</div>
             <div className="flex justify-between"><span className="text-muted-foreground">{t("finResults.directCost")}</span><span className="font-mono">-{fmt(operating.operating_cost)}</span></div>
             <div className="flex justify-between pt-1 border-t border-border">
               <span className="font-semibold">{t("finResults.result")}</span>

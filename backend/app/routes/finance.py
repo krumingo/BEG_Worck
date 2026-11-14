@@ -842,7 +842,7 @@ async def list_subcontractor_documents(
     return docs
 
 
-# ── FG-710 (FG-698a, R86 interim default — Krum to confirm): proforma advances ─────────────
+# ── FG-710 (R90, Krum 14.11.2026 — final): proforma advances named by a final invoice ──
 ADVANCE_USED_BY = "advance_used_by_invoice_id"
 
 

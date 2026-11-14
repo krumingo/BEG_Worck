@@ -1066,7 +1066,7 @@ export default function InvoiceEditorPage() {
 
 
 /**
- * FG-710 (FG-698a, R86 interim default — Krum to confirm): the proforma advances a final
+ * FG-710 (R90, Krum 14.11.2026 — final): the proforma advances a final
  * invoice settles. Only issued proformas of the same project, not used by another invoice;
  * the server checks the project, the client and the single use.
  */

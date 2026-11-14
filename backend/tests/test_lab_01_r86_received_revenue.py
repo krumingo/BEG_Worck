@@ -135,8 +135,9 @@ def test_fg695_an_overdue_invoice_is_issued_and_waits_for_payment(monkeypatch, b
 
 
 def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
-    """FG-696 (interim default, Krum to confirm): "оперативен приход", /project-profit and
-    /cash-vs-earned — фактурирано = issued, net, no proforma; получено = received, net."""
+    """R89 (Krum 14.11.2026, FG-696 — final): "оперативен приход", /project-profit and
+    /cash-vs-earned — фактурирано = issued, net, no proforma; получено = received, net
+    (R90: the paid proforma advance is received money too)."""
     from app.services.project_financial_results import compute_financial_results
 
     async def scenario(c, op):
@@ -146,36 +147,37 @@ def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
              "invoice_no": "R86-O"},
             {"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1"}])
         await _pay(c, "inv-r86", 480.0, "fg696-a")                  # 400 net received
-        await _pay(c, "pf-r86", 600.0, "fg696-p")                   # a proforma alone: never revenue
+        await _pay(c, "pf-r86", 600.0, "fg696-p")                   # R90: the paid advance (500 net) counts
         fr = await compute_financial_results(ORG, P)
-        assert fr["operating"]["earned_revenue"] == 400.0, fr["operating"]
+        assert fr["operating"]["earned_revenue"] == 900.0, fr["operating"]
         assert fr["operating"]["invoiced_revenue"] == 1100.0
         prof = await c.get(f"/api/project-profit/{P}", headers=_token("owner"))
         assert prof.status_code == 200, prof.text
         rv = prof.json()["revenue"]
-        assert (rv["billed"], rv["collected"]) == (1100.0, 400.0), rv
+        assert (rv["billed"], rv["collected"]) == (1100.0, 900.0), rv
         assert rv["billed_label"].startswith("Фактурирано") and rv["collected_label"].startswith("Получено")
         cve = await c.get(f"/api/cash-vs-earned/{P}", headers=_token("owner"))
         assert cve.status_code == 200, cve.text
         cv = cve.json()
-        assert (cv["billed_revenue"], cv["received_net"]) == (1100.0, 400.0), cv
+        assert (cv["billed_revenue"], cv["received_net"]) == (1100.0, 900.0), cv
         assert set(cv["gaps"]) == {"received_vs_earned", "received_vs_billed", "earned_vs_billed"}
         # FG-711: no field calls the net received amount cash
         assert "collected_cash" not in cv and "cash_position" not in cv
         assert cv["labels"] == {"billed": "Фактурирано (без ДДС, без проформа)",
-                                "collected": "Получено (без ДДС, без проформа)"}
+                                "collected": "Получено (без ДДС)"}
     run(monkeypatch, scenario, backend)
 
 
 def test_fg698a_a_final_invoice_against_a_proforma_advance_counts_the_advance(monkeypatch, backend):
-    """FG-698(a) (interim default, Krum to confirm): the advance received on a proforma
-    counts as revenue once a final invoice names it, and reduces its "чака плащане"."""
+    """R90 (a) (Krum 14.11.2026 — final; changes the interim FG-698a): the advance PAID on a
+    proforma is revenue at once; a final invoice that names it counts it against its own
+    "чака плащане" — never a second time as revenue."""
     async def scenario(c, op):
         await op.invoices.insert_one({"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1",
                                       "subtotal": 500.0, "vat_amount": 100.0, "total": 600.0})
         await _pay(c, "pf-r86", 600.0, "fg698-p")
         a, pnl = await _revenue(c)
-        assert a["pnl"]["revenue"] == 0.0 == pnl["total_revenue"]              # a proforma alone
+        assert a["pnl"]["revenue"] == 500.0 == pnl["total_revenue"]            # R90: the paid advance
         await op.invoices.insert_one({"id": "inv-fin", **INV, "invoice_no": "R86-F",
                                       "advance_proforma_ids": ["pf-r86"]})
         a, pnl = await _revenue(c)
@@ -189,7 +191,7 @@ def test_fg698a_a_final_invoice_against_a_proforma_advance_counts_the_advance(mo
 
 
 def test_fg698b_an_outgoing_credit_note_refund_reduces_the_revenue(monkeypatch, backend):
-    """FG-698(b) (interim default, Krum to confirm; the credit-note flow is #84): an active
+    """R90 (b) (Krum 14.11.2026 — final; the credit-note flow is #84): an active
     Outflow payment allocated to an issued CreditNote of the project reduces the revenue."""
     async def scenario(c, op):
         await op.invoices.insert_many([
@@ -289,12 +291,13 @@ def test_fg710_a_final_invoice_names_its_proforma_advance_through_the_api(monkey
         await op.invoices.update_one({"id": fin["id"]}, {"$set": {"status": "Sent"}})
         a, _ = await _revenue(c)
         assert a["pnl"]["revenue"] == 500.0 and a["pnl"]["awaiting_payment_net"] == 500.0, a["pnl"]
-        # removed on update → released, the advance is a proforma alone again
+        # removed on update → released; R90: the paid advance stays revenue, it no longer
+        # reduces this invoice's "чака плащане"
         r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=_k(owner))
         assert r.status_code == 200, r.text
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
         a, _ = await _revenue(c)
-        assert a["pnl"]["revenue"] == 0.0 and a["pnl"]["awaiting_payment_net"] == 1000.0
+        assert a["pnl"]["revenue"] == 500.0 and a["pnl"]["awaiting_payment_net"] == 1000.0
         # named again on update, then the final invoice is cancelled → released
         r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": ["pf-1"]}, headers=_k(owner))
         assert r.status_code == 200 and r.json()["advance_proforma_ids"] == ["pf-1"], r.text
@@ -586,3 +589,72 @@ def test_f73_01_a_parallel_replay_links_once(monkeypatch):
         fin = ok[0].json()
         assert await _link_event_keys(op, fin["id"]) == ["k-par"]
     run(monkeypatch, scenario, "real")
+
+
+# ═══════════════════════════════════════════════ R89 / R90 (Krum 14.11.2026 — final)
+def test_r90_a_paid_proforma_is_revenue_an_unpaid_one_is_not(monkeypatch, backend):
+    """R90 (a): the advance paid on a proforma is revenue (net), named by a final invoice or
+    not; an unpaid proforma is never revenue (R86); a reversed advance payment is not."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([{"id": "pf-paid", **PF, "invoice_no": "PF-1"},
+                                       {"id": "pf-open", **PF, "invoice_no": "PF-2"}])
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0 == pnl["total_revenue"]
+        pay = await _pay(c, "pf-paid", 300.0, "r90-a")                     # half the advance: 250 net
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 250.0 == pnl["total_revenue"], (a["pnl"], pnl)
+        assert a["pnl"]["invoiced_net"] == 0.0                             # a proforma is not invoiced
+        await op.finance_payments.update_many({}, {"$set": {"status": "reversed"}})
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0, pay
+    run(monkeypatch, scenario, backend)
+
+
+def test_r89_every_profit_reader_takes_the_received_money_as_revenue(monkeypatch, backend):
+    """R89: "Печалба по обект" (/project-profit), /profit-by-period and the financial-results
+    cash card read the received money as revenue; "фактурирано" / "получено" columns apart.
+    Seed: a final invoice 1000 net (paid 480 → 400 net, in 2026-12), a paid proforma 500 net
+    (2026-11), an issued credit note 200 net. The approved labor is 180 (the R62 harness)."""
+    from app.services.project_financial_results import compute_financial_results
+
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-r89", **INV, "issue_date": "2026-11-05"},
+            {"id": "pf-r89", **PF, "invoice_no": "PF-1", "issue_date": "2026-11-01"},
+            {"id": "cn-r89", **INV, "kind": "CreditNote", "invoice_no": "CN-1", "issue_date": "2026-11-20",
+             "subtotal": 200.0, "vat_amount": 40.0, "total": 240.0}])
+        await _pay(c, "pf-r89", 600.0, "r89-p", date="2026-11-03")          # 500 net in November
+        await _pay(c, "inv-r89", 480.0, "r89-f", date="2026-12-02")         # 400 net in December
+        prof = (await c.get(f"/api/project-profit/{P}", headers=_token("owner"))).json()
+        rv, pr, ex = prof["revenue"], prof["profit"], prof["expenses"]
+        assert (rv["billed"], rv["collected"]) == (800.0, 900.0), rv        # 1000 − 200; 500 + 400
+        assert pr["revenue_basis"] == "received"
+        assert pr["gross_profit"] == round(900.0 - ex["total"], 2), (pr, ex)
+        assert ex["labor"] == 180.0
+
+        byp = (await c.get(f"/api/profit-by-period/{P}", headers=_token("owner"))).json()
+        per = {p["period"]: p for p in byp["periods"]}
+        assert per["2026-11"]["billed"] == 800.0                           # final − credit note, no proforma
+        assert per["2026-11"]["collected"] == 500.0                        # by PAYMENT month
+        assert per["2026-12"]["collected"] == 400.0
+        assert per["2026-12"]["billed"] == 0.0
+        assert byp["labels"]["collected"].startswith("Получено")
+        for p in per.values():                                             # profit = received − cost
+            if p["collected"] > 0:
+                assert p["gross_profit"] == round(p["collected"] - p["gross_cost"], 2), p
+            else:
+                assert p["gross_profit"] is None, p
+
+        fr = await compute_financial_results(ORG, P)
+        cash = fr["cash"]
+        assert cash["cash_in"] == 1080.0                                   # 600 + 480 received, with VAT
+        assert cash["invoices"]["invoiced"] == 960.0                       # 1200 − 240, no proforma
+        assert cash["invoices"]["unpaid"] == round(fr_await(cash), 2)
+        assert cash["labels"]["cash_in"] == "Получено (с ДДС)"
+        assert fr["operating"]["earned_revenue"] == 900.0 and fr["operating"]["invoiced_revenue"] == 800.0
+    run(monkeypatch, scenario, backend)
+
+
+def fr_await(cash):
+    """the gross "чака плащане" of the R89 seed: final 1200 − received 480 − the open credit note 240"""
+    return 1200.0 - 480.0 - 240.0
