@@ -298,3 +298,94 @@ def test_fg710_a_final_invoice_names_its_proforma_advance_through_the_api(monkey
         r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
         assert r.status_code == 201, r.text                                    # free to use once more
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 70 (FG-718 / FG-719 / FG-720)
+async def _link_events(op, invoice_id):
+    return [(e["action"], e["structured_diff"]["proforma_id"])
+            async for e in op.audit_events.find({"entity_id": invoice_id,
+                                                 "action": {"$regex": "^finance.invoice.advance_"}}).sort("sequence", 1)]
+
+
+@pytest.mark.parametrize("_", [0])
+def test_fg718_a_deleted_or_cancelled_draft_final_invoice_releases_its_advance(monkeypatch, backend, _):
+    """FG-718: deleting a Draft final invoice (and cancelling one) releases its
+    advance_proforma_ids link — the proforma can be linked again. FG-720: one canonical
+    AuditEvent per link and per unlink."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
+        owner = _token("owner")
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        d1 = r.json()
+        assert d1["status"] == "Draft"
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == d1["id"]
+        # forbidden while linked
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "ADVANCE_PROFORMA_IN_USE", r.text
+        # the draft is deleted → released
+        r = await c.delete(f"/api/finance/invoices/{d1['id']}", headers=owner)
+        assert r.status_code == 200, r.text
+        assert await op.invoices.find_one({"id": d1["id"]}) is None
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
+        assert await _link_events(op, d1["id"]) == [("finance.invoice.advance_linked", "pf-1"),
+                                                     ("finance.invoice.advance_unlinked", "pf-1")]
+        # linked again by a new draft, which is cancelled → released again
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        d2 = r.json()
+        r = await c.post(f"/api/finance/invoices/{d2['id']}/cancel", headers=owner)
+        assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
+        assert await _link_events(op, d2["id"]) == [("finance.invoice.advance_linked", "pf-1"),
+                                                     ("finance.invoice.advance_unlinked", "pf-1")]
+        # free once more
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        d3 = r.json()
+        # a PUT that does not change the list writes no link event (no real change)
+        r = await c.put(f"/api/finance/invoices/{d3['id']}", json={"advance_proforma_ids": ["pf-1"]},
+                        headers=owner)
+        assert r.status_code == 200, r.text
+        assert await _link_events(op, d3["id"]) == [("finance.invoice.advance_linked", "pf-1")]
+        ev = await op.audit_events.find_one({"entity_id": d3["id"], "action": "finance.invoice.advance_linked"})
+        assert ev["structured_diff"]["advance_used_by_invoice_id"] == {"before": None, "after": d3["id"]}
+        assert ev["actor_id"] and ev["entity_type"] == "finance.invoice"
+    run(monkeypatch, scenario, backend)
+
+
+@pytest.mark.parametrize("_", [0])
+def test_fg719_a_put_that_changes_the_project_revalidates_the_link(monkeypatch, backend, _):
+    """FG-719: a PUT changing project_id / kind / client re-validates the kept link →
+    409 ADVANCE_LINK_INVALID, nothing written (never a stale link). Removing the advance in
+    the same PUT is allowed; a change that keeps the link valid passes."""
+    async def scenario(c, op):
+        await op.projects.insert_one({"id": "prj-other", "org_id": ORG, "name": "друг", "status": "Active"})
+        await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
+        owner = _token("owner")
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        fin = r.json()
+        before = await op.invoices.find_one({"id": fin["id"]}, {"_id": 0})
+        for change, reason in [({"project_id": "prj-other"}, "ADVANCE_PROFORMA_OTHER_PROJECT"),
+                               ({"counterparty_name": "Друг клиент"}, "ADVANCE_PROFORMA_OTHER_CLIENT"),
+                               ({"kind": "Proforma"}, "ADVANCE_NOT_A_FINAL_INVOICE")]:
+            r = await c.put(f"/api/finance/invoices/{fin['id']}", json=change, headers=owner)
+            assert r.status_code == 409, (change, r.text)
+            assert r.json()["detail"]["code"] == "ADVANCE_LINK_INVALID", r.text
+            assert r.json()["detail"]["reason_code"] == reason, r.text
+            assert await op.invoices.find_one({"id": fin["id"]}, {"_id": 0}) == before     # nothing written
+            assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == fin["id"]
+        # positive: a change that keeps the link valid
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"notes": "ok", "counterparty_name": "Клиент"},
+                        headers=owner)
+        assert r.status_code == 200, r.text
+        # positive: the project change together with the removal of the advance → released, no stale link
+        r = await c.put(f"/api/finance/invoices/{fin['id']}",
+                        json={"project_id": "prj-other", "advance_proforma_ids": []}, headers=owner)
+        assert r.status_code == 200, r.text
+        assert r.json()["project_id"] == "prj-other" and r.json()["advance_proforma_ids"] == []
+        assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
+        assert await _link_events(op, fin["id"]) == [("finance.invoice.advance_linked", "pf-1"),
+                                                      ("finance.invoice.advance_unlinked", "pf-1")]
+    run(monkeypatch, scenario, backend)
