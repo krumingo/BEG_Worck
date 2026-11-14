@@ -144,3 +144,29 @@ def test_r85_a_pending_or_an_hourly_manual_row_is_not_paid_by_this_rule(monkeypa
         row = await _w1()
         assert not _manual_reports(row) and row["earned_amount"] == 180.0  # hourly manual row: not here
     run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 67 (FG-697)
+
+@pytest.mark.parametrize("report", [
+    {"execution_package_id": "pkg-r62", "smr_type": "Шпакловка"},   # another SMR package, same day + project
+    {"execution_package_id": None, "smr_type": "Шпакловка"}])         # no package, another SMR name
+def test_fg697_a_report_for_a_different_smr_the_same_day_does_not_drop_the_akord_row(monkeypatch, backend, report):
+    """FG-697: the duplicate rule keys on worker + day + project + SMR / package."""
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        rid = await _approved_akord_row(c, op)
+        assert (await _w1())["earned_amount"] == 240.0
+        rep = {"id": "R-OTHER", "org_id": ORG, "worker_id": "w1", "submitted_by": "w1", "date": AK_DAY,
+               "project_id": P, "hours": 0, "status": "APPROVED", "approval_status": "APPROVED",
+               "approved_by": "sm"}
+        rep.update(report)
+        await op.employee_daily_reports.insert_one(rep)
+        row = await _w1()
+        assert [m["report_id"] for m in _manual_reports(row)] == ["manual:" + rid]
+        assert row["earned_amount"] == 240.0, row["earned_formula"]          # 240 stays 240
+        assert not any(w["code"] == "MANUAL_ROW_DUPLICATE_OF_REPORT" for w in row["labor_dq_warnings"])
+        lc = await project_labor_cost(ORG, P)
+        assert [x for x in lc["lines"] if x.get("manual_entry_id") == rid] and lc["total"] == 240.0
+    run(monkeypatch, scenario, backend)

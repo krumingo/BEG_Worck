@@ -631,8 +631,22 @@ DQ_MANUAL_DUPLICATE_OF_REPORT = "MANUAL_ROW_DUPLICATE_OF_REPORT"
 MANUAL_PAYROLL_PREFIX = "manual:"
 
 
-def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = None) -> bool:
-    """R85: does an approved daily-report line already pay this manual row's work?"""
+def _same_smr(row: dict, ln: dict, smr_name: str = None) -> bool:
+    """FG-697: the report line is for the row's SMR — the same execution package, else (a line
+    without a package) the same SMR name. A line that names neither cannot be told apart and
+    is taken as the same work (never paid twice)."""
+    pkg = row.get("execution_package_id")
+    if ln.get("execution_package_id"):
+        return bool(pkg) and ln["execution_package_id"] == pkg
+    name = (smr_name or row.get("activity_name") or "").strip().lower()
+    line_name = (ln.get("smr_type") or "").strip().lower()
+    return not line_name or not name or line_name == name
+
+
+def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = None, smr_name: str = None) -> bool:
+    """R85: does an approved daily-report line already pay this manual row's work? FG-697:
+    keyed on worker + day + project + SMR / package — a report for a DIFFERENT SMR on the same
+    day does not drop the row. The report the row's LAB-02 quantity came from always does."""
     day = normalize_labor_date(row.get("date"))
     wid, pid = row.get("employee_id"), row.get("project_id")
     linked = (approval or {}).get("report_id")
@@ -641,7 +655,7 @@ def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = Non
             continue
         if linked and linked in (ln.get("report_doc_id"), ln.get("id")):
             return True
-        if ln.get("date") == day and ln.get("project_id") in (pid, None, ""):
+        if ln.get("date") == day and ln.get("project_id") in (pid, None, "") and _same_smr(row, ln, smr_name):
             return True
     return False
 
@@ -687,7 +701,8 @@ async def payroll_manual_akord_records(tenant: TenantData, org_id: str, date_fro
         wid = r.get("employee_id")
         slot = out.setdefault(wid, {"records": [], "dq": []})
         rid = MANUAL_PAYROLL_PREFIX + str(r.get("id"))
-        if manual_row_duplicates_report(r, lines_by_worker.get(wid), approvals.get(r.get("quantity_approval_id"))):
+        if manual_row_duplicates_report(r, lines_by_worker.get(wid), approvals.get(r.get("quantity_approval_id")),
+                                        (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
             slot["dq"].append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": rid,
                                "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
             continue
@@ -946,7 +961,7 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             a = appr.get(r.get("quantity_approval_id"))
             if a and a.get("report_id"):
                 lines += [ln for ln in all_by_worker.get(wid, []) if a["report_id"] in (ln.get("report_doc_id"), ln.get("id"))]
-            if manual_row_duplicates_report(r, lines, a):
+            if manual_row_duplicates_report(r, lines, a, (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
                 dup.add(r.get("id"))
                 dq.append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": "manual:" + str(r.get("id")),
                            "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
