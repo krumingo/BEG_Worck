@@ -574,6 +574,7 @@
 | FG-725 | low | main `3863610` | AI предложение за Master Data (`master_data/pending.py:299`) се записва с `retention_class` R4 (12 месеца), а FLOW-040 §6 казва, че показаната чернова и structured metadata наследяват R1/R2/R3 според действието; R4 е само за raw prompt/response | PROVEN (код) | open |
 | FG-726 | medium | main `3863610` | legacy `audit_logs` пази заплатите в явен вид (`hr.py:164` записва целия `update`: `hourly_rate`, `daily_rate`, `monthly_salary`, `insurance_*`), а `GET /audit-logs` (`auth.py:699-711`) ги връща без маскиране на всеки потребител с флаг `is_platform_admin`, без payroll право и без break-glass — FLOW-040 §9, §11 | PROVEN (код) | open |
 | FG-727 | low | ASSET-REP-01 `1235bc72` | PM-01 гейтът е червен: в записаната матрица липсват 5-те нови маршрута (`/assets/repairs/my-pending`, `…/accept`, `…/refuse`, `…/problem`, `…/cost`) → 3 теста `test_pm_01_permission_matrix.py` FAILED на реален Mongo | PROVEN | open |
+| FG-728 | medium | #73 `2722786b` / #75 `b489ec7f` | корекция на отчет от коректор (`PUT /daily-reports/{id}`, `_clean_day_entries`) сменя `project_id` на ред (преместване към друг обект) без проверка за присъствие на човека на целевия обект — FLOW-013 L89 „Техникът не може да създаде отчет за човек, който не е присъстващ на съответния обект“; FLOW-014 мести „целия отчет към правилния обект“ (Q014 т. 3) | SUSPECTED (код) | open |
 | FG-575 | medium | #91 `d634bf4` | Viewer още качва снимки: `/media/upload` без проверка на ролята (без контекст или като член на обекта → 200), `/technician/photo-invoice` → 201; само `/projects/{id}/photos` → 403 | PROVEN | resolved (#91 `cb19aeb` — остатъкът FG-587 е затворен) |
 | FG-576 | high | #91 `d634bf4` | `_media_usages` не вижда одобрени/финансови записи: доказателство за клиентско одобрение на оферта (`offers.approval.evidence_file_id`), бракуване (`warehouse_transactions.file_ids`), касови бележки (`cash_receipt_file_id` на #83), `audit_events.related_file_ids` — оттегляне от качилия (Счетоводител) 200 без Собственика | PROVEN | resolved (#91 `1844627` (код `9ba8980`), PROVEN: `services/file_holders.py:44-63, 89-97` — бон в `finance_payments`/`subcontractor_payments`, доказателство на оферта, `warehouse_transactions.file_ids`, `audit_events.related_file_ids` → DELETE 409 `MEDIA_IN_USE`) |
 | FG-577 | medium | #91 `d634bf4` | одобрението на оттегляне не сочи точното състояние: заявката пази само `uses`, при одобрение се преизчисляват без сравнение; `/media/link` по време на чакаща заявка → 200 — Собственикът оттегля файл, на който вече стои плащане | PROVEN | resolved (#91 `1844627` (код `9ba8980`), PROVEN: заявката пази `uses_version`/`ref_version` (`media.py:680-686`), одобрението ги сравнява (`:726-733`) → 409 `RETIRE_REQUEST_STALE`; link при чакаща заявка → 409) |
@@ -6547,6 +6548,10 @@
 - main без промяна (`3863610`); канон `01845564`.
 - #73 `74d8b939` (код `eb768c0e`): FG-710, FG-718, FG-719, FG-720 → resolved; нови няма. #75 `b0a52ea2` съдържа `eb768c0e`/`74d8b939`; Р86, Р85×Р81, Р62, FG-697 се пазят. Гейтове зелени. На #73/#75 от страна на FLOW GUARD остават само въпросите към Крум (FG-698 (a)/(b), FG-696 обхват на „отчета на обекта“). Останалите — без промяна.
 - FLOW-039 (преглед, main): няма модул за качество/дефекти/гаранции (READY-W2); каноничен е само Р54 (гаранционна работа в оригиналния обект с причина и AuditEvent) и рейтингът по Р56. Нови FG-721..723.
+
+### Оракул Q013/Q014 — 14.11.2026 16:30 UTC
+
+- Q013 (AI: основните функции без платен AI, вграден модел) и Q014 (корекция и преместване на дневен отчет) → `oracle/`. Нов FG-728 (SUSPECTED).
 
 ### Проход 72 — 14.11.2026 14:50 UTC (периодичен)
 
