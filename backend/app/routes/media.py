@@ -800,38 +800,83 @@ async def reject_media_retire(request_id: str, data: RetireRequestBody = Body(No
     return await _decide(request_id, user, False, (data.reason if data else None), idempotency_key)
 
 
-#: FG-693: the review lists page — never a silent cap that hides a row
+#: FG-693 / FG-706: the review lists page by KEYSET — newest first, then id; the cursor is
+#: the last row's (sort key, id), so a row that leaves the list between two pages (a
+#: restore, a decision) never shifts an unseen row past the reader. Never a silent cap.
 PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX = 50, 200
 
 
-def _page_args(skip: int, limit: int) -> tuple:
-    if skip < 0 or limit < 1 or limit > PAGE_LIMIT_MAX:
-        raise lifecycle.refuse(400, "BAD_PAGE", "skip ≥ 0, 1 ≤ limit ≤ %d" % PAGE_LIMIT_MAX)
-    return skip, limit
+def _encode_cursor(key, row_id) -> str:
+    import base64
+    import json as _json
+    raw = _json.dumps([key, row_id], separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
-def _page(items: list, total: int, skip: int, limit: int) -> dict:
-    nxt = skip + len(items)
-    return {"items": items, "total": total, "skip": skip, "limit": limit,
-            "next_skip": nxt if nxt < total else None}
+def _decode_cursor(cursor: Optional[str]):
+    if cursor is None or cursor == "":
+        return None
+    import base64
+    import json as _json
+    try:
+        pad = "=" * (-len(cursor) % 4)
+        key, row_id = _json.loads(base64.urlsafe_b64decode(cursor + pad).decode("utf-8"))
+        if (key is not None and not isinstance(key, str)) or not isinstance(row_id, str):
+            raise ValueError("cursor shape")
+        return key, row_id
+    except Exception:                                     # noqa: BLE001
+        raise lifecycle.refuse(400, "BAD_CURSOR", "Невалиден курсор на страницата")
+
+
+def _check_limit(limit: int) -> int:
+    if limit < 1 or limit > PAGE_LIMIT_MAX:
+        raise lifecycle.refuse(400, "BAD_PAGE", "1 ≤ limit ≤ %d" % PAGE_LIMIT_MAX)
+    return limit
+
+
+def _after(field: str, cur) -> dict:
+    """The rows strictly AFTER the cursor in the order (field desc, id asc). A missing /
+    null sort key sorts after every value (BSON null is the lowest), so it has a branch."""
+    key, row_id = cur
+    if key is None:
+        return {field: None, "id": {"$gt": row_id}}
+    return {"$or": [{field: {"$lt": key}}, {field: key, "id": {"$gt": row_id}}, {field: None}]}
+
+
+async def _keyset_page(coll, flt: dict, field: str, projection: dict, cursor: Optional[str],
+                       limit: int) -> tuple:
+    """``(rows, total, next_cursor)`` — one page after ``cursor`` (FG-706)."""
+    limit = _check_limit(limit)
+    cur = _decode_cursor(cursor)
+    total = await coll.count_documents(flt)
+    query = {"$and": [flt, _after(field, cur)]} if cur else flt
+    rows = await coll.find(query, projection).sort([(field, -1), ("id", 1)]).limit(
+        limit + 1).to_list(None)
+    more = len(rows) > limit
+    rows = rows[:limit]
+    nxt = _encode_cursor(rows[-1].get(field), rows[-1]["id"]) if more and rows else None
+    return rows, total, nxt
+
+
+def _page(items: list, total: int, limit: int, next_cursor: Optional[str]) -> dict:
+    return {"items": items, "total": total, "limit": limit, "next_cursor": next_cursor}
 
 
 @router.get("/media-retire-requests")
 async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
-                                     skip: int = 0, limit: int = PAGE_LIMIT_DEFAULT,
+                                     cursor: Optional[str] = None,
+                                     limit: int = PAGE_LIMIT_DEFAULT,
                                      user: dict = Depends(get_current_user)):
-    """Owner/Admin; ``{items, total, skip, limit, next_skip}`` (FG-693), newest first."""
+    """Owner/Admin; newest first; keyset paging (FG-706):
+    ``{items, total, limit, next_cursor}`` — pass ``next_cursor`` back as ``cursor``."""
     if user.get("role") not in ("Owner", "Admin"):
         raise HTTPException(status_code=403, detail="Access denied")
-    skip, limit = _page_args(skip, limit)
     flt = {"org_id": user["org_id"]}
     if status:
         flt["status"] = status
-    coll = _tenant(user).media_retire_requests
-    total = await coll.count_documents(flt)
-    rows = await coll.find(flt, {"_id": 0}).sort([("requested_at", -1), ("id", 1)]).skip(
-        skip).limit(limit).to_list(None)
-    return _page([_request_view(r, user) for r in rows], total, skip, limit)
+    rows, total, nxt = await _keyset_page(_tenant(user).media_retire_requests, flt,
+                                          "requested_at", {"_id": 0}, cursor, limit)
+    return _page([_request_view(r, user) for r in rows], total, limit, nxt)
 
 
 #: the fields a retire writes on the row — on restore they move into ``retire_history``
@@ -908,31 +953,27 @@ async def restore_media(media_id: str, body: Optional[dict] = Body(None),
 
 
 @router.get("/media-retired")
-async def list_retired_media(skip: int = 0, limit: int = PAGE_LIMIT_DEFAULT,
+async def list_retired_media(cursor: Optional[str] = None, limit: int = PAGE_LIMIT_DEFAULT,
                              user: dict = Depends(get_current_user)):
-    """The retired files of the tenant (FG-558: Owner/Admin only), newest first, paged
-    (FG-693: ``{items, total, skip, limit, next_skip}`` — no retired file is unreachable).
-    Each row says whether THIS user may restore it (R88: the Owner) and how."""
+    """The retired files of the tenant (FG-558: Owner/Admin only), newest first, keyset
+    paging (FG-693 / FG-706: ``{items, total, limit, next_cursor}`` — a restore between two
+    pages skips nothing). Each row says whether THIS user may restore it (R88: the Owner)."""
     from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES, RETIRED_LIST_ROLES
     if user.get("role") not in RETIRED_LIST_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
-    skip, limit = _page_args(skip, limit)
     flt = {"org_id": user["org_id"], "status": MEDIA_RETIRED}
-    coll = _tenant(user).media_files
-    total = await coll.count_documents(flt)
-    rows = await coll.find(
-        flt,
+    rows, total, nxt = await _keyset_page(
+        _tenant(user).media_files, flt, "retired_at",
         {"_id": 0, "id": 1, "filename": 1, "stored_filename": 1, "content_type": 1,
          "context_type": 1, "context_id": 1, "owner_user_id": 1, "created_at": 1,
-         **{f: 1 for f in _RETIRE_FIELDS}}).sort([("retired_at", -1), ("id", 1)]).skip(
-        skip).limit(limit).to_list(None)
+         **{f: 1 for f in _RETIRE_FIELDS}}, cursor, limit)
     may = RESTORE_ENABLED and user.get("role") in RESTORE_ROLES
     for r in rows:
         r["can_restore"] = may
         if may:
             r["restore"] = {"method": "POST", "path": "/api/media/%s/restore" % r["id"],
                             "requires": ["reason", "Idempotency-Key"]}
-    return _page(rows, total, skip, limit)
+    return _page(rows, total, limit, nxt)
 
 
 @router.post("/media/{media_id}/pending-holders/{marker_id}/release")

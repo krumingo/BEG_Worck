@@ -81,7 +81,8 @@ function ReasonForm({ id, label, required, busy, onConfirm, onCancel }) {
   );
 }
 
-/** A paged list (FG-693): the first page on load, „Покажи още“ appends the next one. */
+/** A paged list (FG-693 / FG-706 keyset): the first page on load, „Покажи още“ appends
+ * the page after the last cursor. */
 function useList(load) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -92,7 +93,7 @@ function useList(load) {
   const reload = useCallback(() => {
     setLoading(true);
     setProblem(null);
-    return load(0)
+    return load(null)
       .then((page) => { setRows(page.items); setTotal(page.total); setNext(page.next); })
       .catch((err) => { setRows([]); setTotal(0); setNext(null); setProblem(problemOf(err)); })
       .finally(() => setLoading(false));

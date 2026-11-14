@@ -229,9 +229,9 @@ async def _apply_revert(db, row: Dict[str, Any], approver: str,
 
 
 def check_approval_ref(value: Optional[str]) -> Optional[str]:
-    """FG-692 prep: where Krum's "да" was given (a conversation / message reference), stored
-    in every AuditEvent the apply writes. Optional until Krum decides how it is recorded;
-    when given: ≤ 500 characters, no control characters."""
+    """FG-692 / FG-707: where Krum's "да" was given (a conversation / message reference),
+    stored in every AuditEvent the apply writes. REQUIRED for ``--apply`` (backfill and
+    revert); the dry run needs none. ≤ 500 characters, no control characters."""
     if value is None:
         return None
     ref = value.strip()
@@ -246,6 +246,9 @@ async def migrate(db, apply: bool = False, approved_by: Optional[str] = None,
                   plan_sha: Optional[str] = None, revert: bool = False,
                   approval_ref: Optional[str] = None) -> Dict[str, Any]:
     approval_ref = check_approval_ref(approval_ref)
+    if apply and not approval_ref:
+        # FG-707: no write without the reference to Krum's "да" — refused before any read
+        raise NotApproved("--approval-ref is required with --apply (where Krum said \"да\")")
     owner = await resolve_owner(db, approved_by)
     rows = await (build_revert_plan if revert else build_plan)(db, owner["org_id"])
     sha = globals()["plan_sha"](rows)
@@ -276,7 +279,8 @@ def main(argv=None) -> int:
     ap.add_argument("--approved-by", help="the user id of an active Owner of the tenant")
     ap.add_argument("--plan-sha")
     ap.add_argument("--approval-ref",
-                    help="optional (FG-692 prep): where Krum's \"да\" was given; stored in the AuditEvent")
+                    help="REQUIRED with --apply (FG-707): where Krum's \"да\" was given; "
+                         "stored in the AuditEvent")
     args = ap.parse_args(argv)
     from motor.motor_asyncio import AsyncIOMotorClient
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])

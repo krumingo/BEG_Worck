@@ -613,7 +613,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                          {"action": "media.avatar.backfill"})) - audit_before}
         b_dry = q(lambda: bf.migrate(op_db, approved_by=fx["B"]["users"]["owner"]["id"]))
         a4["b_owner_sees_only_b"] = all(r["org_id"] == fx["B"]["tenant_id"] for r in b_dry["plan"])
-        a4["apply_wrong_sha"] = q(lambda: _try(apply=True, approved_by=owner_id, plan_sha="0" * 64))
+        import inspect as _insp                # FG-707: with a ref, the SHA check still refuses
+        _ref = ({"approval_ref": "R83-4 тест"}
+                if "approval_ref" in _insp.signature(bf.migrate).parameters else {})
+        a4["apply_wrong_sha"] = q(lambda: _try(apply=True, approved_by=owner_id, plan_sha="0" * 64,
+                                               **_ref))
         # FG-578: a write that matches nothing aborts the user's transaction ("conflict")
         flag_row = next(r for r in dry["plan"] if r["user_id"] == viewer_id)
         stale_row = dict(flag_row, avatar_url="/api/media/file/not-the-current-one.jpg")
@@ -621,6 +625,21 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                           if hasattr(bf, "_apply_flag") else "no _apply_flag (pre pass 46)")
         a4["conflict_rolled_back"] = media_row(pid("A", "legacy_av")).get("avatar") is None
         approval_ref = "R83-4 — „да“ на Крум в разговора (тестов маркер)"
+        # FG-707: --apply WITHOUT --approval-ref → refused, nothing written; the CLI exits 1
+        ev_before = q(lambda: op_db.audit_events.count_documents({"action": "media.avatar.backfill"}))
+        try:
+            q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry["plan_sha"]))
+            no_ref = "applied"
+        except Exception as exc:               # noqa: BLE001
+            no_ref = type(exc).__name__
+        cli_rc = bf.main(["--approved-by", owner_id, "--plan-sha", dry["plan_sha"], "--apply"])
+        a4["fg707"] = {"migrate": no_ref, "cli_exit": cli_rc,
+                       "flag_untouched": media_row(pid("A", "legacy_av")).get("avatar") is None,
+                       "no_event": q(lambda: op_db.audit_events.count_documents(
+                           {"action": "media.avatar.backfill"})) == ev_before}
+        if no_ref == "applied" or cli_rc == 0:  # before FG-707 the bare apply already wrote
+            a4["fg707"]["note"] = "applied without approval_ref"
+            dry = q(lambda: bf.migrate(op_db, approved_by=owner_id))   # the plan moved on
         try:                                   # FG-692 prep: the optional --approval-ref
             res = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id,
                                        plan_sha=dry["plan_sha"], approval_ref=approval_ref))
@@ -649,7 +668,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                    "approved_by_owner": (e["diff"] or {}).get("approved_by") == owner_id}
                                   for e in events(pid("A", "legacy_av"), "media.avatar")]}
         dry2 = q(lambda: bf.migrate(op_db, approved_by=owner_id))
-        res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry2["plan_sha"]))
+        try:
+            res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry2["plan_sha"],
+                                        approval_ref=approval_ref))
+        except TypeError:
+            res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry2["plan_sha"]))
         a4["second_apply_written"] = res2.get("written")
         a4["second_viewer_action"] = {r["user_id"]: r["action"] for r in dry2["plan"]}.get(viewer_id)
         # revert: dry run first, then the approved plan
@@ -660,8 +683,20 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         a4["revert_dry"] = {"counts": rdry["counts"], "applied": rdry["applied"],
                             "flag_still": media_row(pid("A", "legacy_av")).get("avatar")}
         try:
+            rno = "applied"
+            try:                               # FG-707: the revert apply needs it too
+                q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, revert=True,
+                                     plan_sha=rdry["plan_sha"]))
+            except TypeError:
+                raise
+            except Exception as exc:           # noqa: BLE001
+                rno = type(exc).__name__
+            a4["fg707"]["revert_without_ref"] = rno
+            a4["fg707"]["revert_flag_still"] = media_row(pid("A", "legacy_av")).get("avatar")
+            if rno == "applied":               # before FG-707 the bare revert already wrote
+                rdry = q(lambda: bf.migrate(op_db, approved_by=owner_id, revert=True))
             rres = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, revert=True,
-                                        plan_sha=rdry["plan_sha"]))
+                                        plan_sha=rdry["plan_sha"], approval_ref=approval_ref))
         except TypeError:
             rres = {}
         a4["revert"] = {"written": rres.get("written"),
@@ -1348,34 +1383,63 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                         "retired_list": len(listed("owner")["rows"])}
         again = call("POST", url, key="auto", json={"reason": "пак"})
         r88["again"] = [again["status"], again["error_code"]]
-        # FG-693: both review lists page, with a total — no retired file is unreachable
-        extra = [upload() for _ in range(3)]
+        # FG-693 / FG-706: both review lists page by KEYSET, with a total — no retired file
+        # is unreachable, even when one is restored between two pages
+        extra = [upload() for _ in range(5)]
         for f in extra:
             call("DELETE", "/api/media/%s" % f["id"], role="technician", key="auto",
                  json={"reason": "страниране"})
+        from urllib.parse import quote as _quote
+
+        def walk(limit, between=None, max_pages=60):
+            seen, cur, pages, shapes = [], None, 0, []
+            while pages < max_pages:
+                url = "/api/media-retired?limit=%d" % limit + ("&cursor=%s" % _quote(cur) if cur else "")
+                b = call("GET", url)["body"]
+                if not isinstance(b, dict):
+                    break
+                shapes.append(sorted(b))
+                seen += [x["id"] for x in b.get("items") or []]
+                pages += 1
+                if pages == 1 and between:
+                    between(b)
+                cur = b.get("next_cursor")
+                if not cur:
+                    break
+            return seen, pages, shapes
+        retired_ids = lambda: q(lambda: op_db.media_files.distinct(          # noqa: E731
+            "id", {"org_id": A["tenant_id"], "status": "retired"}))
+        before_ids = set(retired_ids())
         p1 = call("GET", "/api/media-retired?limit=2")
         b1 = p1["body"] if isinstance(p1["body"], dict) else {}
-        seen, skip, pages = [], 0, 0
-        while skip is not None and pages < 50:
-            b = call("GET", "/api/media-retired?skip=%d&limit=2" % skip)["body"]
-            if not isinstance(b, dict):
-                break
-            seen += [x["id"] for x in b.get("items") or []]
-            skip, pages = b.get("next_skip"), pages + 1
-        total_retired = q(lambda: op_db.media_files.count_documents(
-            {"org_id": A["tenant_id"], "status": "retired"}))
+        seen, pages, shapes = walk(2)
+        restored = {}
+
+        def restore_one_of_page_one(b):
+            first = (b.get("items") or [None])[0]
+            if first:
+                restored["id"] = first["id"]
+                restored["status"] = call("POST", "/api/media/%s/restore" % first["id"], key="auto",
+                                          json={"reason": "върнат между страниците"})["status"]
+        seen2, pages2, _ = walk(2, between=restore_one_of_page_one)
         rq = call("GET", "/api/media-retire-requests?status=&limit=1")["body"]
         r88["paging"] = {
-            "first": {"len": len(b1.get("items") or []), "skip": b1.get("skip"), "limit": b1.get("limit"),
-                      "next_skip": b1.get("next_skip"), "total_ok": b1.get("total") == total_retired},
-            "walk": {"all_reached": sorted(seen) == sorted(set(seen)) and len(seen) == total_retired,
-                     "extra_reached": all(f["id"] in seen for f in extra)},
+            "first": {"len": len(b1.get("items") or []), "limit": b1.get("limit"),
+                      "has_cursor": bool(b1.get("next_cursor")),
+                      "total_ok": b1.get("total") == len(before_ids)},
+            "walk": {"all_reached": len(seen) == len(set(seen)) and set(seen) == before_ids,
+                     "extra_reached": all(f["id"] in seen for f in extra),
+                     "shape": shapes[0] if shapes else None, "pages": pages},
+            "restore_between_pages": {
+                "restored": restored.get("status"),
+                "no_duplicates": len(seen2) == len(set(seen2)),
+                "every_unseen_reached": (before_ids - {restored.get("id")}) <= set(seen2)},
             "requests": {"shape": sorted(rq) if isinstance(rq, dict) else None,
                          "len": len(rq.get("items") or []) if isinstance(rq, dict) else None,
                          "total_ge_1": isinstance(rq, dict) and (rq.get("total") or 0) >= 1},
             "bad": [call("GET", "/api/media-retired?limit=0")["status"],
                     call("GET", "/api/media-retired?limit=201")["status"],
-                    call("GET", "/api/media-retired?skip=-1")["status"],
+                    call("GET", "/api/media-retired?cursor=not-a-cursor")["error_code"],
                     call("GET", "/api/media-retire-requests?limit=500")["status"]]}
         obs["r88"] = r88
 
@@ -2039,21 +2103,36 @@ def test_r88_only_the_owner_restores_and_admin_sees_the_list_without_the_action(
 
 
 @real
-def test_fg693_the_review_lists_page_with_a_total(obs):
+def test_fg693_fg706_the_review_lists_page_by_keyset_with_a_total(obs):
     g = obs["r88"]["paging"]
-    assert g["first"] == {"len": 2, "skip": 0, "limit": 2, "next_skip": 2, "total_ok": True}
-    assert g["walk"] == {"all_reached": True, "extra_reached": True}
-    assert g["requests"] == {"shape": ["items", "limit", "next_skip", "skip", "total"], "len": 1,
+    assert g["first"] == {"len": 2, "limit": 2, "has_cursor": True, "total_ok": True}
+    assert g["walk"]["all_reached"] is True and g["walk"]["extra_reached"] is True
+    assert g["walk"]["shape"] == ["items", "limit", "next_cursor", "total"]
+    assert g["requests"] == {"shape": ["items", "limit", "next_cursor", "total"], "len": 1,
                              "total_ge_1": True}
-    assert g["bad"] == [400, 400, 400, 400]
+    assert g["bad"] == [400, 400, "BAD_CURSOR", 400]
 
 
 @real
-def test_fg692_prep_the_backfill_records_an_optional_approval_ref(obs):
+def test_fg706_a_restore_between_two_pages_skips_no_row(obs):
+    g = obs["r88"]["paging"]["restore_between_pages"]
+    assert g == {"restored": 200, "no_duplicates": True, "every_unseen_reached": True}
+
+
+@real
+def test_fg692_the_backfill_records_the_approval_ref(obs):
     a = obs["r83"]["backfill"]["approval_ref"]
     assert a["result"] is True and a["event"] == [True]
     assert a["bad_ref"] == "NotApproved"
-    assert a["optional"] == [None, None]
+    assert a["optional"] == [None, None]          # the dry run needs none
+
+
+@real
+def test_fg707_apply_and_revert_apply_need_the_approval_ref(obs):
+    f = obs["r83"]["backfill"]["fg707"]
+    assert f["migrate"] == "NotApproved" and f["cli_exit"] == 1
+    assert f["flag_untouched"] is True and f["no_event"] is True
+    assert f["revert_without_ref"] == "NotApproved" and f["revert_flag_still"] is True
 
 
 @real

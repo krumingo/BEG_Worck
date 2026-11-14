@@ -63,7 +63,7 @@ const RETIRED = (canRestore) => ({
 });
 
 const page = (items, total = items.length, next = null) =>
-  ({ data: { items, total, skip: 0, limit: 50, next_skip: next } });
+  ({ data: { items, total, limit: 50, next_cursor: next } });
 
 function serve({ canRestore = true } = {}) {
   mockGet.mockImplementation((url) => {
@@ -180,7 +180,7 @@ test("the Owner restores a retired file with a reason and an Idempotency-Key", a
   expect(url).toBe("/media/m-ret/restore");
   expect(body).toEqual({ reason: "нужен за отчета" });
   expect(cfg.headers["Idempotency-Key"]).toEqual(expect.any(String));
-  await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { skip: 0, limit: 50 } }));
+  await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { limit: 50 } }));
 });
 
 test("the Admin sees the retired list without a restore button", async () => {
@@ -210,8 +210,8 @@ test("the retired list loads the next page with „Покажи още“ until 
   mockGet.mockImplementation((url, cfg) => {
     if (url === "/media-retire-requests") return Promise.resolve(page([REQUEST]));
     if (url === "/media-retired") {
-      const skip = cfg?.params?.skip || 0;
-      return Promise.resolve(skip === 0 ? page([r(1), r(2)], 3, 2) : page([r(3)], 3, null));
+      return Promise.resolve(cfg?.params?.cursor === "c-after-2"
+        ? page([r(3)], 3, null) : page([r(1), r(2)], 3, "c-after-2"));
     }
     return Promise.reject({ response: { status: 404 } });
   });
@@ -223,14 +223,14 @@ test("the retired list loads the next page with „Покажи още“ until 
   expect(screen.getByTestId("retired-count").textContent).toBe("2 от 3");
   await act(async () => { fireEvent.click(screen.getByTestId("retired-more")); });
   await screen.findByTestId("retired-m-3");
-  expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { skip: 2, limit: 50 } });
+  expect(mockGet).toHaveBeenCalledWith("/media-retired", { params: { limit: 50, cursor: "c-after-2" } });
   expect(screen.queryByTestId("retired-more")).toBeNull();        // everything is shown
 });
 
 test("the request list is asked for page by page too", async () => {
   await renderPageAs("Admin");
   expect(mockGet).toHaveBeenCalledWith("/media-retire-requests",
-    { params: { status: "pending", skip: 0, limit: 50 } });
+    { params: { status: "pending", limit: 50 } });
   expect(screen.queryByTestId("requests-more")).toBeNull();
 });
 

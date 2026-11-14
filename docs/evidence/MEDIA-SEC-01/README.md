@@ -102,11 +102,20 @@ The orchestrator (14.11.2026), per CLAUDE.md §15: one small screen on the EXIST
 
 | Finding | Fix |
 |---|---|
-| FG-693 | `GET /api/media-retired` and `GET /api/media-retire-requests` page: `skip` (≥ 0), `limit` (1–200, default 50; else 400 `BAD_PAGE`) → `{items, total, skip, limit, next_skip}`, stable order (newest first, then id). The screen shows the total and „Покажи още“ until every row is loaded. Tests: walking the pages reaches every retired file; jest „Покажи още“. |
+| FG-693 | `GET /api/media-retired` and `GET /api/media-retire-requests` page with a total; the screen shows the total and „Покажи още“ until every row is loaded. **Pass 68 (FG-706): keyset** — see below. |
 | FG-691 | `AVATAR_VISIBILITY` (never read) removed from `media_policy.py`; R88 decided it — the avatar route serves the caller's tenant only. |
 | FG-692 (prep) | The backfill takes an optional `--approval-ref` stored in its AuditEvents (not required yet — waits for Krum). |
 
 Red before: `red_pass67_on_163935e4.txt` — 2 failed.
+
+## FLOW Guard pass 68 on 2de0f859 — fixed
+
+| Finding | Fix |
+|---|---|
+| FG-707 (medium) | The backfill's `--apply` (and `--revert --apply`) requires `--approval-ref`; without it → `NotApproved`, exit 1, nothing written. The dry run stays free. Tests: migrate + the CLI refuse, no flag, no AuditEvent; the revert apply refuses too. |
+| FG-706 | Both review lists page by **keyset**: order (sort key desc, id asc), `cursor` = the last row's (sort key, id) (base64url), the next page is strictly after it — a row that leaves the list between two pages (a restore, a decision) never makes the next page skip one. `{items, total, limit, next_cursor}`; a bad cursor → 400 `BAD_CURSOR`, a bad limit → 400 `BAD_PAGE`. Test: a restore after page 1 — the walk still reaches every remaining retired file, no duplicates. The screen asks for `cursor = next_cursor`. |
+
+Red before: `red_pass68_on_2de0f859.txt` — 6 failed (on 2de0f859 the bare `--apply` wrote).
 
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
@@ -119,13 +128,13 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 # 2. after Krum's "да" for THAT plan
 MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_backfill.py \
     --approved-by <Owner user id> --plan-sha <plan_sha from step 1> --apply \
-    [--approval-ref "<where Krum said да>"]
+    --approval-ref "<where Krum said да>"
 # undo: the same two steps with --revert
 ```
 
 * `flag` — `media_files` row of the same tenant with the stored name, not retired, UPLOADED as the user's profile photo (`context_type="profile"`, `context_id` = the user, no `linked_at`) → `avatar: true` (+ `avatar_url` rewritten from `/api/media/file/` to `/api/media/avatar/` form), one transaction per user with AuditEvent `media.avatar.backfill` (actor `system`, approver in the diff).
 * `already` — nothing to do. `skip:*` (`url_shape`, `no_media_in_tenant`, `retired`, `not_a_profile_photo`, `another_users_profile`, `linked_not_uploaded_as_profile`) — reported only; a person re-uploads.
-* `--approval-ref` (FG-692 prep, optional until Krum decides how his „да“ is recorded): stored in every `media.avatar.backfill` / `_revert` AuditEvent and in the output; ≤ 500 characters, no control characters, otherwise refused; not part of the plan SHA.
+* `--approval-ref` — **required with `--apply` and with `--revert --apply`** (FG-707): without it the script refuses, exits 1 and writes nothing; the dry run needs none. Stored in every `media.avatar.backfill` / `_revert` AuditEvent and in the output; ≤ 500 characters, no control characters; not part of the plan SHA. How Krum's „да“ itself is recorded is still his decision (FG-692).
 * `--approved-by` that is not an active Owner's user id, or a plan SHA that is not the current plan → refused, nothing written. A write that matches nothing aborts that user's transaction (`conflict`). A second apply writes 0.
 * `--revert` — removes exactly the flags this script set and restores the user's previous `avatar_url` while it is still the one the backfill wrote; AuditEvent `media.avatar.backfill_revert`.
 
