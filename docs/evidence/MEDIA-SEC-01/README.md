@@ -84,6 +84,20 @@ Canon: commit `01845564` (RECOVERY_EXECUTION_PROPOSAL, Р88): „Изваден 
 
 Tests: `test_r88_*` (Owner restores + replay + audit + history; Admin/Technician/Viewer/SiteManager/Accountant 403; Admin sees the list without the action; another firm sees nothing / 404; no key 428; no or blank reason 422). Red before: `red_r88_on_582eb9d.txt` — 3 failed.
 
+## Screen „Файлове за преглед“ (`/media/review`, Owner/Admin)
+
+The orchestrator (14.11.2026), per CLAUDE.md §15: one small screen on the EXISTING APIs, no new rules.
+
+| Tab | Owner | Admin |
+|---|---|---|
+| „Чакащи заявки за изваждане“ (`GET /media-retire-requests`) | the list + **Одобри** (reason optional) / **Откажи** (reason required) → `POST /media/retire-requests/{id}/approve` / `reject` | the list only („Само преглед — решенията взема Собственикът“) |
+| „Извадени от употреба“ (`GET /media-retired`) | the list + **Върни** (reason required) → `POST /media/{id}/restore` — only where the server's row says `can_restore` | the list only |
+
+* Route guard `components/MediaReviewRoute.js` (Owner/Admin; everyone else → `/`, no session → `/login`); sidebar entry in the settings group for Owner/Admin only; `lib/mediaReviewAccess.js` mirrors `media_policy.py` and a jest test fails when they drift.
+* Every write carries an Idempotency-Key per submission (`createKeyHolder`: kept for a retry after a network error, new after a server answer).
+* Tests: `frontend/src/pages/__tests__/MediaReviewPage.mediasec01.test.js` — 22 (who reaches the screen, sidebar entry, Owner/Admin buttons, reason rules, endpoints + keys, the server's `can_restore`, a 403 message, the policy mirror).
+* Not yet seen live — Krum's live test (CLAUDE.md §18 step 7) is still needed before „Готово“.
+
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
 Until it is applied, a legacy avatar (uploaded before MEDIA-SEC-01, no `avatar` flag) shows initials instead of the photo.
@@ -114,12 +128,12 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 * `MissingSMRPage.js:712` still shows attachments with a plain `<img src=".../api/media/file/...">`. That route already required a login before this change, so these images most likely don't load today. The same `AuthImage` fix applies.
 * ~~`EmployeesPage.js` new-employee avatar with `context_type="avatar"`~~ — fixed in pass 47 (FG-590a).
 * ~~Retired media has no "restore" path~~ — done by R88 (below). Retired **project photos** still have none (a separate route, not in R88's scope).
-* The retired list and the restore are API only — no frontend screen yet (like the retire request / Owner approval).
+* ~~The retired list and the restore are API only~~ — the screen „Файлове за преглед“ exists now (below).
 * **W0-07**: the interim Owner-approval flow (`media_retire_requests`) moves into the canonical Approval runtime.
 * **FG-588 option (a) — debt**: a pre-commit hook in the (locked) warehouse service so the claim runs INSIDE `service.execute`'s transaction; needs Krum. Option 4 (pending-holder marker) closes the proven race meanwhile.
 * **OCR from-media (`ocr_invoice.py` from-media) — debt (FG-597)**: claim-then-write outside one transaction; unreachable today (pre-existing 500: `create_ocr_intake` calls `extract_invoice_text(media_id=...)` without a tenant). Before that 500 is fixed, the route gets the pending-holder pattern (or the claim inside the write's transaction).
 * **#83 merge (FG-555 / FG-589)**: `"retired"` goes into `bank_account_guard._INACTIVE_FILE_STATES` (and a pending retire request is refused); the `cash_receipt_file_id` writers in `finance.py` / `subcontractors.py` use `file_holders.claimed_write`; `receipt_references` uses `find_holders(kinds=RECEIPT_KINDS)`. FLOW Guard's 5-point recipe applies.
-* The frontend has no screen yet for the retire request / Owner approval (API only); `EmployeesPage` new-employee avatar keeps failing silently (now also refused by R83(3), as it passes a `/api/media/file/` URL).
+* ~~The frontend has no screen yet for the retire request / Owner approval~~ — closed by „Файлове за преглед“ (below). `EmployeesPage` new-employee avatar: fixed in pass 47 (FG-590a).
 * `GET /api/media/{id}` order changed: the media ACL runs first, then the retired rule (403 for a user without access, 410 for a reader with access).
 
 ## Merge note

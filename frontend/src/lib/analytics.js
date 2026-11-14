@@ -41,7 +41,7 @@ export const ROUTE_TEMPLATES = [
   "/employees/:userId", "/brigades", "/advances", "/pay-runs", "/finance", "/finance/accounts", "/finance/analysis",
   "/finance/invoices", "/finance/invoices/new", "/finance/invoices/:invoiceId", "/finance/invoices/:invoiceId/lines",
   "/finance/payments", "/finance/payments/new", "/overhead", "/overhead/snapshots/:snapshotId", "/data/warehouses",
-  "/data/counterparties", "/data/items", "/data/clients", "/data/prices", "/data/turnover", "/data/master-data",
+  "/data/counterparties", "/data/items", "/data/clients", "/data/prices", "/data/turnover", "/data/master-data", "/media/review",
   "/assets/qr", "/assets/items", "/assets/units", "/assets/units/:unitId", "/assets/batch-intake",
   "/assets/intake-review", "/warehouse/canonical", "/sales", "/clients/:clientId", "/daily-logs", "/change-orders",
   "/ai-calibration", "/procurement", "/inventory", "/missing-smr", "/smr-analyses", "/contract-payments",

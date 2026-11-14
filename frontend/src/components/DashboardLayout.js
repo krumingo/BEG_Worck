@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { canReadMasterData } from "@/lib/masterDataAccess";
 import { canReadFinance } from "@/lib/financeAccess";
 import { canOpenCanonicalWarehouse } from "@/lib/warehouseCanonicalAccess";
+import { canOpenMediaReview } from "@/lib/mediaReviewAccess";
 import {
   LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut, KeyRound,
   ChevronRight, ChevronDown, HardHat, FolderKanban, CalendarCheck,
@@ -114,6 +115,8 @@ const NAV_GROUPS = [
     children: [
       { to: "/settings", icon: Settings, labelKey: "nav.companySettings" },
       { to: "/users", icon: Users, labelKey: "nav.users" },
+      // MEDIA-SEC-01: retire requests + retired files — Owner/Admin only (lib/mediaReviewAccess.js)
+      { to: "/media/review", icon: Archive, labelKey: "nav.mediaReview", mediaReview: true },
     ],
   },
 ];
@@ -253,9 +256,12 @@ export default function DashboardLayout({ children }) {
   // Build effective groups for admin (add platform admin children to settings)
   // SEC-02 (R20): finance menus only for Owner/Admin/Accountant (lib/financeAccess.js).
   const seesFinance = canReadFinance(user?.role);
+  const seesMediaReview = canOpenMediaReview(user?.role);
   const getGroups = () => {
     return NAV_GROUPS.filter(g => seesFinance || !g.finance).map(g => {
-      const children = g.children ? g.children.filter(c => seesFinance || !c.finance) : g.children;
+      const children = g.children
+        ? g.children.filter(c => (seesFinance || !c.finance) && (seesMediaReview || !c.mediaReview))
+        : g.children;
       if (g.id === "settings" && isPlatformAdmin) {
         return { ...g, children: [...(children || []), ...PLATFORM_ADMIN_CHILDREN] };
       }
