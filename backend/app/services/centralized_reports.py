@@ -331,13 +331,11 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
     _mat = await project_material_cost(tenant, org_id, project_id)
     total_materials = _mat["total_cost"]
 
-    # Revenue from invoices
-    invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-        {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
-    ).to_list(200)
-    # NET revenue (без ДДС) so balance/margin sit on the same basis as costs
-    total_revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in invoices if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+    # R86 (FG-565): revenue = the payments RECEIVED (FLOW-006 ledger), net — the one shared
+    # rule of the project P&L; the invoiced amount is shown apart
+    from app.services.project_pnl import received_revenue
+    rec = await received_revenue(tenant, org_id, [project_id])
+    total_revenue = rec["received_net"]
 
     total_expense = round(total_labor_with_oh + total_materials, 2)
     balance = round(total_revenue - total_expense, 2)
@@ -354,6 +352,9 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         "material_cost_basis": cost_basis(_mat),
         "total_expense": total_expense,
         "total_revenue": total_revenue,
+        "revenue_basis": rec["revenue_basis"],
+        "invoiced_net": rec["invoiced_net"],
+        "awaiting_payment_net": rec["awaiting_payment_net"],
         "balance": balance,
         "margin_pct": margin,
         "missing_rate_count": sum(1 for e in entries if e.get("missing_rate")),

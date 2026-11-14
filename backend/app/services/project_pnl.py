@@ -8,15 +8,87 @@ from app.services.labor_cost import project_labor_cost
 from app.services.payment_state import active_payments
 
 
-# FG-530 (Krum): THE revenue rule — ISSUED invoices (direction Issued, a sent / paid / partly
-# paid status), net (без ДДС). The project P&L and the project aggregate use the same rule.
+# FG-530: the ISSUED documents — direction Issued, a sent / paid / partly paid status. Since
+# R86 they are the INVOICED amount ("фактурирано"), shown apart, not the revenue.
 REVENUE_STATUSES = ("Sent", "Paid", "PartiallyPaid")
+ISSUED_STATUSES = REVENUE_STATUSES
+
+
+def _net(i) -> float:
+    return float((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) or 0)
 
 
 def issued_revenue_net(invoices) -> float:
-    """Net revenue of Issued invoice rows (each with direction already Issued)."""
-    return round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) or 0
-                     for i in invoices if i.get("status") in REVENUE_STATUSES), 2)
+    """Net INVOICED amount of Issued invoice rows (R86: invoiced, not revenue)."""
+    return round(sum(_net(i) for i in invoices if i.get("status") in ISSUED_STATUSES), 2)
+
+
+def _is_proforma(i) -> bool:
+    return (i.get("kind") or "Invoice") == "Proforma"
+
+
+# R86 (Krum 14.11.2026, FG-565; changes R80): THE project revenue rule — "Приход" = only the
+# payments RECEIVED (in full or in installments) against issued documents, net of VAT. The
+# source is the FLOW-006 Payment ledger: active Inflow rows of finance_payments allocated
+# (active payment_allocations) to an Issued, non-proforma invoice of the project. A proforma
+# alone is never revenue. Issued but unpaid is "фактурирано, чака плащане", shown apart.
+# The net share of a payment = allocated × invoice subtotal / invoice total.
+REVENUE_BASIS = "received payments (FLOW-006 ledger), net of VAT"
+
+
+async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str = None,
+                           date_to: str = None, invoices=None) -> dict:
+    """R86: the received revenue of ``project_ids`` (``date_from`` ≤ payment date < ``date_to``).
+
+    Returns ``received_net`` (THE revenue), ``received_gross``, ``invoiced_net``,
+    ``invoiced_gross`` and ``awaiting_payment_net`` / ``_gross`` (invoiced, not yet received).
+    The invoiced / awaiting amounts are not limited by the payment dates."""
+    from app.services.payment_state import active_allocations
+    project_ids = list(project_ids)
+    if invoices is None:
+        invoices = await tenant.invoices.find(
+            {"org_id": org_id, "project_id": {"$in": project_ids}, "direction": "Issued"},
+            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1},
+        ).to_list(5000)
+    docs = {i["id"]: i for i in invoices
+            if i.get("id") and not _is_proforma(i) and i.get("status") not in ("Draft", "Cancelled")}
+    issued = [i for i in docs.values() if i.get("status") in ISSUED_STATUSES]
+    out = {"invoiced_gross": round(sum(float(i.get("total") or 0) for i in issued), 2),
+           "invoiced_net": issued_revenue_net(issued),
+           "received_gross": 0.0, "received_net": 0.0, "revenue_basis": REVENUE_BASIS}
+    paid_gross_all = paid_net_all = 0.0
+    if docs:
+        allocs = await tenant.payment_allocations.find(
+            active_allocations({"invoice_id": {"$in": list(docs)}}),
+            {"_id": 0, "payment_id": 1, "invoice_id": 1, "amount_allocated": 1},
+        ).to_list(20000)
+        pay_ids = list({a.get("payment_id") for a in allocs if a.get("payment_id")})
+        pays = {}
+        if pay_ids:
+            for p in await tenant.finance_payments.find(
+                    active_payments({"id": {"$in": pay_ids}, "direction": "Inflow"}),
+                    {"_id": 0, "id": 1, "date": 1}).to_list(20000):
+                pays[p["id"]] = p
+        for a in allocs:
+            pay = pays.get(a.get("payment_id"))
+            if not pay:
+                continue                      # reversed / not an inflow: not money received
+            inv = docs[a["invoice_id"]]
+            gross = float(a.get("amount_allocated") or 0)
+            total = float(inv.get("total") or 0)
+            net = gross * (_net(inv) / total) if total else 0.0
+            paid_gross_all += gross
+            paid_net_all += net
+            d = (pay.get("date") or "")[:10]
+            if (date_from and d < date_from) or (date_to and d >= date_to):
+                continue
+            out["received_gross"] += gross
+            out["received_net"] += net
+    out["received_gross"] = round(out["received_gross"], 2)
+    out["received_net"] = round(out["received_net"], 2)
+    out["awaiting_payment_gross"] = round(max(0.0, out["invoiced_gross"] - paid_gross_all), 2)
+    out["awaiting_payment_net"] = round(max(0.0, out["invoiced_net"] - paid_net_all), 2)
+    return out
 
 
 async def compute_project_pnl(org_id: str, project_id: str) -> dict:
@@ -40,8 +112,9 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     # ── b. REVENUE ─────────────────────────────────────────────────
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-        {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
-    ).to_list(200)
+        {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1,
+         "id": 1, "kind": 1},
+    ).to_list(5000)
     _rev_statuses = list(REVENUE_STATUSES)   # FG-530: the one revenue rule
     # Gross (с ДДС) — invoiced / received, the cash view
     invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in _rev_statuses)
@@ -65,7 +138,12 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     ).to_list(200)
     additional_offered = sum(m.get("ai_estimated_price") or 0 for m in additional)
 
-    total_revenue = round(invoiced_net, 2)  # NET basis (без ДДС) for management P&L / margin
+    # R86: revenue = the payments RECEIVED (FLOW-006 ledger), net — not the invoiced amount
+    received = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    total_revenue = received["received_net"]
+    # R86: the invoiced amount by the same rule (a proforma is not an issued document)
+    invoiced_total = received["invoiced_gross"]
+    invoiced_net = received["invoiced_net"]
 
     # ── c. LABOR COST (LAB-01: approved report lines, one labor calculation) ──
     # FLOW-019/028 + R31: real labor = approved daily-report lines priced by
@@ -161,6 +239,12 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "acts_total": round(acts_total, 2),
             "additional_offered": round(additional_offered, 2),
             "total_revenue": round(total_revenue, 2),
+            "received_net": received["received_net"],
+            "received_gross": received["received_gross"],
+            "awaiting_payment_net": received["awaiting_payment_net"],
+            "awaiting_payment_gross": received["awaiting_payment_gross"],
+            "awaiting_payment_label": "Фактурирано, чака плащане",
+            "revenue_basis": REVENUE_BASIS,
         },
         "vat": {
             "output_vat": round(output_vat, 2),
@@ -222,6 +306,10 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
 
     now = datetime.now(timezone.utc)
     trend = []
+    project_invoices = await tenant.invoices.find(
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},
+        {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1},
+    ).to_list(5000)
 
     for i in range(months - 1, -1, -1):
         dt = now - timedelta(days=30 * i)
@@ -235,13 +323,9 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         me = m_end.isoformat()
         label = m_start.strftime("%Y-%m")
 
-        # Revenue (invoices issued in this month)
-        inv = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": project_id, "direction": "Issued",  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-             "created_at": {"$gte": ms, "$lt": me}},
-            {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
-        ).to_list(100)
-        revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
+        # R86: revenue = the payments RECEIVED in this month (payment date), net
+        revenue = (await received_revenue(tenant, org_id, [project_id], date_from=ms[:10],
+                                          date_to=me[:10], invoices=project_invoices))["received_net"]
 
         # Expense (LAB-01: labor of approved report lines dated in this month)
         month_labor = await project_labor_cost(

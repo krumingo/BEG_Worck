@@ -37,18 +37,20 @@ const memberView = {           // what /aggregate answers to a member without th
 };
 const financeView = {
   ...memberView,
-  children: memberView.children.map(c => ({ ...c, invoices: { count: 1, invoiced: 1200, paid: 300, unpaid: 900, issued_net: 1000 },
+  children: memberView.children.map(c => ({ ...c, invoices: { count: 1, invoiced: 1200, paid: 480, unpaid: 720, issued_net: 1000,
+                                                                  received_net: 400, awaiting_payment_net: 600 },
                                             work: { hours: 24, labor_cost: 180 }, materials: { ex_vat: 50 },
                                             paid_labor: { gross_labor: 99 } })),
   invoices: { total: { count: 2, invoiced: 2400, paid: 600, unpaid: 1800 } },
   work: { total: { hours: 48, labor_cost: 360 } }, materials: { total: { ex_vat: 100 } },
-  paid_labor: { total: { gross_labor: 198 } }, pnl: { revenue: 2000, expenses: 460, profit: 1540 },
+  paid_labor: { total: { gross_labor: 198 } }, pnl: { revenue: 800, invoiced_net: 2000, awaiting_payment_net: 1200, expenses: 460, profit: 340 },
 };
 
 test("a member sees counts and hours, but no money row, card value or chart — never 0 €", () => {
   const { container } = render(<SubProjectsSummaryView sub_projects={subs} aggregate={memberView} navigate={() => {}} />);
   expect(container.textContent).not.toMatch(/€/);
-  for (const label of ["Фактурирано", "Платено", "Неплатено", "Труд (одобрен)", "Материали", "Платен труд", "Приход:", "Труд:"]) {
+  for (const label of ["Фактурирано", "Платено", "Неплатено", "Труд (одобрен)", "Материали", "Платен труд", "Приход:", "Труд:",
+                       "Фактурирано, чака плащане", "Приход (получени"]) {
     expect(screen.queryByText(label, { exact: false })).toBeNull();
   }
   expect(screen.queryByTestId("sub-chart")).toBeNull();
@@ -63,4 +65,15 @@ test("a finance role sees the money rows, the card values and the chart", () => 
   expect(screen.getByText("Труд (одобрен)")).toBeTruthy();
   expect(screen.getAllByText("Приход:", { exact: false }).length).toBe(2);
   expect(screen.getByTestId("sub-chart")).toBeTruthy();
+});
+
+test("R86: revenue is the payments received, net — the issued amount waits apart", () => {
+  const { container } = render(<SubProjectsSummaryView sub_projects={subs} aggregate={financeView} navigate={() => {}} />);
+  expect(screen.getByText("Фактурирано, чака плащане")).toBeTruthy();
+  expect(screen.getByText("Приход (получени, без ДДС)")).toBeTruthy();
+  expect(screen.queryByText("Неплатено")).toBeNull();
+  // each card's "Приход" is the received 400, never the issued 1000
+  const cards = [...container.querySelectorAll("button")].map(b => b.textContent);
+  expect(cards.filter(t => /Приход:\s*400/.test(t)).length).toBe(2);
+  expect(cards.some(t => /Приход:\s*1[\s.,]?000/.test(t))).toBe(false);
 });

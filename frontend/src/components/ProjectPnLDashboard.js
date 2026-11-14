@@ -53,9 +53,10 @@ export default function ProjectPnLDashboard({ projectId }) {
           <p className="text-[9px] text-muted-foreground">EUR</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.revenue")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></p>
-          <p className="font-mono font-bold text-lg text-blue-400">{revenue.total_revenue.toFixed(0)}</p>
-          <p className="text-[9px] text-muted-foreground">{t("pnl.paid")}: {revenue.paid_total.toFixed(0)}</p>
+          <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.revenue")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">получени, без ДДС</span></p>
+          <p className="font-mono font-bold text-lg text-blue-400" data-testid="pnl-revenue">{revenue.total_revenue.toFixed(0)}</p>
+          {/* R86 (FG-565): revenue = received payments; issued but unpaid is shown apart */}
+          <p className="text-[9px] text-amber-400" data-testid="pnl-awaiting">Фактурирано, чака плащане: {(revenue.awaiting_payment_net || 0).toFixed(0)}</p>
         </div>
         <div className="rounded-lg border border-border p-3 text-center">
           <p className="text-[10px] text-muted-foreground uppercase flex items-center justify-center gap-1">{t("pnl.expense")}<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></p>
@@ -123,6 +124,7 @@ export default function ProjectPnLDashboard({ projectId }) {
             {[
               { label: t("pnl.invoiced"), val: revenue.invoiced_total },
               { label: t("pnl.paid"), val: revenue.paid_total },
+              { label: "Фактурирано, чака плащане (без ДДС)", val: revenue.awaiting_payment_net },
               { label: t("pnl.clientActs"), val: revenue.acts_total },
               { label: t("pnl.additionalOffered"), val: revenue.additional_offered },
             ].map(({ label, val }) => (
