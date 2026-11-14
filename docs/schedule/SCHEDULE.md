@@ -1,7 +1,7 @@
 # График за изпълнение — живо копие
 
 > Поддържа: Claude Scheduler (клон `claude/schedule`). Решения: само Крум. Без merge/deploy без изрично „да“ от Крум.
-> Обновено: 2026-11-14 00:30 UTC (периодичен преглед; main = `3863610`, непроменен). Източници: PR списък и коментари, `02-release-gates.md`, `scope-matrix.md`, `08-c01-c16-review.md` (клон `codex/integrated-rc-2026-10-25` @ `3e0db8e`), BACKLOG_2026-10-17, seed SCHEDULE.
+> Обновено: 2026-11-14 03:30 UTC (периодичен преглед; main = `3863610`, непроменен). Източници: PR списък и коментари, `02-release-gates.md`, `scope-matrix.md`, `08-c01-c16-review.md` (клон `codex/integrated-rc-2026-10-25` @ `3e0db8e`), BACKLOG_2026-10-17, seed SCHEDULE.
 
 ## Процес (решение на Крум R9, 06.11)
 
@@ -66,7 +66,7 @@ Claude програмира (до 3 паралелни сесии върху р�
 | 12f | PWA-01 инсталируема PWA обвивка | #88 | — | **СЛЯТ** (`3863610`, 09.11): по запис на оркестратора — Codex PASS на `62f898a`, после merge с main `5e36dc2` → `e03315a` (чист merge-tree + 2 evidence файла), gates R0 814 / W0 = 16 както на main / A2C 0 / jest 253, същото „да“ на Крум; AUDIT-2 след сливане: `claude/audit-log` `00bff786`. **Проверено в git:** дървото на main `035f0ff2` = дървото на главата на клона | `e03315a` | — |
 | 12h | SEC-03 премахване на Emergent + SEC-SCAN (Р75, Р76) | #90 | Claude → Codex (сигурност) | **нов PR** | `66dd1ae` | — |
 | 12i | MEDIA-SEC-01: аватари вързани за tenant, media retire (без hard delete), членство за снимки на проект, без повторно свързване + Р83 | #91 | Claude → Codex (сигурност) | **нов PR**; PM-01 harness re-run | `582eb9d` | — |
-| 12j | PWA-02 офлайн опашка и синхронизация (присъствие, дневен отчет, снимка) зад `offline_queue` | #92 | Claude → одит | **нов PR** (Modern Field Experience, Wave 2) | `f13b78e` | PWA-01 (слят) |
+| 12j | PWA-02 офлайн опашка и синхронизация (присъствие, дневен отчет, снимка) зад `offline_queue` | #92 | Claude → одит | **нов PR** (Modern Field Experience, Wave 2) | `4140b02` | PWA-01 (слят) |
 | 13 | Backup restore proof + rollback на точния image | — | Codex | блокирано: няма Docker socket / защитен backup | — | достъп до Synology (одобрение от Крум) |
 | 14 | Решение на Крум за deploy | — | Крум | — | — | 1–13 |
 
