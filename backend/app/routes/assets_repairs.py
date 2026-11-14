@@ -70,9 +70,12 @@ COST_ACTION = "asset_repair.cost.update"
 MODULE = "M8"
 RESOURCE = "asset_repair"
 
-# Legacy role strings that may write custody (off/shadow). Viewer and Driver never;
-# Accountant is a finance role (it holds the cost only).
-CUSTODY_WRITE_ROLES = ("Owner", "Admin", "SiteManager", "Warehousekeeper", "Technician")
+# Legacy role strings that may write custody (off/shadow) — the same holders as the catalog
+# (PM-01: enforce answers like off). Viewer and Driver never; Accountant is a finance role
+# (it holds the cost only). Technician: not yet — its catalog set is the W0-02 invariant
+# {"asset_intake.submit"}; a Technician holder initiating a handover waits for Krum's
+# mapping of LEGACY_TECHNICIAN (debt D-ASSETREP-01).
+CUSTODY_WRITE_ROLES = ("Owner", "Admin", "SiteManager", "Warehousekeeper")
 # Roles RESPONSIBLE for an asset they do not hold (they may initiate its handover).
 RESPONSIBLE_ROLE_IDS = frozenset({"owner", "admin", "site_manager", "project_manager",
                                   "warehouse"})

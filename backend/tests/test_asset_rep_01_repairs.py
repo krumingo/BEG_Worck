@@ -376,8 +376,9 @@ def test_refuse_and_problem_change_no_custody(monkeypatch, backend, mode):
 
 
 def test_only_holder_or_responsible_initiates(monkeypatch, backend, mode):
-    """The Technician is neither holder nor responsible → 403 (off/shadow: the data rule;
-    enforce: the catalog — the legacy Technician holds no repair action, W0-02 invariant)."""
+    """The Technician → 403 in every mode (the legacy Technician holds no repair action:
+    W0-02 invariant, debt D-ASSETREP-01). Receiver rules: another active user of THIS
+    tenant who may accept."""
     async def scenario(c, op):
         before = await _dump(op)
         r = await c.post(SEND, json=_send_body(), headers=_h("technician"))
