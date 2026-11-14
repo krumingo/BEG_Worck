@@ -13,7 +13,7 @@ const newKey = () => (globalThis.crypto && globalThis.crypto.randomUUID ? global
 const OP_LABELS = { "attendance.mark": "Присъствие", "technician.daily_report": "Дневен отчет", "media.upload": "Снимка" };
 const LATE_REASONS = { previous_day: "записано в предишен ден", clock_skew: "часовникът на телефона е разминат" };
 const KIND_LABELS = { version: "офисът е променил записа", approved: "записът е одобрен", paid: "записът е платен",
-  already_recorded: "вече записано от офиса" };
+  already_recorded: "вече записано от офиса", closed: "денят е затворен (заплати/подаден отчет)" };
 
 function Section({ icon: Icon, title, count, children, testId }) {
   return (

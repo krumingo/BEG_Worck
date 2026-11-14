@@ -522,6 +522,16 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         site_update = {"$inc": {"version": 1}, "$set": {
             "status": status, "project_id": project_id, "updated_at": now, "note": ""}}
         if existing_att:
+            # FG-663: same status on the same object → nothing to write (a plain save on a
+            # closed day is harmless); a CHANGE on a closed day is refused for this worker
+            if existing_att.get("status") == status and existing_att.get("project_id") == project_id:
+                continue
+            locked = await attendance_void.correction_locked(tenant, existing_att)
+            if locked:
+                refused.append({"worker_id": wid, "status": 409, "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+                                "relies_on": locked, "entry_id": existing_att.get("id")})
+                workers[-1]["status"] = existing_att.get("status")     # the list shows what stands
+                continue
             await tenant.attendance_entries.update_one({"id": existing_att["id"]}, site_update)
         else:
             try:
@@ -540,9 +550,18 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
                 })
             except DuplicateKeyError:
                 # a concurrent save marked the same worker and day first: already marked —
-                # this save updates it, exactly as when the entry was found above
-                await tenant.attendance_entries.update_one(
-                    {"org_id": org_id, "attendance_day_key": day_key}, site_update)
+                # this save updates it, exactly as when the entry was found above (FG-663 lock)
+                won = await tenant.attendance_entries.find_one(
+                    {"org_id": org_id, "attendance_day_key": day_key}, {"_id": 0})
+                if won and won.get("status") != status:
+                    locked = await attendance_void.correction_locked(tenant, won)
+                    if locked:
+                        refused.append({"worker_id": wid, "status": 409,
+                                        "error_code": "CORRECTION_OR_REVERSAL_REQUIRED",
+                                        "relies_on": locked, "entry_id": won.get("id")})
+                        continue
+                    await tenant.attendance_entries.update_one(
+                        {"org_id": org_id, "attendance_day_key": day_key}, site_update)
 
     for r in refused:                            # FG-661: each refusal is on record
         await attendance_void.audit_refusal(user, r, project_id, d)

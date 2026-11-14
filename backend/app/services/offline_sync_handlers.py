@@ -45,30 +45,13 @@ def _stamp(env: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
     return extra
 
 
-async def closed_day(user: Dict[str, Any], worker_id: str, date: str) -> Optional[str]:
-    """Q4: "paid" / "approved" when the worker's day is already closed by the office."""
-    tenant = _tenant(user)
-    org = user["org_id"]
-    paid = await tenant.pay_runs.find_one(
-        {"org_id": org, "status": {"$in": ["paid", "paying"]}, "period_start": {"$lte": date},
-         "period_end": {"$gte": date}, "employee_rows.employee_id": worker_id}, {"_id": 0, "id": 1})
-    if paid:
-        return "paid"
-    dr = await tenant.employee_daily_reports.find_one(
-        {"org_id": org, "worker_id": worker_id, "date": date,
-         "$or": [{"payroll_status": {"$in": ["batched", "paid"]}}]}, {"_id": 0, "payroll_status": 1})
-    if dr:
-        return "paid"
-    approved = await tenant.employee_daily_reports.find_one(
-        {"org_id": org, "worker_id": worker_id, "date": date,
-         "$or": [{"approval_status": "APPROVED"}, {"status": "Approved"}]}, {"_id": 0, "id": 1})
-    if approved:
-        return "approved"
-    wr = await tenant.work_reports.find_one(
-        {"org_id": org, "user_id": worker_id, "date": date, "status": "Approved"}, {"_id": 0, "id": 1})
-    if wr:
-        return "approved"
-    return None
+async def closed_day(user: Dict[str, Any], worker_id: str, date: str,
+                     project_id: Optional[str] = None) -> Optional[str]:
+    """Q4 / FG-664: the SAME closed-day definition as everywhere else
+    (``attendance_void.correction_locked``), shown as the conflict kind paid / approved / closed."""
+    from app.services.attendance_void import correction_locked, lock_kind
+    return lock_kind(await correction_locked(
+        _tenant(user), {"user_id": worker_id, "date": date, "project_id": project_id}))
 
 
 # ─────────────────────────────────────────────────────────────── attendance
@@ -102,10 +85,10 @@ async def _attendance(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, 
             # Q3: identical → idempotent confirmation, nothing written
             return {"entity_type": "attendance", "entity_id": existing["id"], "date": date,
                     "identical": True}
-        kind = await closed_day(user, user["id"], date) or "already_recorded"
+        kind = await closed_day(user, user["id"], date, project_id) or "already_recorded"
         raise sync.SyncConflict(entity_type="attendance", entity_id=existing["id"],
                                 office=_att_view(existing), field=phone, kind=kind)
-    kind = await closed_day(user, user["id"], date)
+    kind = await closed_day(user, user["id"], date, project_id)
     if kind:
         raise sync.SyncConflict(entity_type="attendance", entity_id="%s:%s" % (user["id"], date),
                                 office={"date": date, "closed": kind}, field=phone, kind=kind)
@@ -158,7 +141,7 @@ async def attendance_apply(user: Dict[str, Any], conflict: Dict[str, Any],
         raise sync.refuse(409, "CONFLICT_STALE",
                           "Офисът промени записа след конфликта — вижте новата стойност",
                           office=now_view)
-    kind = await closed_day(user, current["user_id"], current["date"])
+    kind = await closed_day(user, current["user_id"], current["date"], current.get("project_id"))
     if kind:
         raise sync.refuse(409, "CORRECTION_OR_REVERSAL_REQUIRED",
                           "Записът е одобрен/платен — промяна само чрез корекция или сторно", kind=kind)
@@ -222,7 +205,7 @@ async def _daily_report(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str
         raise sync.SyncRejected("PAYLOAD_INVALID", "Невалиден отчет: %s" % str(exc)[:200])
     for entry in data.entries:
         wid = entry.worker_id or user["id"]
-        kind = await closed_day(user, wid, date)
+        kind = await closed_day(user, wid, date, data.project_id)
         if kind:
             raise sync.SyncConflict(entity_type="daily_report", entity_id="%s:%s" % (wid, date),
                                     office={"date": date, "worker_id": wid, "closed": kind},

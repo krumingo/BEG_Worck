@@ -879,6 +879,38 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg["can_photo_technician"] = can("technician").get(P)
         fg["can_photo_viewer"] = can("viewer").get(P)
         fg["can_photo_owner"] = can("owner").get(P)
+        # FG-663: the site list never changes a status on a closed day; an unchanged one is not written
+        v_before = (att_rows(w659, today) or [{}])[0].get("version")
+        r663 = call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w659, "status": "SickLeave"}]})
+        ref663 = [x for x in (r663["body"] or {}).get("refused", []) if x["worker_id"] == w659]
+        fg["fg663_change"] = {"status": r663["status"], "code": ref663[0]["error_code"] if ref663 else None}
+        fg["fg663_row"] = [(r.get("status"), r.get("version")) for r in att_rows(w659, today)]
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w659, "status": "Present"}]})
+        fg["fg663_same_no_write"] = [r.get("version") for r in att_rows(w659, today)] == [v_before]
+        # FG-664: ONE closed-day definition on every path — offline mark (conflict kind), accept,
+        # correct, late confirm — here with the states the old list missed (payment_failed, confirmed)
+        q(lambda: op_db.pay_runs.insert_many([
+            {"id": "pr-664a", "org_id": A["tenant_id"], "status": "payment_failed", "period_start": today,
+             "period_end": today, "employee_rows": [{"employee_id": adm["id"]}]},
+            {"id": "pr-664b", "org_id": A["tenant_id"], "status": "confirmed", "period_start": yday,
+             "period_end": yday, "employee_rows": [{"employee_id": adm["id"]}]}]))
+        m664 = batch([envelope(adm["id"], A["tenant_id"], "attendance.mark",
+                               {"status": "Present", "project_id": P2, "note": ""})], role="admin")["body"]["results"][0]
+        fg["fg664_mark"] = {"status": m664["status"], "kind": m664["result"].get("kind")}
+        cid664 = m664["result"].get("conflict_id")
+        def res664(decision, **extra):
+            r = call("POST", "/api/sync/conflicts/%s/resolve" % cid664, role="owner", key=str(uuid.uuid4()),
+                     json={"decision": decision, "reason": "проба", **extra})
+            return r["error_code"]
+        fg["fg664_accept"] = res664("accept_field")
+        fg["fg664_correct"] = res664("correct", payload={"status": "Absent"})
+        late664 = batch([envelope(adm["id"], A["tenant_id"], "attendance.mark",
+                                  {"status": "Present", "project_id": P, "note": ""}, captured=yesterday_dt)],
+                        role="admin")["body"]["results"][0]
+        lc = call("POST", "/api/sync/late/%s/decide" % late664["result"].get("late_id"), role="owner",
+                  key=str(uuid.uuid4()), json={"decision": "confirm", "reason": "проба"})
+        fg["fg664_late_confirm"] = {"status": lc["status"], "code": lc["error_code"]}
+        fg["fg664_rows"] = len(att_rows(adm["id"], yday)) + len([r for r in att_rows(adm["id"], today) if r["project_id"] == P2])
         obs["flowguard"] = fg
 
         # ─────────────────────────────────────────────── console permissions
@@ -1391,6 +1423,79 @@ def test_a_closed_day_is_never_corrected_or_voided(obs):
     assert "voided" not in f["fg659_rows_untouched"] and "Absent" not in f["fg659_rows_untouched"]
     assert f["fg659_site"] == {"status": 200, "code": "CORRECTION_OR_REVERSAL_REQUIRED", "closed_by": "pay_run_confirmed"}
     assert f["fg659_site_active"] == 1 and f["fg661_refusal_events"] == 1
+
+
+@real
+def test_the_site_list_never_changes_a_closed_day_and_an_unchanged_status_is_not_written(obs):
+    """FG-663."""
+    f = obs["flowguard"]
+    assert f["fg663_change"] == {"status": 200, "code": "CORRECTION_OR_REVERSAL_REQUIRED"}
+    assert [x[0] for x in f["fg663_row"]] == ["Present"]
+    assert f["fg663_same_no_write"] is True
+
+
+@real
+def test_one_closed_day_definition_on_every_offline_path(obs):
+    """FG-664: payment_failed / confirmed close the day on the mark, accept, correct and late confirm."""
+    f = obs["flowguard"]
+    assert f["fg664_mark"] == {"status": "conflict", "kind": "closed"}
+    assert f["fg664_accept"] == "CORRECTION_OR_REVERSAL_REQUIRED"
+    assert f["fg664_correct"] == "CORRECTION_OR_REVERSAL_REQUIRED"
+    assert f["fg664_late_confirm"] == {"status": 409, "code": "LATE_CONFLICT"}
+    assert f["fg664_rows"] == 0
+
+
+@real
+def test_correction_locked_knows_every_reason():
+    """FG-664: each closed-day reason, on a scratch database, through the one function."""
+    import asyncio
+    import uuid as _uuid
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from app.services.attendance_void import correction_locked, lock_kind
+    from app.tenancy.data_access import TenantData
+
+    async def body():
+        name = DB_PREFIX_OP + "lock_" + _uuid.uuid4().hex[:8]
+        c = AsyncIOMotorClient(os.environ["W0_03_REAL_MONGO_URL"])
+        d = c[name]
+        t = TenantData.for_resolved_org(d, "o")
+        got = {}
+        try:
+            for i, st in enumerate(("confirmed", "paying", "paid", "payment_failed")):
+                w = "w%d" % i
+                await d.pay_runs.insert_one({"id": "r%d" % i, "org_id": "o", "status": st, "period_start": "2026-11-01",
+                                             "period_end": "2026-11-30", "employee_rows": [{"employee_id": w}]})
+                got[st] = await correction_locked(t, {"user_id": w, "date": "2026-11-14", "project_id": "p"})
+            await d.pay_runs.insert_one({"id": "r9", "org_id": "o", "status": "draft", "period_start": "2026-11-01",
+                                         "period_end": "2026-11-30", "employee_rows": [{"employee_id": "w9"}]})
+            got["draft_run"] = await correction_locked(t, {"user_id": "w9", "date": "2026-11-14", "project_id": "p"})
+            for w, doc in (("a", {"approval_status": "APPROVED"}), ("s", {"approval_status": "SUBMITTED"}),
+                           ("y", {"payroll_status": "batched"}), ("d", {"status": "Draft"})):
+                await d.employee_daily_reports.insert_one({"id": "d" + w, "org_id": "o", "worker_id": w,
+                                                           "date": "2026-11-14", "project_id": "p", **doc})
+                got["rep_" + w] = await correction_locked(t, {"user_id": w, "date": "2026-11-14", "project_id": "p"})
+            got["other_object"] = await correction_locked(t, {"user_id": "a", "date": "2026-11-14", "project_id": "q"})
+            await d.work_reports.insert_one({"id": "wr", "org_id": "o", "user_id": "k", "date": "2026-11-14",
+                                             "project_id": "p", "status": "Approved"})
+            got["work_report"] = await correction_locked(t, {"user_id": "k", "date": "2026-11-14", "project_id": "p"})
+        finally:
+            await c.drop_database(name)
+            c.close()
+        return got
+    got = asyncio.run(body())
+    assert got == {"confirmed": "pay_run_confirmed", "paying": "pay_run_paying", "paid": "pay_run_paid",
+                   "payment_failed": "pay_run_payment_failed", "draft_run": None,
+                   "rep_a": "report_approved", "rep_s": "report_submitted", "rep_y": "report_in_payroll",
+                   "rep_d": None, "other_object": None, "work_report": "report_approved"}
+    assert [lock_kind(got[k]) for k in ("paid", "confirmed", "payment_failed", "rep_a", "rep_s", "rep_y")] == \
+        ["paid", "closed", "closed", "approved", "closed", "paid"]
+
+
+def test_every_offline_path_uses_the_one_closed_day_definition():
+    """FG-664 (structural): the handlers keep no closed-day query of their own."""
+    src = (BACKEND / "app" / "services" / "offline_sync_handlers.py").read_text(encoding="utf-8")
+    body = src[src.index("async def closed_day"):src.index("# ─", src.index("async def closed_day"))]
+    assert "correction_locked" in body and "pay_runs" not in src and "payroll_status" not in src
 
 
 @real

@@ -68,16 +68,21 @@ CLOSED_PAY_RUN_STATES = ("confirmed", "paying", "paid", "payment_failed")
 
 
 async def correction_locked(tenant, entry: Dict[str, Any]) -> Optional[str]:
-    """The day is closed for a correction or a void: a confirmed / paid / failed pay run covers
-    it, or an APPROVED / SUBMITTED report (or one already in payroll) relies on the entry."""
+    """FG-659/664 — THE one definition of a closed day, used by every path (console correct /
+    void, site list, removal, offline mark, conflict accept, late confirm / correct): a pay run
+    in ``CLOSED_PAY_RUN_STATES`` covers the worker's day, or a SUBMITTED / APPROVED report (or one
+    already in payroll) — of that object, when the entry names one — relies on it."""
     worker, date = entry.get("user_id"), entry.get("date")
     run = await tenant.pay_runs.find_one(
         {"status": {"$in": list(CLOSED_PAY_RUN_STATES)}, "period_start": {"$lte": date},
          "period_end": {"$gte": date}, "employee_rows.employee_id": worker}, {"_id": 0, "status": 1})
     if run:
         return "pay_run_%s" % run.get("status")
+    where = {"date": date}
+    if entry.get("project_id"):
+        where["project_id"] = entry.get("project_id")
     rep = await tenant.employee_daily_reports.find_one(
-        {"worker_id": worker, "date": date, "project_id": entry.get("project_id"),
+        {**where, "worker_id": worker,
          "$or": [{"approval_status": {"$in": ["APPROVED", "SUBMITTED"]}},
                  {"status": {"$in": ["Approved", "APPROVED", "Submitted", "SUBMITTED"]}},
                  {"payroll_status": {"$in": ["batched", "paid"]}}]},
@@ -87,7 +92,20 @@ async def correction_locked(tenant, entry: Dict[str, Any]) -> Optional[str]:
             return "report_in_payroll"
         st = (rep.get("approval_status") or rep.get("status") or "").upper()
         return "report_approved" if st == "APPROVED" else "report_submitted"
+    wr = await tenant.work_reports.find_one(
+        {**where, "user_id": worker, "status": {"$in": ["Approved", "Submitted"]}}, {"_id": 0, "status": 1})
+    if wr:
+        return "report_approved" if wr.get("status") == "Approved" else "report_submitted"
     return None
+
+
+#: the conflict kind a closed-day reason shows as (R61-4: all of them → correction / reversal)
+LOCK_KIND = {"pay_run_paid": "paid", "pay_run_paying": "paid", "report_in_payroll": "paid",
+             "report_approved": "approved"}
+
+
+def lock_kind(reason: Optional[str]) -> Optional[str]:
+    return None if not reason else LOCK_KIND.get(reason, "closed")
 
 
 def refuse_locked(entry: Dict[str, Any], why: str) -> HTTPException:

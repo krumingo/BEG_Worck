@@ -25,6 +25,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// FG-665: the reason for removing a presence someone else marked (the server voids it)
+export function askRemovalReason(prompt = (typeof window !== "undefined" ? window.prompt : null)) {
+  if (!prompt) return null;
+  const r = prompt("Причина за премахването от списъка (присъствието се анулира):", "");
+  return r && r.trim().length >= 3 ? r.trim() : null;
+}
+
 // FG-661: why a worker could not be removed from the day's list (the server keeps the presence)
 export function refusedReasonText(r) {
   const why = (r && r.relies_on) || "";
@@ -755,7 +762,18 @@ export default function TechnicianDashboard() {
     // === Auto-save helper ===
     const saveRoster = async (workers) => {
       const payload = workers.map(w => ({ worker_id: w.worker_id, worker_name: w.worker_name, status: "Present" }));
-      const saved = await API.post(`/technician/site/${selectedSite.project_id}/attendance`, { workers: payload });
+      const url = `/technician/site/${selectedSite.project_id}/attendance`;
+      let saved;
+      try {
+        saved = await API.post(url, { workers: payload });
+      } catch (err) {
+        // FG-665: removing someone else's entry needs a reason — ask for it and send it
+        const d = err && err.response && err.response.data && err.response.data.detail;
+        if (!(err.response && err.response.status === 422 && d && d.error_code === "REASON_REQUIRED")) throw err;
+        const reason = askRemovalReason();
+        if (!reason) return;
+        saved = await API.post(url, { workers: payload, removal_reason: reason });
+      }
       setRosterRefused((saved && saved.data && saved.data.refused) || []);
       try {
         const [detailRes, draftsRes] = await Promise.all([
