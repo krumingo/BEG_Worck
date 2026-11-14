@@ -2251,3 +2251,23 @@
 - **FG-183** (отписване на актив без Approval) → reference за L165.
 
 Следващ FLOW в бавния преглед: FLOW-040.
+
+## Проход 72 — FLOW-040 (втори преглед: AuditEvent / AI Audit Log)
+
+- main @ `38636107`, 14.11.2026. Първият преглед е в проход 3; тук е само разликата.
+- Прочетени: `audit/envelope.py` (маскиране, `build_event`), `master_data/pending.py`, `utils/audit.py`, `routes/auth.py:699-711`, `routes/hr.py:136-164`; извикванията на `log_audit`/`record_event` в `routes/`.
+
+| Правило в FLOW-040 | Състояние | Къде / бележка |
+|---|---|---|
+| Append-only, без update/delete (§2, §8, §15) | ✅ | Няма `audit_events.update/delete/replace` в `app/` |
+| Hash chain (§8) | ✅ | FG-37 resolved (#72) |
+| Един общ envelope (§2) | ⚠️ | 23 route файла още пишат legacy `audit_logs` (дълг W0-04) |
+| Retention класове (§6) | ⚠️ | AI предложение за Master Data → R4 вместо R2/R1 → **FG-725** |
+| Data minimization: заплати/PII маскирани според ролята (§9) | ❌ PROVEN | `hr.py:164` пише заплатите в явен вид; `SENSITIVE_KEY_MARKERS` покрива само secrets → **FG-726** |
+| Видимост по роля L0–L5 (§10–11) | ❌ | Единственият четец е `GET /audit-logs`, само за `is_platform_admin`, legacy колекция, без маскиране → FG-681, **FG-726** |
+| Permission denied в off/shadow (§4.1) | ❌ | FG-28 open |
+| AI → човек → изпълнение (§5) | ⏳ | Няма AI write tools на main |
+| Immutable архив, signed manifest, hold, disposition (§6–8) | ⏳ | Няма в кода (W0-04 / FLOW-044) |
+| Export с manifest (§14) | ⏳ | Няма |
+
+Следващ FLOW в бавния преглед: FLOW-041.
