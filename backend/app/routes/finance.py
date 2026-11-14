@@ -1379,6 +1379,25 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
+async def _refuse_cancel_of_a_used_advance(tenant: TenantData, proforma: dict, session=None) -> None:
+    """LAB73-N2: a proforma named as the advance of a final invoice that is not Cancelled
+    cannot be cancelled → 409 ADVANCE_PROFORMA_IN_USE, nothing written. The advance is
+    removed from the final invoice first (PUT advance_proforma_ids: []) — never unlinked
+    implicitly."""
+    if (proforma.get("kind") or "Invoice") != "Proforma":
+        return
+    used_by = proforma.get(ADVANCE_USED_BY)
+    final = await tenant.invoices.find_one(
+        {"$or": ([{"id": used_by}] if used_by else []) + [{"advance_proforma_ids": proforma["id"]}],
+         "status": {"$ne": "Cancelled"}, "id": {"$ne": proforma["id"]}},
+        {"_id": 0, "id": 1, "invoice_no": 1}, session=session)
+    if final:
+        raise HTTPException(status_code=409, detail={
+            "code": "ADVANCE_PROFORMA_IN_USE", "proforma_id": proforma["id"], "invoice_id": final["id"],
+            "message": "Проформата е посочена като аванс във фактура %s — първо премахнете аванса"
+                       % (final.get("invoice_no") or final["id"])})
+
+
 @router.post("/finance/invoices/{invoice_id}/cancel")
 async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -1392,12 +1411,14 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
     
     now = datetime.now(timezone.utc).isoformat()
+    await _refuse_cancel_of_a_used_advance(tenant, invoice)      # LAB73-N2: before any write
 
     async def _body(session):
         # FG-140: status + allocations decided in the transaction; a payment
         # racing the cancel writes the same invoice document → serialized.
         current = await claim_invoice(tenant, invoice_id, session=session,
                                       forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED) or invoice
+        await _refuse_cancel_of_a_used_advance(tenant, current, session=session)
         # Check for allocations
         alloc_count = await tenant.payment_allocations.count(
             active_allocations({"invoice_id": invoice_id}), session=session)

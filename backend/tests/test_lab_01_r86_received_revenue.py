@@ -389,3 +389,59 @@ def test_fg719_a_put_that_changes_the_project_revalidates_the_link(monkeypatch, 
         assert await _link_events(op, fin["id"]) == [("finance.invoice.advance_linked", "pf-1"),
                                                       ("finance.invoice.advance_unlinked", "pf-1")]
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ AUDIT-2 LAB73-N2 (from the AUDIT-2 probe
+# docs/audit/probes/lab01/test_probe_lab01_fg718_proforma_cancel.py)
+@pytest.mark.parametrize("_", [0])
+def test_lab73_n2_a_proforma_that_backs_a_final_invoice_cannot_be_cancelled(monkeypatch, backend, _):
+    """forbidden: cancelling an issued, unpaid proforma named as the advance of a final invoice
+    → 409 ADVANCE_PROFORMA_IN_USE; the proforma and the final invoice are byte-identical and
+    the revenue is unchanged. positive: after PUT advance_proforma_ids [] the cancel succeeds."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
+        owner = _token("owner")
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 201, r.text
+        fin = r.json()
+        await op.invoices.update_one({"id": fin["id"]}, {"$set": {"status": "Sent"}})
+        pf_before = await op.invoices.find_one({"id": "pf-1"}, {"_id": 0})
+        fin_before = await op.invoices.find_one({"id": fin["id"]}, {"_id": 0})
+        rev_before, _ = await _revenue(c)
+        events_before = await op.audit_events.count_documents({})
+
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        assert r.status_code == 409, r.text
+        d = r.json()["detail"]
+        assert d["code"] == "ADVANCE_PROFORMA_IN_USE" and d["invoice_id"] == fin["id"], d
+        assert await op.invoices.find_one({"id": "pf-1"}, {"_id": 0}) == pf_before
+        assert await op.invoices.find_one({"id": fin["id"]}, {"_id": 0}) == fin_before
+        assert await op.audit_events.count_documents({}) == events_before
+        rev_after, _ = await _revenue(c)
+        assert rev_after["pnl"] == rev_before["pnl"]
+
+        # positive: the advance is removed from the final invoice first → the cancel succeeds
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=owner)
+        assert r.status_code == 200, r.text
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
+        pf = await op.invoices.find_one({"id": "pf-1"}, {"_id": 0})
+        f = await op.invoices.find_one({"id": fin["id"]}, {"_id": 0})
+        assert pf.get("advance_used_by_invoice_id") is None and f["advance_proforma_ids"] == []
+    run(monkeypatch, scenario, backend)
+
+
+@pytest.mark.parametrize("_", [0])
+def test_lab73_n2_a_proforma_named_by_a_cancelled_final_invoice_can_be_cancelled(monkeypatch, backend, _):
+    """positive: once the final invoice is cancelled (FG-718 releases the advance), the
+    proforma can be cancelled."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
+        owner = _token("owner")
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        fin = r.json()
+        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=owner)
+        assert r.status_code == 200, r.text
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
+    run(monkeypatch, scenario, backend)
