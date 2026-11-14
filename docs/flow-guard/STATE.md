@@ -24,7 +24,7 @@
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `3028304` | 37 | слят в main (`1525a1e`);  FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `558dfdf` | 67 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `eb8138fc` | 54 | FLOW-010, Р48 |
-| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `38d3244b` | 54 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
+| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `3d3f8b2b` | 68 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `49eb546` | 38 | слят в main (`5e36dc2`);  FLOW-001, FLOW-018/039, Р54 |
 | #88 `claude/pwa-01-installable-shell` (PWA-01) | `e03315a` | 44 | слят в main (`3863610`);  FLOW-037, Р61, MFE; FG-315..321 |
 | `claude/off-02-offer-money-strip` (OFF-02, #89) | `5763bd86` | 52 | FLOW-003, Р67; FG-350, FG-471, FG-472 |
