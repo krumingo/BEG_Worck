@@ -176,6 +176,19 @@ async def resolve_alarm(event_id: str, data: AcknowledgeRequest, request: Reques
                                              **await _band_filter(request, user)})  # SEC71-04
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
+    if ev.get("type") == "labor_correction_required":
+        # R77 / FG-533: the alarm closes only when the row was reversed or a correcting row
+        # (corrects_entry_id) was approved — never by a click alone
+        entry_id = (ev.get("context") or {}).get("entity_id")
+        row = await tenant.labor_entries.find_one({"org_id": user["org_id"], "id": entry_id},
+                                                  {"_id": 0, "reversed_by_entry_id": 1})
+        fixed = bool((row or {}).get("reversed_by_entry_id")) or bool(await tenant.labor_entries.find_one(
+            {"org_id": user["org_id"], "corrects_entry_id": entry_id, "approval_status": "approved"},
+            {"_id": 0, "id": 1}))
+        if not fixed:
+            raise HTTPException(status_code=409, detail={
+                "code": "CORRECTION_REQUIRED",
+                "message": "Алармата се затваря след сторно или одобрен коригиращ ред"})
     now = datetime.now(timezone.utc).isoformat()
     await tenant.alarm_events.update_one({"id": event_id}, {"$set": {
         "status": "resolved", "resolved_by": user["id"], "resolved_at": now, "resolve_notes": data.notes,

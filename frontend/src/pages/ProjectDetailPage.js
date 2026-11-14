@@ -73,6 +73,34 @@ const WARRANTY_OPTIONS = [
   { value: 12, label: "12 месеца" }, { value: 24, label: "24 месеца" },
 ];
 
+// R77 / FG-533: the approved manual akord rows whose LAB-02 quantity was corrected or voided —
+// "изисква корекция" until they are reversed and a new row is approved by a second person
+function CorrectionRequiredBanner({ projectId }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    API.get("/labor-entries", { params: { project_id: projectId, correction_required: true } })
+      .then(r => setRows(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setRows([]));
+  }, [projectId]);
+  if (!rows.length) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm" data-testid="labor-correction-required">
+      <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+      <div>
+        <p className="font-semibold text-amber-300">Изисква корекция: {rows.length} ръчни реда за труд</p>
+        <p className="text-xs text-gray-300">
+          Одобреното количество е променено. Сторнирайте реда и въведете нов (одобрява втори човек); дотогава се брои старата сума.
+        </p>
+        <ul className="mt-1 text-xs text-gray-400">
+          {rows.slice(0, 5).map(r => (
+            <li key={r.id} data-testid={`labor-correction-${r.id}`}>{r.date} · {r.activity_name || "—"} · {r.hours}ч</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -411,6 +439,9 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Sub-projects section */}
+          {/* R77 / FG-533: manual labor rows that need a correction */}
+          {seesFinance && <CorrectionRequiredBanner projectId={projectId} />}
+
           {/* Centralized View */}
           {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">

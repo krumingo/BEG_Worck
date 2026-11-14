@@ -127,8 +127,13 @@ def _package(line: dict, terms: dict = None) -> dict:
 
 
 def resolve_pay_type(line: dict, profile: dict, terms: dict = None):
-    """(pay_type, source) by the documented priority SMR package → profile.
-    The worker-editable ``line.pay_type`` is ignored (FG-64)."""
+    """(pay_type, source) by the documented priority: the approval's snapshot of the SMR
+    terms (LAB-02 — a later price change does not touch an approved quantity) → the SMR
+    package → profile. The worker-editable ``line.pay_type`` is ignored (FG-64)."""
+    rec = _quantities(terms).get(line_approval_key(line)) or {}
+    pt = _norm_pay_type(rec.get("labor_pay_type"))
+    if pt:
+        return pt, "smr"
     terms = _package(line, terms)
     pt = _norm_pay_type(terms.get("labor_pay_type"))
     if pt:
@@ -137,7 +142,12 @@ def resolve_pay_type(line: dict, profile: dict, terms: dict = None):
 
 
 def resolve_piece_rate(line: dict, terms: dict = None):
-    """(piece_rate, source) — ONLY the SMR package/contract. Never the line, never the profile."""
+    """(piece_rate, source) — the approval's snapshot of the SMR price (LAB-02), else the SMR
+    package/contract. Never the line, never the profile."""
+    rec = _quantities(terms).get(line_approval_key(line)) or {}
+    r = _num(rec.get("piece_rate"))
+    if r is not None and r > 0:
+        return r, "smr"
     terms = _package(line, terms)
     r = _num(terms.get("labor_piece_rate"))
     if r is not None and r > 0:
@@ -149,7 +159,14 @@ def _is_approved(line: dict) -> bool:
     return (line.get("status") or "").upper() == "APPROVED"
 
 
-def _cost_type(line: dict) -> str:
+def _cost_type(line: dict, terms: dict = None) -> str:
+    """LAB-02: the approver's classification of the line (``labor_line_classifications``)
+    decides DOWNTIME / LABOR; only without one the line's own (legacy, no longer writable —
+    LAB-01-C) ``cost_type`` is read."""
+    rec = ((terms or {}).get("classifications") or {}).get(line_approval_key(line))
+    if rec:
+        ct = (rec.get("cost_type") or "").strip().upper()
+        return ct if ct in DOWNTIME_TYPES else LABOR
     ct = (line.get("cost_type") or line.get("activity_type") or "").strip().upper()
     return ct if ct in DOWNTIME_TYPES else LABOR
 
@@ -260,7 +277,7 @@ def compute_person_labor(profile: dict, lines: list, smr_terms: dict = None) -> 
         key = line_approval_key(ln)
         duplicate = key in seen_keys
         seen_keys.add(key)
-        cost_type = _cost_type(ln)
+        cost_type = _cost_type(ln, smr_terms)
         pay_type, pt_src = resolve_pay_type(ln, profile, smr_terms)
         rec = dict(base, cost_type=cost_type, pay_type=pay_type, pay_type_source=pt_src,
                    quantity=_num(ln.get("quantity")),
@@ -365,7 +382,7 @@ _DQ_MESSAGES = {
     DQ_AKORD_NO_APPROVED_QTY: "Акорд без одобрено количество — не влиза в разхода (0).",
     DQ_AKORD_NO_PIECE_RATE: "Акорд без акордна цена по реда/СМР — не влиза в разхода (0).",
     DQ_MISSING_RATE: "Липсва ставка в профила — не влиза в разхода (0), без ставка по подразбиране.",
-    DQ_DOWNTIME_UNCLASSIFIED: "Неуточнен престой — нужна е класификация (FLOW-019).",
+    DQ_DOWNTIME_UNCLASSIFIED: "Неуточнен престой — нужна е класификация.",
     DQ_DUPLICATE_ENTRY: "Повторен ред (същият отчет/версия/ред) — одобреното количество се брои само веднъж.",
 }
 
@@ -423,7 +440,101 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
             {"_id": 0, "id": 1, "project_id": 1, "labor_pay_type": 1, "labor_piece_rate": 1},
         ).to_list(len(pkg_ids))
         packages = {p["id"]: p for p in pkgs}
-    return {"packages": packages, "quantities": quantities}
+    # LAB-02: the approver's DOWNTIME / LABOR classification, bound like an approval
+    classifications = {}
+    if report_ids:
+        recs = await tenant.labor_line_classifications.find(
+            {"org_id": org_id, "report_id": {"$in": report_ids}, "status": "active"}, {"_id": 0},
+        ).to_list(len(worker_of) * 4 + 10)
+        recs.sort(key=lambda r: (str(r.get("classified_at") or ""), str(r.get("id") or "")))
+        for r in recs:
+            key, by = record_approval_key(r), r.get("classified_by")
+            if key not in worker_of or not by or by == worker_of[key]:
+                continue
+            classifications[key] = r  # the latest active one wins
+    return {"packages": packages, "quantities": quantities, "classifications": classifications}
+
+
+R77_FLAG = "изисква корекция"
+
+
+async def flag_rows_of_changed_quantities(tenant: TenantData, org_id: str, approval_ids, actor_id: str,
+                                          reason: str, replacement: dict = None, session=None) -> int:
+    """R77 (Krum, canon 9b9ede8b; FG-507): a LAB-02 approved quantity that an APPROVED manual
+    akord row used was corrected or voided. The row is NOT changed and keeps counting at its
+    old amount (with a visible DQ warning); it is flagged "изисква корекция" with the
+    correction recorded and a proposal — reverse it and enter a new row at the new quantity,
+    approved by a second person (R66). Each flag writes an AuditEvent and raises an alarm."""
+    from datetime import datetime, timezone
+    import uuid as _uuid
+    from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
+    from app.audit.store import record_event
+    ids = [a for a in (approval_ids or []) if a]
+    if not ids:
+        return 0
+    # FG-531: a row is found by its own approval OR by any approval of its correction chain
+    # (a second correction, or a later void of a replacement, reaches the flagged row)
+    rows = await tenant.labor_entries.find(
+        {"org_id": org_id, "approval_status": MANUAL_APPROVED,
+         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None,
+         "$or": [{"quantity_approval_id": {"$in": ids}}, {"correction_required.chain": {"$in": ids}}]},
+        {"_id": 0}, session=session).to_list(500)
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        prev = row.get("correction_required") or None
+        chain = list((prev or {}).get("chain") or [row.get("quantity_approval_id")])
+        if replacement and replacement.get("id") and replacement["id"] not in chain:
+            chain.append(replacement["id"])
+        # FG-531: the proposal follows the LATEST approved quantity of the chain (a void with
+        # no replacement leaves the newest one still approved, or none — a new approval)
+        latest = None
+        if replacement and replacement.get("status") == "approved":
+            latest = replacement
+        else:
+            for qa_id in reversed(chain):
+                if qa_id in ids:
+                    continue
+                latest = await tenant.labor_quantity_approvals.find_one(
+                    {"org_id": org_id, "id": qa_id, "status": "approved"}, {"_id": 0}, session=session)
+                if latest:
+                    break
+        proposal = {"action": "reverse_and_reenter", "approved_by_second_person": True,
+                    "replacement_approval_id": None, "quantity": None, "piece_rate": None, "labor_cost": None}
+        if latest:
+            q = float(latest.get("approved_quantity") or 0)
+            rate = float(latest.get("piece_rate") or 0)
+            proposal.update({"replacement_approval_id": latest.get("id"), "quantity": q,
+                             "piece_rate": rate, "labor_cost": round(q * rate, 2)})
+        flag = {"status": R77_FLAG, "at": now, "by": actor_id, "reason": reason,
+                "changed_approval_id": ([a for a in ids if a in chain] or ids)[0],
+                "changed_approval_ids": [a for a in ids if a in chain] or ids,
+                "chain": chain, "sequence": int((prev or {}).get("sequence") or 0) + 1,
+                "old": {"quantity": row.get("quantity"), "piece_rate": row.get("piece_rate"),
+                        "labor_cost": row.get("labor_cost")},
+                "proposal": proposal}
+        upd = {"$set": {"correction_required": flag}}
+        if prev:
+            upd["$push"] = {"correction_history": prev}     # FG-531: the earlier flag is kept
+        await tenant.labor_entries.update_one({"org_id": org_id, "id": row["id"]}, upd, session=session)
+        await record_event(db, build_event(
+            tenant_id=org_id, actor_type="human", actor_id=actor_id,
+            action="labor.manual_entry.correction_required", source_flow="FLOW-028",
+            retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="labor_entry",
+            entity_id=row["id"], entity_version=str(row.get("version") or 1),
+            structured_diff={"before": None, "after": {"correction_required": flag}},
+            reason="R77: the LAB-02 approved quantity of this row was " + reason,
+            tool_or_endpoint="labor_quantity_approvals (void / correction)"), session=session)
+        await tenant.alarm_events.insert_one({
+            "id": str(_uuid.uuid4()), "org_id": org_id, "rule_id": None,
+            "rule_name": "Ръчен труд — изисква корекция", "severity": "warning",
+            "type": "labor_correction_required", "site_id": row.get("project_id"),
+            "triggered_at": now, "status": "active",
+            "message": "Одобреното количество на ръчен акордов ред е променено — сторно и нов ред (втори човек)",
+            "context": {"entity_type": "labor_entry", "entity_id": row["id"],
+                        "changed_approval_id": row.get("quantity_approval_id")},
+            "acknowledged_by": None, "acknowledged_at": None, "resolved_by": None,
+            "resolved_at": None, "resolve_notes": None}, session=session)
+    return len(rows)
 
 
 async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
@@ -431,17 +542,59 @@ async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
                                collection: str = "employee_daily_reports", bump: bool = True,
                                session=None) -> int:
     """LAB-01-D (FG-72): any change or reset of a report bumps its ``report_version`` and
-    voids every labor approval of it. The approval records stay (no delete), marked void."""
+    voids every labor approval of it. The approval records stay (no delete), marked void.
+
+    FG-568: the bump, the voids and the R77 flags of the rows that used a voided quantity (with
+    their AuditEvents and alarms) are ONE transaction — the caller's ``session`` when it has
+    one, else its own. A retry repairs a half-done earlier state: an approved row whose
+    quantity approval of this report is void but which was never flagged is flagged now."""
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
-    if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
-        await tenant.collection(collection).update_one(
-            {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=session)
-    res = await tenant.labor_quantity_approvals.update_many(
-        {"org_id": org_id, "report_id": report_id, "status": "approved"},
-        {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
-        session=session)
-    return getattr(res, "modified_count", 0)
+
+    async def body(s):
+        if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
+            await tenant.collection(collection).update_one(
+                {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=s)
+        voided = [a["id"] for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": report_id, "status": "approved"}, {"_id": 0, "id": 1},
+            session=s).to_list(500)]
+        res = await tenant.labor_quantity_approvals.update_many(
+            {"org_id": org_id, "report_id": report_id, "status": "approved"},
+            {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
+            session=s)
+        # FG-568 repair: void approvals of this report whose approved rows were never flagged
+        all_void = [a["id"] for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": report_id, "status": "void"}, {"_id": 0, "id": 1},
+            session=s).to_list(500)]
+        missed = []
+        if all_void:
+            for r in await tenant.labor_entries.find(
+                    {"org_id": org_id, "quantity_approval_id": {"$in": all_void},
+                     "approval_status": MANUAL_APPROVED, "reversed_by_entry_id": None,
+                     "entry_kind": {"$ne": "reversal"}, "correction_required": None},
+                    {"_id": 0, "quantity_approval_id": 1}, session=s).to_list(500):
+                missed.append(r["quantity_approval_id"])
+        # R77 (FG-507): an APPROVED manual akord row priced from a voided quantity is flagged
+        await flag_rows_of_changed_quantities(tenant, org_id, sorted(set(voided) | set(missed)),
+                                              actor_id, reason, session=s)
+        # LAB-02: the approver's DOWNTIME classification of the old version is void as well
+        await tenant.labor_line_classifications.update_many(
+            {"org_id": org_id, "report_id": report_id, "status": "active"},
+            {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
+            session=s)
+        return getattr(res, "modified_count", 0)
+
+    if session is not None:
+        return await body(session)
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        await ensure_labor_day_locks(db)
+        return await run_in_transaction(db, body)
+    except (TransactionsUnavailable, NotImplementedError):
+        # a deployment without transactions (and the DB-free test backend, which has no
+        # sessions) changed reports before FG-568 and still does: the same steps, not atomic —
+        # the repair above completes a half-done state on the next change
+        return await body(None)
 
 
 # R62 (Krum 09.11.2026, FG-340 / FG-58): a manual labor row counts only after the Owner
@@ -467,6 +620,170 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
             return bool(day) and (not date_from or day >= date_from) and (not date_to or day <= date_to)
         rows = [r for r in rows if inside(r)]
     return rows
+
+
+# R85 (Krum 14.11.2026, FG-569): the APPROVED manual akord rows (approved quantity × labour
+# unit price) go into the payroll Pay Run, priced as they are in THE labor cost (R62) — and
+# never a second time with the daily report: a row whose worker, day and project (or a
+# project-less report of that day) already has an APPROVED report line, or whose LAB-02
+# quantity belongs to an approved report, is not counted (DQ MANUAL_ROW_DUPLICATE_OF_REPORT).
+# R91 (Krum 14.11.2026, extends R85): the approved manual HOURLY rows (hours × the hourly
+# rate stored on the row) go into the Pay Run the same way — after approval, at their stored
+# cost, and never a second time with the daily report (the same duplicate rule).
+DQ_MANUAL_DUPLICATE_OF_REPORT = "MANUAL_ROW_DUPLICATE_OF_REPORT"
+MANUAL_PAYROLL_PREFIX = "manual:"
+
+
+def _same_smr(row: dict, ln: dict, smr_name: str = None) -> bool:
+    """FG-697: the report line is for the row's SMR — the same execution package, else (a line
+    without a package) the same SMR name. A line that names neither cannot be told apart and
+    is taken as the same work (never paid twice)."""
+    pkg = row.get("execution_package_id")
+    if ln.get("execution_package_id"):
+        return bool(pkg) and ln["execution_package_id"] == pkg
+    name = (smr_name or row.get("activity_name") or "").strip().lower()
+    line_name = (ln.get("smr_type") or "").strip().lower()
+    return not line_name or not name or line_name == name
+
+
+def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = None, smr_name: str = None) -> bool:
+    """R85: does an approved daily-report line already pay this manual row's work? FG-697:
+    keyed on worker + day + project + SMR / package — a report for a DIFFERENT SMR on the same
+    day does not drop the row. The report the row's LAB-02 quantity came from always does."""
+    day = normalize_labor_date(row.get("date"))
+    wid, pid = row.get("employee_id"), row.get("project_id")
+    linked = (approval or {}).get("report_id")
+    for ln in approved_lines or []:
+        if not _is_approved(ln) or ln.get("worker_id") != wid:
+            continue
+        if linked and linked in (ln.get("report_doc_id"), ln.get("id")):
+            return True
+        if ln.get("date") == day and ln.get("project_id") in (pid, None, "") and _same_smr(row, ln, smr_name):
+            return True
+    return False
+
+
+async def payroll_manual_records(tenant: TenantData, org_id: str, date_from: str, date_to: str,
+                                 worker_id: str = None, payroll_filter: list = None) -> dict:
+    """R85 + R91: the approved manual rows of the window — AKORD and HOURLY — as Pay Run
+    labor records, by worker.
+
+    Each record has the shape of a ``compute_person_labor`` line (report_id
+    ``manual:<entry id>``) at the row's stored cost (akord: approved quantity × the rate
+    snapshotted in its LAB-02 approval; hourly: hours × the hourly rate stored on the row).
+    ``payroll_filter`` (["!paid", "!batched"]) drops rows already in a Pay Run. A row that
+    duplicates an approved report line is left out (``dq``).
+    Returns ``{worker_id: {"records": [...], "dq": [...]}}``."""
+    from app.services.report_normalizer import fetch_normalized_report_lines
+    flt = {"org_id": org_id, "source": {"$ne": SYNC_SOURCE}, "approval_status": MANUAL_APPROVED,
+           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
+    if worker_id:
+        flt["employee_id"] = worker_id
+    rows = []
+    for r in await tenant.labor_entries.find(flt, {"_id": 0}).to_list(20000):
+        day = normalize_labor_date(r.get("date"))
+        if not day or (date_from and day < date_from) or (date_to and day > date_to):
+            continue
+        status = r.get("payroll_status") or "none"
+        if payroll_filter and any(f.startswith("!") and status == f[1:] for f in payroll_filter):
+            continue
+        rows.append(r)
+    out = {}
+    if not rows:
+        return out
+    qa_ids = sorted({r.get("quantity_approval_id") for r in rows if r.get("quantity_approval_id")})
+    approvals = {a["id"]: a for a in await tenant.labor_quantity_approvals.find(
+        {"org_id": org_id, "id": {"$in": qa_ids}}, {"_id": 0}).to_list(len(qa_ids) or 1)} if qa_ids else {}
+    pkg_ids = sorted({r.get("execution_package_id") for r in rows if r.get("execution_package_id")})
+    pkgs = {p["id"]: p for p in await tenant.execution_packages.find(
+        {"org_id": org_id, "id": {"$in": pkg_ids}}, {"_id": 0, "id": 1, "activity_name": 1}).to_list(
+        len(pkg_ids) or 1)} if pkg_ids else {}
+    lines_by_worker = {}
+    for wid in sorted({r.get("employee_id") for r in rows}):
+        lines_by_worker[wid] = await fetch_normalized_report_lines(   # ANY payroll status
+            org_id=org_id, date_from=date_from, date_to=date_to, worker_id=wid, status_filter="APPROVED")
+    for r in rows:
+        wid = r.get("employee_id")
+        slot = out.setdefault(wid, {"records": [], "dq": []})
+        rid = MANUAL_PAYROLL_PREFIX + str(r.get("id"))
+        akord = r.get("pay_type") == AKORD
+        if manual_row_duplicates_report(r, lines_by_worker.get(wid), approvals.get(r.get("quantity_approval_id")),
+                                        (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
+            slot["dq"].append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": rid,
+                               "message": _duplicate_message(r)})
+            continue
+        cost = r.get("labor_cost")
+        if not akord:                                          # R91: a manual hourly row
+            hrs, rate = round(float(r.get("hours") or 0), 2), r.get("hourly_rate")
+            slot["records"].append({
+                "report_id": rid, "manual_entry_id": r.get("id"), "worker_id": wid,
+                "date": normalize_labor_date(r.get("date")), "project_id": r.get("project_id", ""),
+                "smr_type": (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")
+                            or r.get("activity_name") or "",
+                "execution_package_id": r.get("execution_package_id") or None,
+                "hours": hrs, "status": "APPROVED",
+                "cost_type": LABOR, "pay_type": r.get("pay_type") or "Hourly", "pay_type_source": "manual_row",
+                "quantity": None, "approved_quantity": None, "unit": "",
+                "piece_rate": None, "rate": rate,
+                "amount": round(float(cost), 2) if cost is not None else 0.0,
+                "formula": (r.get("labor_formula") or (f"{hrs}ч × {rate}" if rate else f"{hrs}ч"))
+                           + " (ръчен ред на час, R91)",
+                "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
+                "payroll_status": r.get("payroll_status") or "none",
+                "payroll_source": r.get("payroll_source") or "",
+                "quantity_approval_id": None})
+            continue
+        q, piece = r.get("quantity"), r.get("piece_rate")
+        slot["records"].append({
+            "report_id": rid, "manual_entry_id": r.get("id"), "worker_id": wid,
+            "date": normalize_labor_date(r.get("date")), "project_id": r.get("project_id", ""),
+            "smr_type": (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")
+                        or r.get("activity_name") or "",
+            "execution_package_id": r.get("execution_package_id") or None,
+            "hours": round(float(r.get("hours") or 0), 2), "status": "APPROVED",
+            "cost_type": LABOR, "pay_type": AKORD, "pay_type_source": "manual_row",
+            "quantity": q, "approved_quantity": q, "unit": r.get("unit") or "",
+            "piece_rate": piece, "rate": piece,
+            "amount": round(float(cost), 2) if cost is not None else 0.0,
+            "formula": (r.get("labor_formula") or "") + " (ръчен акордов ред, R85)",
+            "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
+            "payroll_status": r.get("payroll_status") or "none",
+            "payroll_source": r.get("payroll_source") or "",
+            "quantity_approval_id": r.get("quantity_approval_id")})
+    return out
+
+
+# R85 kept its name for its callers; the reader covers the hourly rows too (R91)
+payroll_manual_akord_records = payroll_manual_records
+
+
+def _duplicate_message(row: dict) -> str:
+    kind = "акордов" if row.get("pay_type") == AKORD else "на час"
+    return f"Ръчният ред ({kind}) повтаря одобрен дневен отчет — не се брои втори път."
+
+
+def merge_manual_records(lc: dict, records: list, dq: list = None) -> dict:
+    """R85 + R91: ``compute_person_labor``'s result with the manual records added (once) —
+    akord into ``akord_total``, hourly into ``time_total``."""
+    seen = {x.get("report_id") for x in lc.get("lines", [])}
+    add = [x for x in records or [] if x["report_id"] not in seen]
+    amt = round(sum(x["amount"] for x in add), 2)
+    ak = round(sum(x["amount"] for x in add if x.get("pay_type") == AKORD), 2)
+    hourly = round(amt - ak, 2)
+    out = dict(lc)
+    out["lines"] = list(lc.get("lines", [])) + add
+    out["labor_total"] = round(lc.get("labor_total", 0) + amt, 2)
+    out["akord_total"] = round(lc.get("akord_total", 0) + ak, 2)
+    out["time_total"] = round(lc.get("time_total", 0) + hourly, 2)
+    out["total"] = round(lc.get("total", 0) + amt, 2)
+    out["manual_akord_total"] = round(lc.get("manual_akord_total", 0) + ak, 2)
+    out["manual_hourly_total"] = round(lc.get("manual_hourly_total", 0) + hourly, 2)
+    out["dq_warnings"] = list(lc.get("dq_warnings", [])) + list(dq or []) + [
+        {"code": c, "report_id": x["report_id"], "message": "Ръчен ред за труд без стойност — 0."}
+        for x in add for c in x["dq"]]
+    out["approved_hours"] = round(lc.get("approved_hours", 0) + sum(x["hours"] for x in add), 1)
+    out["approved_days"] = len({x["date"] for x in out["lines"]})
+    return out
 
 
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -500,7 +817,7 @@ def normalize_labor_date(value) -> Optional[str]:
 
 async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: Optional[str],
                                   employee_id: str, date: str, statuses,
-                                  exclude_id: str = None, session=None) -> list:
+                                  exclude_id: str = None, session=None, exclude_ids=None) -> list:
     """FG-463 (R62): the live manual rows (``statuses``; not reversed, not a reversal) of one
     worker on one day — hours that would be counted a second time. ``project_id`` None =
     every project of the tenant (FG-490: a report without a project). FG-491: the day is
@@ -513,8 +830,9 @@ async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: O
            "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
     if project_id:
         flt["project_id"] = project_id
-    if exclude_id:
-        flt["id"] = {"$ne": exclude_id}
+    skip = [x for x in ([exclude_id] + list(exclude_ids or [])) if x]
+    if skip:
+        flt["id"] = {"$nin": skip}
     rows = await tenant.labor_entries.find(
         flt, {"_id": 0, "id": 1, "approval_status": 1, "date": 1, "project_id": 1},
         session=session).to_list(5000)
@@ -616,6 +934,7 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
     manual = await approved_manual_rows(tenant, org_id, project_id, date_from, date_to)
 
     kept, dq = [], []
+    all_by_worker = {}
     if proj_lines:
         workers = sorted({ln["worker_id"] for ln in proj_lines if ln.get("worker_id")})
         dates = sorted({ln["date"] for ln in proj_lines if ln.get("date")})
@@ -625,7 +944,6 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             {"org_id": org_id, "user_id": {"$in": workers}}, {"_id": 0}).to_list(len(workers) or 1)
         prof_map = {p["user_id"]: p for p in profiles}
 
-        all_by_worker = {}
         for wid in workers:
             all_lines = await fetch_normalized_report_lines(
                 org_id=org_id, date_from=d_from, date_to=d_to, worker_id=wid, status_filter="APPROVED")
@@ -654,6 +972,40 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
     by_name = {}
     for p in pkgs.values():
         by_name.setdefault((p.get("activity_name") or "").lower().strip(), []).append(p)
+    # FG-508: the quantity approvals behind manual akord rows, to flag self-approved ones
+    self_qty = set()
+    qa_ids = sorted({r.get("quantity_approval_id") for r in manual if r.get("quantity_approval_id")})
+    if qa_ids:
+        by_row = {r.get("quantity_approval_id"): r for r in manual if r.get("quantity_approval_id")}
+        for a in await tenant.labor_quantity_approvals.find(
+                {"org_id": org_id, "id": {"$in": qa_ids}}, {"_id": 0, "id": 1, "approved_by": 1}).to_list(len(qa_ids)):
+            r = by_row.get(a["id"]) or {}
+            if a.get("approved_by") and a["approved_by"] in (r.get("employee_id"), r.get("created_by")):
+                self_qty.add(a["id"])
+    # R85 (FG-569) + R91: a manual row (akord or hourly) that an approved daily report already
+    # pays is not counted a second time — the same rule as the Pay Run (payroll_manual_records)
+    ak_rows = list(manual)
+    if ak_rows:
+        appr = {a["id"]: a for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "id": {"$in": sorted({r.get("quantity_approval_id") for r in ak_rows
+                                                       if r.get("quantity_approval_id")})}},
+            {"_id": 0, "id": 1, "report_id": 1}).to_list(len(ak_rows))}
+        worker_lines = {}
+        dup = set()
+        for r in ak_rows:
+            wid, day = r.get("employee_id"), normalize_labor_date(r.get("date"))
+            if (wid, day) not in worker_lines:
+                worker_lines[(wid, day)] = await fetch_normalized_report_lines(
+                    org_id=org_id, date_from=day, date_to=day, worker_id=wid, status_filter="APPROVED") if day else []
+            lines = list(worker_lines[(wid, day)])
+            a = appr.get(r.get("quantity_approval_id"))
+            if a and a.get("report_id"):
+                lines += [ln for ln in all_by_worker.get(wid, []) if a["report_id"] in (ln.get("report_doc_id"), ln.get("id"))]
+            if manual_row_duplicates_report(r, lines, a, (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")):
+                dup.add(r.get("id"))
+                dq.append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": "manual:" + str(r.get("id")),
+                           "message": _duplicate_message(r)})
+        manual = [r for r in manual if r.get("id") not in dup]
     for row in manual:
         cost = row.get("labor_cost")
         row_dq = [] if cost is not None else ["MANUAL_ROW_NO_COST"]
@@ -675,6 +1027,22 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             dq.append({"code": "MANUAL_ROW_NON_ISO_DATE", "report_id": "manual:" + str(row.get("id")),
                        "date": row.get("date"), "normalized": normalize_labor_date(row.get("date")),
                        "message": "Ръчен ред с дата не във формат ГГГГ-ММ-ДД — коригирайте ръчно (сторно + нов ред)."})
+        if row.get("pending_reversal"):
+            # R81: a creator's reversal waits for a second person — the row still counts
+            row_dq.append("MANUAL_ROW_REVERSAL_PENDING")
+            dq.append({"code": "MANUAL_ROW_REVERSAL_PENDING", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Сторно от въвеждащия чака одобрение от втори човек — дотогава редът се брои."})
+        if row.get("correction_required"):
+            # R77 (FG-507): still counted at its old amount until the correction is approved
+            row_dq.append("MANUAL_ROW_CORRECTION_REQUIRED")
+            dq.append({"code": "MANUAL_ROW_CORRECTION_REQUIRED", "report_id": "manual:" + str(row.get("id")),
+                       "status": R77_FLAG, "correction": row["correction_required"],
+                       "message": "Одобреното количество е променено — редът изисква корекция (сторно + нов ред, одобрен от втори човек); дотогава се брои старата сума."})
+        if row.get("quantity_approval_id") and row["quantity_approval_id"] in self_qty:
+            # FG-508 (R66): an old row whose quantity was approved by its worker or creator
+            row_dq.append("MANUAL_AKORD_SELF_APPROVED_QUANTITY")
+            dq.append({"code": "MANUAL_AKORD_SELF_APPROVED_QUANTITY", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Количеството на акордовия ред е одобрено от работника или от въвеждащия — нужна е проверка (R66)."})
         role = {"Owner": "Собственика", "Accountant": "Счетоводителя"}.get(
             row.get("approved_by_role") or "", row.get("approved_by_role") or "одобряващия")
         rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),

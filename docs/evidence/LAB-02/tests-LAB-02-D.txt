@@ -1,0 +1,48 @@
+# L02Q checks (2026-11-08) — head 8e24b2d — real mongo:7.0 rs0, every pytest run with -rs (skips listed)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness (W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27017/?directConnection=true) exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 0
+  changed cells vs. main's committed matrix:
+    changed cells: 150
+    - GET /api/labor-quantities/pending: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/labor-quantities/pending: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/labor-terms: status —→200, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - GET /api/labor-terms: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-quantities/approve: status —→403, wrote —→no — 15 cells: roles accountant, driver, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-quantities/approve: status —→428, wrote —→no — 9 cells: roles admin, owner, requester × modes enforce, off, shadow
+    - POST /api/labor-quantities/classify: status —→403, wrote —→no — 15 cells: roles accountant, driver, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/labor-quantities/classify: status —→422, wrote —→no — 9 cells: roles admin, owner, requester × modes enforce, off, shadow
+    - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - PUT /api/labor-quantities/entry: status —→404, wrote —→no — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - PUT /api/labor-terms/{package_id}: status —→428, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - PUT /api/labor-terms/{package_id}: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+## PM-01 tests (real-Mongo regression included)
+6 passed, 6 warnings in 217.70s (0:03:37)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 218 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 440 unit(s) checked, 0 violation(s)
+## LAB suites
+167 passed, 1 warning in 17.13s
+## PAY-01 (tests/test_pay_01_*.py)
+630 passed, 1 warning in 179.03s (0:02:59)
+## W0-04 (audit idempotency + C01 indexes/chain), real Mongo
+74 passed, 1 warning in 16.44s
+## AUTH-01/02
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+122 passed, 6 warnings in 159.72s (0:02:39)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 172.20s (0:02:52)
+  lines 'subscription id resolves to no single tenant' in the R0 output: 0
+## W0 DB-free (baseline run, no real Mongo URL)
+15 failed, 1094 passed, 83 skipped, 6 warnings in 76.41s (0:01:16)
+  non-legacy_routes failures: 0
+## frontend: yarn test (CI) / yarn build
+Test Suites: 10 passed, 10 total
+Tests:       122 passed, 122 total
+build OK

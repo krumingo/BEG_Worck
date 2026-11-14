@@ -1,0 +1,19 @@
+# LAB-02-C01 checks (2026-11-07): LAB-02 merged with LAB-01-I (ca81286) + four-eyes on quantity entry/approval; run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## LAB-02 + LAB-01 tests --noconftest (mongomock + real mongo:7.0 rs0)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+106 passed, 1 skipped, 1 warning in 8.10s
+## PM-01 matrix tests (incl. a fresh real-Mongo reproduction of the committed matrix)
+6 passed, 6 warnings in 174.53s (0:02:54)
+## tests/test_r0_0*.py --noconftest (real mongo:7.0 rs0)
+814 passed, 6 warnings in 163.30s (0:02:43)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 72.83s (0:01:12)
+  non-legacy_routes failures: 0
+## frontend: unchanged since LAB-02 (0c85678) — yarn test
+Tests:       97 passed, 97 total

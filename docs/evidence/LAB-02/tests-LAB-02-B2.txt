@@ -1,0 +1,24 @@
+# LAB-02-B2 checks (2026-11-07): audit LAB02-1 — one active approval / classification per line (unique partial index); run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## LAB02-1 concurrency tests (real mongo:7.0 rs0 + mongomock), 3 runs
+4 passed, 31 deselected, 1 warning in 1.10s
+4 passed, 31 deselected, 1 warning in 1.08s
+4 passed, 31 deselected, 1 warning in 1.12s
+## the same concurrency test WITHOUT the guard (index + insert check disabled), real Mongo, 3 runs — must fail
+1 failed, 1 warning in 0.79s
+1 failed, 1 warning in 0.88s
+1 failed, 1 warning in 0.76s
+## LAB-02 + LAB-01 tests (mongomock + real)
+122 passed, 1 skipped, 1 warning in 9.82s
+## PM-01 matrix tests
+6 passed, 6 warnings in 166.67s (0:02:46)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 160.14s (0:02:40)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 72.78s (0:01:12)
+  non-legacy_routes failures: 0

@@ -120,7 +120,7 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
                              record=record, diff={"after": {"amount": amount, "source_pay_run_id": spr}},
                              reason="paid line exceeds the LAB-01 earned of its days (receivable)")
                 await _alert(tenant, org_id, DQ_CODE, record, now, message=(
-                    f"Вземане по FLOW-028: платено с {amount} EUR повече от заработеното ({spr}). "
+                    f"Вземане: платено с {amount} EUR повече от заработеното ({spr}). "
                     "Чака изрично одобрено решение; не се нетира и не се прилага автоматично."))
                 created.append(record)
                 continue

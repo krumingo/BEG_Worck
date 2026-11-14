@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { parseQuantity } from "@/lib/laborQuantities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -650,7 +651,7 @@ export default function TechnicianDashboard() {
                   <p className="text-xs text-foreground truncate">{dd.smr_type || "—"}</p>
                   <p className="text-[10px] text-muted-foreground">{dd.worker_name} · {dd.hours}ч{dd.notes ? ` · ${dd.notes}` : ""}</p>
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditDraft({ id: dd.id, smr_type: dd.smr_type || "", hours: dd.hours || 0, notes: dd.notes || "" })}><Pencil className="w-3 h-3" /></Button>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditDraft({ id: dd.id, smr_type: dd.smr_type || "", hours: dd.hours || 0, notes: dd.notes || "", quantity: dd.quantity ?? "", quantity0: dd.quantity ?? "" })}><Pencil className="w-3 h-3" /></Button>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={async () => {
                   if (!window.confirm(`Изтрий чернова: ${dd.worker_name} — ${dd.smr_type} — ${dd.hours}ч?`)) return;
                   try {
@@ -687,6 +688,12 @@ export default function TechnicianDashboard() {
                   <label className="text-xs text-muted-foreground mb-1 block">Бележка</label>
                   <Input value={editDraft.notes} onChange={e => setEditDraft(prev => ({ ...prev, notes: e.target.value }))} className="h-11" />
                 </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Изработено количество (м2, бр., м…)</label>
+                  <Input inputMode="decimal" value={editDraft.quantity} data-testid="draft-quantity"
+                         onChange={e => setEditDraft(prev => ({ ...prev, quantity: e.target.value }))} className="h-11" />
+                  <p className="text-[11px] text-muted-foreground mt-1">Важи за акорд след одобрение от ръководителя.</p>
+                </div>
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setEditDraft(null)} disabled={editSaving} className="flex-1 h-12 rounded-xl">Отказ</Button>
@@ -698,6 +705,12 @@ export default function TechnicianDashboard() {
                       hours: parseFloat(editDraft.hours) || 0,
                       notes: editDraft.notes,
                     });
+                    // LAB-02: the made quantity (approved later by the site manager)
+                    if (String(editDraft.quantity) !== String(editDraft.quantity0)) {
+                      const q = parseQuantity(editDraft.quantity);
+                      if (editDraft.quantity !== "" && q === null) throw { response: { data: { detail: "Количеството трябва да е число ≥ 0" } } };
+                      await API.put("/labor-quantities/entry", { report_id: editDraft.id, quantity: q });
+                    }
                     toast.success("Черновата е обновена");
                     setEditDraft(null);
                     const [draftsRes, detailRes] = await Promise.all([

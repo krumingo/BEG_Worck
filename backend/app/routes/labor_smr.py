@@ -122,7 +122,10 @@ async def create_labor_entry(
     # FG-423 (R62): priced as R62 prices labor — akord = quantity × the package's piece rate,
     # otherwise hours × the profile's hourly rate (no rate → no cost, never a default)
     entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
-                                           entry["execution_package_id"], hours, data.get("quantity")))
+                                           entry["execution_package_id"], hours, data.get("quantity"),
+                                           approval_id=(data.get("quantity_approval_id") or "").strip() or None,
+                                           project_id=entry["project_id"], date=entry["date"],
+                                           creator_id=user["id"]))
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
     # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
     # a replay shows them to a caller without the finance right (an R16 member).
@@ -168,7 +171,9 @@ async def create_labor_entry(
             # FG-463: nor the hours of another live manual row (pending or approved) of the day
             if await overlapping_manual_rows(tenant, org_id, entry["project_id"], entry["employee_id"],
                                              entry["date"], (MANUAL_PENDING, MANUAL_APPROVED),
-                                             exclude_id=entry["id"], session=session):
+                                             exclude_id=entry["id"], session=session,
+                                             # R81: the row it replaces counts until its approval
+                                             exclude_ids=[entry.get("corrects_entry_id")]):
                 raise HTTPException(status_code=409, detail={
                     "code": "DUPLICATE_MANUAL_ROW",
                     "message": "За този работник, обект и ден вече има ръчен ред — поправете него, не добавяйте втори"})
@@ -215,7 +220,8 @@ MANUAL_REVERSED = "reversed"
 
 
 async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hours: float,
-                              quantity) -> dict:
+                              quantity, approval_id: Optional[str] = None, project_id=None,
+                              date=None, creator_id: Optional[str] = None) -> dict:
     """FG-423: the R62 price of a manual row — the package's pay type first, then the
     profile's; akord = quantity × the package's piece rate (never hours × rate)."""
     pkg = None
@@ -225,21 +231,48 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
         {"org_id": org_id, "user_id": employee_id}, {"_id": 0}) or {}
     pay_type = (pkg or {}).get("labor_pay_type") or profile.get("pay_type") or "Hourly"
     if pay_type == "Akord":
-        # R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity — never a
-        # second quantity typed into a manual row. This branch has no LAB-02 approval source,
-        # so a manual akord row is refused (LAB-02, #75, links the approved quantity).
-        raise HTTPException(status_code=422, detail={
-            "code": "AKORD_NEEDS_APPROVED_QUANTITY",
-            "message": "Акордният ред се остойностява само от одобрено количество (LAB-02) — ръчно въведено количество не се приема"})
-        q = money_value(quantity, "quantity", places=None)        # finite > 0, else 422
-        piece = (pkg or {}).get("labor_piece_rate")
-        if not piece or float(piece) <= 0:
+        # R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity of that
+        # worker, package and day (labor_quantity_approvals, status approved) — never a second,
+        # typed quantity. quantity × the piece rate snapshotted in that approval.
+        if not approval_id:
+            raise HTTPException(status_code=422, detail={
+                "code": "AKORD_NEEDS_APPROVED_QUANTITY",
+                "message": "Акордният ред се остойностява само от одобрено количество (LAB-02) — посочете одобрението"})
+        appr = await tenant.labor_quantity_approvals.find_one(
+            {"org_id": org_id, "id": approval_id, "status": "approved"}, {"_id": 0})
+        if not appr or appr.get("worker_id") != employee_id or appr.get("execution_package_id") != pkg_id \
+                or appr.get("project_id") != project_id \
+                or normalize_labor_date(appr.get("date")) != normalize_labor_date(date):
+            raise HTTPException(status_code=422, detail={
+                "code": "AKORD_APPROVAL_MISMATCH",
+                "message": "Одобреното количество трябва да е на същия работник, СМР пакет, обект и ден"})
+        if appr.get("approved_by") in {employee_id, creator_id}:
+            # FG-508 (R66): the quantity was approved by the worker or by the row's creator
+            raise HTTPException(status_code=409, detail={
+                "code": "SELF_APPROVED_QUANTITY",
+                "message": "Количеството е одобрено от работника или от въвеждащия реда — нужно е одобрение от втори човек"})
+        piece = appr.get("piece_rate")
+        if appr.get("labor_pay_type") != "Akord" or not piece or float(piece) <= 0:
             raise HTTPException(status_code=422, detail=(
-                "Акордният ред изисква СМР пакет с акордна цена — няма цена по подразбиране"))
+                "Одобрението няма акордна цена — няма цена по подразбиране"))
+        q = float(appr.get("approved_quantity") or 0)
+        if quantity not in (None, "") and money_value(quantity, "quantity", places=None) != q:
+            raise HTTPException(status_code=422, detail={
+                "code": "SECOND_QUANTITY",
+                "message": "Количеството е одобреното (LAB-02) — друго количество не се приема"})
+        live = await tenant.labor_entries.find_one(
+            {"org_id": org_id, "quantity_approval_id": approval_id,
+             "approval_status": {"$in": [MANUAL_PENDING, MANUAL_APPROVED]},
+             "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}, {"_id": 0, "id": 1})
+        if live:
+            raise HTTPException(status_code=409, detail={
+                "code": "APPROVED_QUANTITY_IN_USE", "entry_id": live["id"],
+                "message": "Това одобрено количество вече е в друг ръчен ред"})
         return {"pay_type": "Akord", "quantity": q, "piece_rate": float(piece),
-                "labor_terms_version": (pkg or {}).get("labor_terms_version") or 0,
+                "quantity_approval_id": approval_id,
+                "labor_terms_version": appr.get("labor_terms_version") or 0,
                 "hourly_rate": None, "labor_cost": round(q * float(piece), 2),
-                "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)}"}
+                "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)} (одобрено количество {approval_id})"}
     rate = profile.get("hourly_rate")
     cost = round(hours * float(rate), 2) if rate else None
     # an hourly row carries only its rate and cost (the akord fields belong to akord rows)
@@ -286,7 +319,10 @@ async def _correction_link(tenant, org_id: str, entry: dict, corrects: Optional[
     replaced = await tenant.labor_entries.find(
         {"org_id": org_id, "project_id": entry.get("project_id"), "employee_id": entry.get("employee_id"),
          "source": {"$ne": SYNC_SOURCE}, "entry_kind": {"$ne": "reversal"},
-         "approval_status": {"$in": [MANUAL_REJECTED, MANUAL_REVERSED]}},
+         "$or": [{"approval_status": {"$in": [MANUAL_REJECTED, MANUAL_REVERSED]}},
+                 # R81: an approved row whose reversal waits for its replacement
+                 {"approval_status": MANUAL_APPROVED, "pending_reversal": {"$ne": None},
+                  "reversed_by_entry_id": None}]},
         {"_id": 0, "id": 1, "date": 1}).to_list(500)
     ids = {r["id"] for r in replaced if normalize_labor_date(r.get("date")) == day}
     if corrects is None:
@@ -390,21 +426,61 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             raise HTTPException(status_code=409, detail={
                 "code": "STALE_VERSION", "version": version, "labor_cost": row.get("labor_cost"),
                 "message": "Редът е променен — презаредете и решете отново"})
+        # R81 (Krum, FG-532): a reversal by the row's CREATOR is only requested — the row keeps
+        # counting (project cost and payroll) until a second person approves its replacement
+        # (the reversal and the new row then take effect together) or confirms the reversal.
+        is_creator = bool(row.get("created_by")) and row.get("created_by") == user["id"]
+        pending_rev = row.get("pending_reversal") or None
+        mode = None
+        if kind == "reverse":
+            if pending_rev:
+                if is_creator:
+                    raise HTTPException(status_code=409, detail={
+                        "code": "REVERSAL_PENDING",
+                        "message": "Сторното вече чака одобрение от втори човек"})
+                mode = "confirm"
+            else:
+                mode = "request" if is_creator else "direct"
+        target = None          # R81: the approved row a pending replacement corrects
+        if kind in ("approve", "reject") and row.get("corrects_entry_id"):
+            t = await tenant.labor_entries.find_one({"org_id": org_id, "id": row["corrects_entry_id"]}, {"_id": 0})
+            if t and t.get("pending_reversal") and not t.get("reversed_by_entry_id"):
+                target = t
+        if mode == "confirm" and await tenant.labor_entries.find_one(
+                {"org_id": org_id, "corrects_entry_id": entry_id, "approval_status": MANUAL_PENDING},
+                {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=409, detail={
+                "code": "REPLACEMENT_PENDING",
+                "message": "Има нов ред за този — одобрете или отхвърлете него (сторното влиза заедно с него)"})
         frm = {"approve": MANUAL_PENDING, "reject": MANUAL_PENDING, "reverse": MANUAL_APPROVED}[kind]
         to = {"approve": MANUAL_APPROVED, "reject": MANUAL_REJECTED, "reverse": MANUAL_REVERSED}[kind]
         if (row.get("approval_status") or MANUAL_PENDING) != frm or row.get("reversed_by_entry_id"):
             code = "ALREADY_APPROVED" if row.get("approval_status") == MANUAL_APPROVED and kind == "approve" else "INVALID_STATE"
             raise HTTPException(status_code=409, detail={
                 "code": code, "message": f"Редът е „{row.get('approval_status') or MANUAL_PENDING}“ — не може да бъде {kind}"})
+        if kind == "approve" and row.get("quantity_approval_id"):
+            qa = await tenant.labor_quantity_approvals.find_one(
+                {"org_id": org_id, "id": row["quantity_approval_id"], "status": "approved"},
+                {"_id": 0, "id": 1, "approved_by": 1})
+            if not qa:
+                raise HTTPException(status_code=409, detail={
+                    "code": "APPROVED_QUANTITY_VOID",
+                    "message": "Одобреното количество на реда вече не е активно — сторнирайте и въведете нов ред"})
+            if qa.get("approved_by") in {row.get("employee_id"), row.get("created_by")}:
+                # FG-508 (R66), also for a row entered before the rule
+                raise HTTPException(status_code=409, detail={
+                    "code": "SELF_APPROVED_QUANTITY",
+                    "message": "Количеството е одобрено от работника или от въвеждащия реда — нужно е одобрение от втори човек"})
         if kind == "approve" and await _approved_report_hours_exist(
                 org_id, row.get("project_id"), row.get("employee_id"), row.get("date")):
             raise HTTPException(status_code=409, detail={
                 "code": "DUPLICATE_OF_APPROVED_REPORT",
                 "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
         # FG-463: nor another approved manual row of the same worker, project and day
+        skip_target = [target["id"]] if target else []
         if kind == "approve" and await overlapping_manual_rows(
                 tenant, org_id, row.get("project_id"), row.get("employee_id"), row.get("date"),
-                (MANUAL_APPROVED,), exclude_id=entry_id):
+                (MANUAL_APPROVED,), exclude_id=entry_id, exclude_ids=skip_target):
             raise HTTPException(status_code=409, detail={
                 "code": "DUPLICATE_MANUAL_ROW",
                 "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
@@ -425,44 +501,87 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                         "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
                 if await overlapping_manual_rows(tenant, org_id, row.get("project_id"), row.get("employee_id"),
                                                  row.get("date"), (MANUAL_APPROVED,), exclude_id=entry_id,
-                                                 session=session):
+                                                 session=session, exclude_ids=skip_target):
                     raise HTTPException(status_code=409, detail={
                         "code": "DUPLICATE_MANUAL_ROW",
                         "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
-            res = await tenant.labor_entries.update_one(
-                {"org_id": org_id, "id": entry_id, "version": row.get("version"),
-                 "approval_status": row.get("approval_status")},
-                {"$set": {"approval_status": to, "version": version + 1,
-                          f"{to}_by": user["id"], f"{to}_by_role": role, f"{to}_at": now,
-                          **({"decision_reason": reason} if reason else {})}}, session=session)
-            if not getattr(res, "modified_count", 0):
-                raise HTTPException(status_code=409, detail={
-                    "code": "STALE_VERSION", "message": "Редът току-що беше решен от друг — презаредете"})
             reversal_id = None
-            if kind == "reverse":
+            if mode in ("request", "confirm"):
+                await bump_labor_day_lock(tenant, org_id, row.get("employee_id"), row.get("date"), session=session)
+            if mode == "request":
+                # R81: requested only — the row stays approved and counted
                 reversal_id = str(uuid.uuid4())
-                await tenant.labor_entries.insert_one({
-                    "id": reversal_id, "org_id": org_id, "project_id": row.get("project_id"),
-                    "employee_id": row.get("employee_id"), "execution_package_id": row.get("execution_package_id"),
-                    "date": row.get("date"), "hours": -float(row.get("hours") or 0),
-                    "labor_cost": (-float(row["labor_cost"]) if row.get("labor_cost") is not None else None),
-                    "quantity": (-float(row["quantity"]) if row.get("quantity") is not None else None),
-                    "source": row.get("source") or "manual", "entry_kind": "reversal",
-                    "reverses_entry_id": entry_id, "approval_status": "reversal",
-                    "note": "Сторно на ръчен ред: " + reason, "created_by": user["id"], "created_at": now},
-                    session=session)
+                res = await tenant.labor_entries.update_one(
+                    {"org_id": org_id, "id": entry_id, "version": row.get("version"),
+                     "approval_status": MANUAL_APPROVED, "reversed_by_entry_id": None,
+                     "pending_reversal": None},
+                    {"$set": {"version": version + 1, "pending_reversal": {
+                        "reversal_entry_id": reversal_id, "by": user["id"], "by_role": role, "at": now,
+                        "reason": reason}}}, session=session)
+                if not getattr(res, "modified_count", 0):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "STALE_VERSION", "message": "Редът току-що беше решен от друг — презаредете"})
+                await tenant.labor_entries.insert_one(_reversal_row(row, reversal_id, user, now, reason, "pending"),
+                                                      session=session)
+            elif mode == "confirm":
+                if await tenant.labor_entries.find_one(
+                        {"org_id": org_id, "corrects_entry_id": entry_id, "approval_status": MANUAL_PENDING},
+                        {"_id": 0, "id": 1}, session=session):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "REPLACEMENT_PENDING",
+                        "message": "Има нов ред за този — одобрете или отхвърлете него"})
+                reversal_id = pending_rev["reversal_entry_id"]
+                await _make_reversal_effective(tenant, org_id, row, version, user, role, now, reason, session)
+            else:
+                res = await tenant.labor_entries.update_one(
+                    {"org_id": org_id, "id": entry_id, "version": row.get("version"),
+                     "approval_status": row.get("approval_status")},
+                    {"$set": {"approval_status": to, "version": version + 1,
+                              f"{to}_by": user["id"], f"{to}_by_role": role, f"{to}_at": now,
+                              **({"decision_reason": reason} if reason else {})}}, session=session)
+                if not getattr(res, "modified_count", 0):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "STALE_VERSION", "message": "Редът току-що беше решен от друг — презаредете"})
+            if mode == "direct":
+                reversal_id = str(uuid.uuid4())
+                await tenant.labor_entries.insert_one(_reversal_row(row, reversal_id, user, now, reason, "reversal"),
+                                                      session=session)
                 await tenant.labor_entries.update_one(
                     {"org_id": org_id, "id": entry_id},
                     {"$set": {"reversed_by_entry_id": reversal_id, "reversed_at": now}}, session=session)
+                await _resolve_correction_alarm(tenant, org_id, entry_id, user, now, reason, session)
+            if target is not None and kind == "approve":
+                # R81: the replacement is approved by a second person — the pending reversal of
+                # the row it corrects takes effect in THIS transaction (the day never shows 0)
+                await _make_reversal_effective(tenant, org_id, target, int(target.get("version") or 1),
+                                               user, role, now, "R81: replaced by " + entry_id, session)
+            if target is not None and kind == "reject":
+                # R81: the replacement is rejected — the old row stays, its reversal is cancelled
+                res = await tenant.labor_entries.update_one(
+                    {"org_id": org_id, "id": target["id"], "reversed_by_entry_id": None,
+                     "pending_reversal.reversal_entry_id": target["pending_reversal"]["reversal_entry_id"]},
+                    {"$set": {"pending_reversal": None},
+                     "$push": {"cancelled_reversals": dict(target["pending_reversal"], cancelled_at=now,
+                                                           cancelled_by=user["id"], replacement_rejected=entry_id)}},
+                    session=session)
+                if not getattr(res, "modified_count", 0):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "STALE_VERSION", "message": "Редът, който се коригира, току-що беше променен — презаредете"})
+                await tenant.labor_entries.update_one(
+                    {"org_id": org_id, "id": target["pending_reversal"]["reversal_entry_id"]},
+                    {"$set": {"approval_status": "cancelled", "cancelled_at": now}}, session=session)
             event = build_event(
                 tenant_id=org_id, actor_type="human", actor_id=user["id"],
-                action=f"labor.manual_entry.{ {'approve': 'approved', 'reject': 'rejected', 'reverse': 'reversed'}[kind] }",
+                action=("labor.manual_entry.reversal_requested" if mode == "request" else
+                        f"labor.manual_entry.{ {'approve': 'approved', 'reject': 'rejected', 'reverse': 'reversed'}[kind] }"),
                 source_flow="FLOW-028", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
                 entity_type="labor_entry", entity_id=entry_id, entity_version=str(version + 1),
                 structured_diff={"before": {"approval_status": row.get("approval_status"), "version": version,
                                             "labor_cost": row.get("labor_cost")},
-                                 "after": {"approval_status": to, "version": version + 1,
-                                           "reversal_entry_id": reversal_id},
+                                 "after": {"approval_status": (MANUAL_APPROVED if mode == "request" else to),
+                                           "version": version + 1, "reversal_entry_id": reversal_id,
+                                           "reversal_mode": mode,          # R81: request / confirm / direct
+                                           "replaced_entry_id": (target or {}).get("id")},
                                  # R73: who decided, in which role, and whether it was the creator
                                  "actor": {"user_id": user["id"], "role": role,
                                            "is_creator": bool(row.get("created_by")) and row.get("created_by") == user["id"]}},
@@ -479,6 +598,52 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
 
     return await _manual_idempotent(user, idempotency_key, f"labor.manual_entry.{kind}",
                                     {"entry_id": entry_id, **data.model_dump()}, perform, replay)
+
+
+def _reversal_row(row: dict, reversal_id: str, user: dict, now: str, reason: str, status: str) -> dict:
+    """The negative row of a reversal (no delete). ``status``: "reversal" (effective) or
+    "pending" (R81: waits for a second person)."""
+    return {
+        "id": reversal_id, "org_id": row.get("org_id"), "project_id": row.get("project_id"),
+        "employee_id": row.get("employee_id"), "execution_package_id": row.get("execution_package_id"),
+        "date": row.get("date"), "hours": -float(row.get("hours") or 0),
+        "labor_cost": (-float(row["labor_cost"]) if row.get("labor_cost") is not None else None),
+        "quantity": (-float(row["quantity"]) if row.get("quantity") is not None else None),
+        "source": row.get("source") or "manual", "entry_kind": "reversal",
+        "reverses_entry_id": row.get("id"), "approval_status": status,
+        "note": "Сторно на ръчен ред: " + reason, "created_by": user["id"], "created_at": now}
+
+
+async def _resolve_correction_alarm(tenant, org_id: str, entry_id: str, user: dict, now: str, reason: str,
+                                    session) -> None:
+    """R77: the correction is done (the row is reversed) — its alarm is resolved."""
+    await tenant.alarm_events.update_many(
+        {"org_id": org_id, "type": "labor_correction_required", "status": "active",
+         "context.entity_id": entry_id},
+        {"$set": {"status": "resolved", "resolved_at": now, "resolved_by": user["id"],
+                  "resolve_notes": "R77: reversed — " + reason}}, session=session)
+
+
+async def _make_reversal_effective(tenant, org_id: str, row: dict, version: int, user: dict, role: str,
+                                   now: str, reason: str, session) -> None:
+    """R81: a pending reversal takes effect — by a second person (the replacement's approver
+    or the confirmer). Compare-and-set on the pending reversal: a concurrent decision → 409."""
+    pr = row.get("pending_reversal") or {}
+    res = await tenant.labor_entries.update_one(
+        {"org_id": org_id, "id": row["id"], "approval_status": MANUAL_APPROVED, "reversed_by_entry_id": None,
+         "pending_reversal.reversal_entry_id": pr.get("reversal_entry_id")},
+        {"$set": {"approval_status": MANUAL_REVERSED, "version": version + 1,
+                  "reversed_by": user["id"], "reversed_by_role": role, "reversed_at": now,
+                  "reversal_requested_by": pr.get("by"), "decision_reason": pr.get("reason") or reason,
+                  "reversed_by_entry_id": pr.get("reversal_entry_id"), "pending_reversal": None}},
+        session=session)
+    if not getattr(res, "modified_count", 0):
+        raise HTTPException(status_code=409, detail={
+            "code": "STALE_VERSION", "message": "Сторното току-що беше решено от друг — презаредете"})
+    await tenant.labor_entries.update_one(
+        {"org_id": org_id, "id": pr.get("reversal_entry_id")},
+        {"$set": {"approval_status": "reversal", "effective_at": now, "confirmed_by": user["id"]}}, session=session)
+    await _resolve_correction_alarm(tenant, org_id, row["id"], user, now, reason, session)
 
 
 # R66: the decision belongs to the Owner / Управител or the Accountant (never the creator)
@@ -735,9 +900,11 @@ async def list_labor_entries(
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
     employee_id: Optional[str] = None,
+    correction_required: Optional[bool] = None,
     user: dict = Depends(require_m2),
 ):
     """SEC-02 (FG-1 GET; R20-5, R16, FLOW-037 §3.4).
+    R77 / FG-533: ``correction_required=true`` — the live approved rows flagged "изисква корекция".
 
     Finance roles: every row, with rate and cost (as before). Every other role: only the
     rows of projects they are a CURRENT member of (date-aware project_team membership,
@@ -761,6 +928,9 @@ async def list_labor_entries(
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if employee_id: q["employee_id"] = employee_id
+    if correction_required:
+        q.update({"correction_required": {"$ne": None}, "reversed_by_entry_id": None,
+                  "approval_status": MANUAL_APPROVED})
     entries = await tenant.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
     if not show_money:
         entries = without_keys(entries, LABOR_MONEY_FIELDS)

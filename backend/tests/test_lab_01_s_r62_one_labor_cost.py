@@ -703,9 +703,17 @@ def test_r73_the_creator_reverses_his_own_approved_row(monkeypatch):
         r = await c.post("/api/labor-entries/le-man/reverse", json=_decision(version=2, reason="двойно"),
                          headers=_key("admin"))
         assert r.status_code == 200, r.text
-        assert (r.json()["reversed_by"], r.json()["reversed_by_role"]) == ("admin", "Admin")
-        ev = await op.audit_events.find_one({"entity_id": "le-man", "action": "labor.manual_entry.reversed"})
+        # R81 (Krum, FG-532): the creator's reversal is REQUESTED — the row still counts (230)
+        assert r.json()["approval_status"] == "approved" and r.json()["pending_reversal"]["by"] == "admin"
+        ev = await op.audit_events.find_one({"entity_id": "le-man", "action": "labor.manual_entry.reversal_requested"})
         assert ev["structured_diff"]["actor"]["is_creator"] is True
+        assert set((await _numbers(c)).values()) == {230.0}
+        # a second person confirms it — only now it takes effect
+        r = await c.post("/api/labor-entries/le-man/reverse", json=_decision(version=3, reason="потвърждавам"),
+                         headers=_key("acct"))
+        assert r.status_code == 200, r.text
+        assert (r.json()["approval_status"], r.json()["reversed_by"], r.json()["reversal_requested_by"]) == (
+            "reversed", "acct", "admin")
         assert set((await _numbers(c)).values()) == {180.0}
     run(monkeypatch, scenario)
 

@@ -1,0 +1,19 @@
+# LAB-02-C checks (2026-11-07) — FG-101: second approval of the same version → 409 ALREADY_APPROVED; merged LAB-01-L (FG-99); run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## new FG-101 tests without the fix (labor_quantities.py of ba08ab5): 2 failed
+## LAB-02 + LAB-01 tests (mongomock + real mongo:7.0 rs0)
+140 passed, 1 skipped, 1 warning in 11.04s
+## PM-01
+5 passed, 1 skipped, 6 warnings in 2.52s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 168.25s (0:02:48)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 76.38s (0:01:16)
+  non-legacy_routes failures: 0
+## frontend: yarn test (CI) / yarn build
+Test Suites: 8 passed, 8 total
+Tests:       101 passed, 101 total
+build OK

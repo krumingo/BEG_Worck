@@ -1,0 +1,34 @@
+# LAB-02 checks (2026-11-07), branch claude/lab-02-quantity-approval (from LAB-01 head 6763970) + working tree, run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches (+ labor_line_classifications, + labor_terms_history)
+## tests/test_lab_02_quantity_approval.py --noconftest (mongomock + real mongo:7.0 rs0; roles × off/shadow/enforce)
+21 passed, 1 warning in 3.17s
+## LAB-01 tests (labor_cost + d + e + h_r36)
+78 passed, 1 skipped, 1 warning in 4.86s
+## PM-01 matrix (regenerated with the real-Mongo harness: +144 cells for the 6 new routes; POST /api/pay-runs 400→428 for owner/admin = R29 from LAB-01-E)
+6 passed, 6 warnings in 164.64s (0:02:44)
+## tests/test_r0_0*.py --noconftest (real mongo:7.0 rs0)
+814 passed, 6 warnings in 157.67s (0:02:37)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 70.34s (0:01:10)
+  non-legacy_routes failures: 0
+## frontend: yarn test (CI) / yarn build
+Test Suites: 6 passed, 6 total
+Tests:       97 passed, 97 total
+Compiled with warnings.
+Done in 55.89s.
+## bot scenario (docs/evidence/LAB-02/bot): real backend (uvicorn, throw-away local db lab02_bot) + production build, Playwright 390×844
+PASS accountant sees the piece-rate tab only 
+PASS accountant saved the piece rate (version 1) 
+PASS site manager does not see the piece-rate tab 
+PASS site manager sees the approval without a price 
+PASS admin sees 120 м2 × 5 = 600 
+PASS Pay Run preview earned = 600 (120 м2 × 5) 600
+PASS worker gets 403 on the approval list 403
+PASS worker is sent away from the screen http://127.0.0.1:3011/tech
+
+bot scenario: 8/8 checks passed

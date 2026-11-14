@@ -1,0 +1,25 @@
+# LAB-02-C4 checks (2026-11-07) — merged LAB-01-N (reset in ONE transaction) + main 0f870c3 into LAB-02; merge 467dfe3
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness (W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27017/?directConnection=true) exit=0; changed cells vs. #75 57dc310:
+  changed cells: 48
+  - POST /api/auth/forgot-password: status —→200, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+  - POST /api/auth/reset-password: status —→400, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+## PM-01 tests WITH the real-Mongo regression
+6 passed, 6 warnings in 186.68s (0:03:06)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 215 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 434 unit(s) checked, 0 violation(s)
+## LAB-02 + LAB-01 tests (mongomock + real; -rs)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+155 passed, 1 skipped, 1 warning in 12.48s
+## main's AUTH-01/02 tests (merged in)
+122 passed, 6 warnings in 172.17s (0:02:52)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 161.53s (0:02:41)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 75.65s (0:01:15)
+  non-legacy_routes failures: 0
+## frontend: yarn test (CI) / yarn build
+Test Suites: 9 passed, 9 total
+Tests:       116 passed, 116 total
+build OK
