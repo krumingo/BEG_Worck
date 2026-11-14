@@ -256,3 +256,69 @@ async def fail_idempotent(
             "completed_at": _now_iso(),
         }},
     )
+
+
+# ── F-73-01 (Codex, R29): the key reserved and completed IN the caller's transaction ─────
+# A write that must be exactly-once together with its key (the key record and the business
+# write commit or roll back together) reserves the key with ``session``, does its write,
+# and completes the key with the SAME ``session``. Outside a transaction (session None) a
+# failed write marks the key failed, so a clean retry may run it again.
+IDEMPOTENCY_REPLAY = "replay"
+
+
+class IdempotencyInProgress(Exception):
+    """The key is STARTED by an attempt that has not finished (only seen outside a
+    transaction — inside one an unfinished attempt is invisible)."""
+
+
+async def peek_idempotent(db, *, tenant_id: str, key: str, action: str,
+                          request_fingerprint: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Read-only look-up before any write: None (unknown key), or the record. Raises
+    IdempotencyConflict when the key exists with another request fingerprint."""
+    rec = await db[IDEMPOTENCY_COLLECTION].find_one(
+        {"tenant_id": tenant_id, "id": _record_id(tenant_id, action, key)}, {"_id": 0})
+    if rec is not None and rec.get("request_fingerprint") != request_fingerprint:
+        raise IdempotencyConflict(f"Idempotency key '{key}' for action '{action}' was already used "
+                                  "with a different request payload")
+    return rec
+
+
+async def reserve_idempotent_in_session(db, *, tenant_id: str, key: str, action: str,
+                                        request_fingerprint: Optional[str], session) -> Dict[str, Any]:
+    """In the caller's transaction: {"status": STARTED} (the caller performs the write) or
+    {"status": REPLAY, "result_reference"} (completed before — return it, write nothing).
+    Raises IdempotencyConflict (another payload) or IdempotencyInProgress."""
+    if not key or not key.strip():
+        raise ValueError("idempotency key must be non-empty")
+    rid = _record_id(tenant_id, action, key)
+    flt = {"tenant_id": tenant_id, "id": rid}
+    rec = await db[IDEMPOTENCY_COLLECTION].find_one(flt, {"_id": 0}, session=session)
+    if rec is not None and rec.get("request_fingerprint") != request_fingerprint:
+        raise IdempotencyConflict(f"Idempotency key '{key}' for action '{action}' was already used "
+                                  "with a different request payload")
+    if rec is not None and rec.get("status") == IDEMPOTENCY_COMPLETED:
+        return {"status": IDEMPOTENCY_REPLAY, "result_reference": rec.get("result_reference")}
+    if rec is not None and rec.get("status") == IDEMPOTENCY_STARTED:
+        raise IdempotencyInProgress(key)
+    now = _now_iso()
+    if rec is None:
+        await db[IDEMPOTENCY_COLLECTION].insert_one({
+            "id": rid, "tenant_id": tenant_id, "action": action, "key": key,
+            "request_fingerprint": request_fingerprint, "status": IDEMPOTENCY_STARTED,
+            "result_reference": None, "error_code": None, "reserved_at": now, "completed_at": None},
+            session=session)
+    else:                                                   # a FAILED attempt: a clean retry
+        await db[IDEMPOTENCY_COLLECTION].update_one(
+            {**flt, "status": IDEMPOTENCY_FAILED},
+            {"$set": {"status": IDEMPOTENCY_STARTED, "reserved_at": now, "error_code": None,
+                      "completed_at": None}}, session=session)
+    return {"status": IDEMPOTENCY_STARTED}
+
+
+async def complete_idempotent_in_session(db, *, tenant_id: str, key: str, action: str,
+                                         result_reference: str, session) -> None:
+    """Complete the key in the SAME transaction as the write it guards."""
+    await db[IDEMPOTENCY_COLLECTION].update_one(
+        {"tenant_id": tenant_id, "id": _record_id(tenant_id, action, key), "status": IDEMPOTENCY_STARTED},
+        {"$set": {"status": IDEMPOTENCY_COMPLETED, "result_reference": result_reference,
+                  "completed_at": _now_iso()}}, session=session)

@@ -985,17 +985,16 @@ async def _peek_invoice_key(tenant: TenantData, user: dict, key: Optional[str], 
     if not key:
         return None
     import json
-    from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, _record_id,
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IdempotencyConflict, peek_idempotent,
                                        request_fingerprint)
-    rec = await tenant._db[IDEMPOTENCY_COLLECTION].find_one(   # pylint: disable=protected-access
-        {"id": _record_id(user["org_id"], action, key)}, {"_id": 0})
-    if not rec:
-        return None
-    if rec.get("request_fingerprint") != request_fingerprint(fingerprint):
+    try:
+        rec = await peek_idempotent(tenant._db, tenant_id=user["org_id"], key=key,   # pylint: disable=protected-access
+                                    action=action, request_fingerprint=request_fingerprint(fingerprint))
+    except IdempotencyConflict:
         raise HTTPException(status_code=409, detail={
             "error_code": "IDEMPOTENCY_KEY_REUSED",
             "message": "Този Idempotency-Key вече е използван за друга заявка"})
-    if rec.get("status") == IDEMPOTENCY_COMPLETED:
+    if rec and rec.get("status") == IDEMPOTENCY_COMPLETED:
         return json.loads(rec["result_reference"])
     return None
 
@@ -1005,9 +1004,10 @@ async def _invoice_write_once(tenant: TenantData, user: dict, key: Optional[str]
     """``work(session) -> result`` in ONE transaction with the key's reservation and
     completion (no key: just the transaction). Returns {"result", "replay"}."""
     import json
-    from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED,
-                                       IDEMPOTENCY_FAILED, IDEMPOTENCY_STARTED, _now_iso, _record_id,
-                                       ensure_idempotency_index, request_fingerprint)
+    from app.audit.idempotency import (IDEMPOTENCY_REPLAY, IdempotencyConflict, IdempotencyInProgress,
+                                       complete_idempotent_in_session, ensure_idempotency_index,
+                                       fail_idempotent, request_fingerprint,
+                                       reserve_idempotent_in_session)
     from app.audit.store import ensure_chain_index
     idb = tenant._db                                           # pylint: disable=protected-access
     await ensure_chain_index(idb)
@@ -1019,45 +1019,30 @@ async def _invoice_write_once(tenant: TenantData, user: dict, key: Optional[str]
         return out
     await ensure_idempotency_index(idb)
     fp = request_fingerprint(fingerprint)
-    rid = _record_id(user["org_id"], action, key)
+    ids = {"tenant_id": user["org_id"], "key": key, "action": action}
 
     async def body(session):
         out["replay"] = False
-        rec = await idb[IDEMPOTENCY_COLLECTION].find_one({"id": rid}, {"_id": 0}, session=session)
-        if rec is not None and rec.get("request_fingerprint") != fp:
+        try:
+            state = await reserve_idempotent_in_session(idb, request_fingerprint=fp, session=session, **ids)
+        except IdempotencyConflict:
             raise HTTPException(status_code=409, detail={
                 "error_code": "IDEMPOTENCY_KEY_REUSED",
                 "message": "Този Idempotency-Key вече е използван за друга заявка"})
-        if rec is not None and rec.get("status") == IDEMPOTENCY_COMPLETED:
-            out["result"], out["replay"] = json.loads(rec["result_reference"]), True
-            return
-        if rec is not None and rec.get("status") == IDEMPOTENCY_STARTED:
+        except IdempotencyInProgress:
             raise _key_in_progress()       # only outside a transaction: an attempt in flight
-        now = _now_iso()
-        if rec is None:
-            await idb[IDEMPOTENCY_COLLECTION].insert_one({
-                "id": rid, "tenant_id": user["org_id"], "action": action, "key": key,
-                "request_fingerprint": fp, "status": IDEMPOTENCY_STARTED, "result_reference": None,
-                "error_code": None, "reserved_at": now, "completed_at": None}, session=session)
-        else:                                                   # a FAILED attempt: clean retry
-            await idb[IDEMPOTENCY_COLLECTION].update_one(
-                {"id": rid, "status": IDEMPOTENCY_FAILED},
-                {"$set": {"status": IDEMPOTENCY_STARTED, "reserved_at": now, "error_code": None,
-                          "completed_at": None}}, session=session)
+        if state["status"] == IDEMPOTENCY_REPLAY:
+            out["result"], out["replay"] = json.loads(state["result_reference"]), True
+            return
         try:
             result = await work(session)
         except Exception as exc:
             if session is None:                                 # no transaction to roll back
-                await idb[IDEMPOTENCY_COLLECTION].update_one({"id": rid}, {"$set": {
-                    "status": IDEMPOTENCY_FAILED, "completed_at": _now_iso(),
-                    "error_code": "HTTP_%d" % exc.status_code if isinstance(exc, HTTPException)
-                    else "ERROR"}})
+                await fail_idempotent(idb, error_code="HTTP_%d" % exc.status_code
+                                      if isinstance(exc, HTTPException) else "ERROR", **ids)
             raise
         stored = json.dumps(result, sort_keys=True, default=str)
-        await idb[IDEMPOTENCY_COLLECTION].update_one(
-            {"id": rid, "status": IDEMPOTENCY_STARTED},
-            {"$set": {"status": IDEMPOTENCY_COMPLETED, "result_reference": stored,
-                      "completed_at": _now_iso()}}, session=session)
+        await complete_idempotent_in_session(idb, result_reference=stored, session=session, **ids)
         out["result"] = json.loads(stored)
     await run_transaction(tenant, body)
     return out
