@@ -12,8 +12,8 @@
 | #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #73 LAB-01 | `74d8b93` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #75 LAB-02 | `b0a52ea` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
+| #73 LAB-01 | `2722786` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
+| #75 LAB-02 | `b489ec7` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `39a1e27` | **PASS** (code `c41da0b`; R88 restore + review screen; FG-706 keyset paging; FG-707 --approval-ref required for --apply) | 2026-11-14 |
@@ -7231,3 +7231,48 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | frontend jest | 257 | 266 |
 
 - **W0:** the one non-`legacy_routes` failure is the order-dependent `test_r1`; main fails it here too.
+
+## 2026-11-14 — #73 LAB-01 `2722786b` / #75 LAB-02 `b489ec7f` — PASS (delta: LAB73-N2 closed; still pending Krum FG-565 / FG-569)
+
+### Heads
+
+- **#73:** `2722786b` = `92cb589a` (code) + regenerated evidence; the delta is over `74d8b939`.
+- **#75:** `b489ec7f` contains the #73 merge `e672613a`, which equals merge-tree except `docs/evidence`.
+- Both: clean onto main; role-union 0.
+
+### LAB73-N2 fix — `finance.py` `_refuse_cancel_of_a_used_advance`
+
+- Covers either link:
+  - the proforma's `advance_used_by_invoice_id`;
+  - any final invoice whose `advance_proforma_ids` holds it.
+- Only a non-Cancelled final invoice blocks the cancel.
+- Called before any write and again inside the transaction on the claimed `current`. Both paths write the proforma doc, so a concurrent link + cancel serializes.
+- Result: 409 `ADVANCE_PROFORMA_IN_USE`, nothing written.
+- **No implicit unlink:** the advance is removed only by `PUT advance_proforma_ids: []`.
+
+### Probes (`docs/audit/probes/lab01/test_probe_lab01_fg718_proforma_cancel.py`, now 3 cases)
+
+- Cancelling a backing proforma: **409**, the proforma stays Sent, both links intact, money unchanged.
+- **Each link alone** (only `used_by`; only `advance_proforma_ids`): 409, not cancelled.
+- Both heads, both backends.
+
+### Regenerated files
+
+- A1 inventory byte-equal (full redirect).
+- PM-01 regen = committed, 0 cells.
+- SEC-02 regen = committed, 0 cells.
+- Both heads.
+
+### Gates (real Mongo)
+
+| Gate | #73 | #75 |
+|---|---|---|
+| LAB | 254 | 355 + 1 env-only = 356 |
+| AUTH | 122 | 122 |
+| A2C / A1 | 0/246, 0/496 | 0/247, 0/498 |
+| PM-01 | 6 | 6 |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31 | 31 |
+| PAY | 630 | 630 |
+| R0 | 814 | 814 |
+| W0 | 16 = main's 16 (`test_r1` order-dependent) | same |
