@@ -24,7 +24,7 @@ from datetime import date, timedelta
 import pytest
 
 ORG, ORG_B = "ORG-AR01", "ORG-AR01-B"
-UNIT, UNIT_B = "U-AR01", "U-AR01-B"
+UNIT, UNIT_B, UNIT2 = "U-AR01", "U-AR01-B", "U-AR01-2"
 WH = "WH-AR01"
 MODES = ("off", "shadow", "enforce")
 BUSINESS = ("asset_repairs", "asset_units", "asset_custody", "finance_payments",
@@ -77,6 +77,9 @@ async def _seed(op, sysdb):
         {"id": UNIT, "org_id": ORG, "item_id": "I1", "qr_id": "QR-1", "serial_no": "SN-1",
          "status": "available", "location_type": "warehouse", "location_id": WH,
          "purchase_date": purchase, "warranty_months": 24},
+        {"id": UNIT2, "org_id": ORG, "item_id": "I3", "qr_id": "QR-2", "serial_no": "SN-2",
+         "status": "available", "location_type": "warehouse", "location_id": WH,
+         "purchase_date": purchase, "warranty_months": 24},
         {"id": UNIT_B, "org_id": ORG_B, "item_id": "I2", "qr_id": "QR-B", "serial_no": "SN-B",
          "status": "available", "location_type": "warehouse", "location_id": "WH-B",
          "purchase_date": purchase, "warranty_months": 24},
@@ -94,6 +97,10 @@ async def _seed(op, sysdb):
                                             "to_user_id": "sitemanager"}]})
     await op.invoices.insert_one({"id": "INV-1", "org_id": ORG, "direction": "Received",
                                   "total": 500, "status": "Sent", "invoice_no": "S-1"})
+    await op.invoices.insert_one({"id": "INV-2", "org_id": ORG, "direction": "Received",
+                                  "total": 300, "status": "Sent", "invoice_no": "S-2"})
+    await op.invoices.insert_one({"id": "INV-B", "org_id": ORG_B, "direction": "Received",
+                                  "total": 100, "status": "Sent", "invoice_no": "B-1"})
     await op.invoices.insert_one({"id": "INV-OUT", "org_id": ORG, "direction": "Issued",
                                   "total": 900, "status": "Sent", "invoice_no": "I-1"})
     await op.audit_idempotency.create_index([("id", 1)], unique=True)
@@ -206,9 +213,10 @@ def _send_body(receiver="warehouse"):
             "file_ids": ["F-1"]}
 
 
-async def _to_in_repair(c, op):
+async def _to_in_repair(c, op, unit=UNIT):
     """sitemanager (responsible) → warehouse (receiver) ; the receiver accepts."""
-    r = await c.post(SEND, json=_send_body(), headers=_h("sitemanager"))
+    r = await c.post("/api/assets/units/%s/repair/send" % unit, json=_send_body(),
+                     headers=_h("sitemanager"))
     assert r.status_code == 200, r.text
     rec = r.json()
     ho = rec["handovers"][0]["id"]
@@ -591,3 +599,87 @@ def test_no_total_paid_and_the_read_strips_money():
     src = inspect.getsource(ar)
     assert "total_paid\"" not in src.replace('r.pop("total_paid", None)', "")
     assert getattr(ar.list_repairs, "sec02_strips_money", False)
+
+
+# ═══════════════════════════════════════════════════════════════════ FG-724
+async def _pay(op, invoice_id, amount, pid="PAY-724"):
+    await op.finance_payments.insert_one({"id": pid, "org_id": ORG, "direction": "Outflow",
+                                          "amount": amount})
+    await op.payment_allocations.insert_one({"id": "AL-" + pid, "org_id": ORG, "payment_id": pid,
+                                             "invoice_id": invoice_id, "amount_allocated": amount})
+
+
+def test_fg724_one_invoice_backs_one_repair(monkeypatch, backend, mode):
+    """FG-724 reproduction: invoice 500, one payment 500, two repairs. The second link → 409
+    with the first repair's id, nothing written; the ledger total is shown once."""
+    async def scenario(c, op):
+        r1 = await _to_in_repair(c, op, UNIT)
+        r2 = await _to_in_repair(c, op, UNIT2)
+        await _pay(op, "INV-1", 500)
+        ok = await c.put("/api/assets/repairs/%s/cost" % r1["id"],
+                         json={"cost": 500, "invoice_id": "INV-1"}, headers=_h("accountant"))
+        assert ok.status_code == 200, ok.text
+        assert (await op.invoices.find_one({"id": "INV-1"}))["asset_repair_id"] == r1["id"]
+        before = await _dump(op)
+        r = await c.put("/api/assets/repairs/%s/cost" % r2["id"],
+                        json={"cost": 500, "invoice_id": "INV-1"}, headers=_h("accountant"))
+        assert r.status_code == 409, r.text
+        d = r.json()["detail"]
+        assert d["error_code"] == "INVOICE_ALREADY_LINKED" and d["other_repair_id"] == r1["id"]
+        # the same through the return with a cost (owner = finance role)
+        r = await c.post("/api/assets/units/%s/repair/return" % UNIT2,
+                         json={"receiver_user_id": "sitemanager", "cost": 500,
+                               "invoice_id": "INV-1", "is_warranty": True}, headers=_h("owner"))
+        assert r.status_code == 409 and r.json()["detail"]["other_repair_id"] == r1["id"]
+        assert await _dump(op) == before                                 # nothing written
+        # the same repair may re-state its own invoice (a correction)
+        r = await c.put("/api/assets/repairs/%s/cost" % r1["id"],
+                        json={"cost": 450, "reason": "отстъпка", "invoice_id": "INV-1"},
+                        headers=_h("accountant"))
+        assert r.status_code == 200, r.text
+        b1 = (await c.get(LIST, headers=_h("owner", key=None))).json()
+        b2 = (await c.get("/api/assets/units/%s/repairs" % UNIT2, headers=_h("owner", key=None))).json()
+        assert (b1["paid"], b1["remaining"]) == (450, 0)         # capped at the repair's cost
+        assert (b2["paid"], b2["total_cost"]) == (0, 0)
+        assert b1["paid"] + b2["paid"] <= 500                     # never more than the ledger
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg724_paid_is_capped_at_cost_and_remaining_never_negative(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        rec = await _to_in_repair(c, op)
+        await _pay(op, "INV-2", 500)                               # overpaid invoice
+        r = await c.put("/api/assets/repairs/%s/cost" % rec["id"],
+                        json={"cost": 300, "invoice_id": "INV-2"}, headers=_h("accountant"))
+        assert r.status_code == 200, r.text
+        b = (await c.get(LIST, headers=_h("accountant", key=None))).json()
+        it = b["items"][0]
+        assert (it["cost"], it["paid"], it["remaining"]) == (300, 300, 0)
+        assert (b["total_cost"], b["paid"], b["remaining"]) == (300, 300, 0)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg724_invoice_cas_and_relink(monkeypatch, backend, mode):
+    """The CAS on the invoice: an invoice already claimed (asset_repair_id of another
+    repair) → 409 even when no repair row shows it; a re-link to another invoice releases
+    the previous one; another tenant's invoice is "missing"."""
+    async def scenario(c, op):
+        rec = await _to_in_repair(c, op)
+        url = "/api/assets/repairs/%s/cost" % rec["id"]
+        await op.invoices.update_one({"id": "INV-2"}, {"$set": {"asset_repair_id": "R-OTHER"}})
+        before = await _dump(op)
+        r = await c.put(url, json={"cost": 100, "invoice_id": "INV-2"}, headers=_h("accountant"))
+        assert r.status_code == 409 and r.json()["detail"]["other_repair_id"] == "R-OTHER", r.text
+        r = await c.put(url, json={"cost": 100, "invoice_id": "INV-B"}, headers=_h("accountant"))
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "INVOICE_NOT_FOUND"
+        assert await _dump(op) == before
+        await op.invoices.update_one({"id": "INV-2"}, {"$set": {"asset_repair_id": None}})
+        assert (await c.put(url, json={"cost": 100, "invoice_id": "INV-1"},
+                            headers=_h("accountant"))).status_code == 200
+        r = await c.put(url, json={"cost": 100, "reason": "грешна фактура", "invoice_id": "INV-2"},
+                        headers=_h("accountant"))
+        assert r.status_code == 200, r.text
+        assert (await op.invoices.find_one({"id": "INV-1"})).get("asset_repair_id") is None
+        assert (await op.invoices.find_one({"id": "INV-2"}))["asset_repair_id"] == rec["id"]
+        assert (await op.invoices.find_one({"id": "INV-B"})).get("asset_repair_id") is None
+    run(monkeypatch, backend, mode, scenario)

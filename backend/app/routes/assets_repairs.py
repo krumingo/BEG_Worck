@@ -347,8 +347,72 @@ def _cost_number(value: Any) -> float:
     return money_value(value, "cost", allow_zero=True)
 
 
-async def _invoice_ok(tenant: TenantData, invoice_id: Optional[str]) -> Optional[str]:
-    """The obligation link: a RECEIVED (supplier) invoice of THIS tenant."""
+# FG-724 (interim, the safe option): ONE received invoice backs at most ONE non-cancelled
+# repair, so a payment on it is never shown as paid by two repairs. Splitting one invoice
+# across several repairs (by allocations) is later work (debt D-ASSETREP-05).
+CANCELLED_STATUSES = (ST_SEND_REFUSED, ST_SEND_PROBLEM)
+INVOICE_LINK_FIELD = "asset_repair_id"
+
+
+def _invoice_taken(other_repair_id: Optional[str]) -> HTTPException:
+    return _err(409, "INVOICE_ALREADY_LINKED",
+                "Фактурата вече е свързана с друг ремонт", other_repair_id=other_repair_id)
+
+
+async def _other_repair_on_invoice(tenant: TenantData, invoice_id: str, repair_id: str,
+                                   session=None) -> Optional[str]:
+    other = await tenant.asset_repairs.find_one(
+        {"invoice_id": invoice_id, "id": {"$ne": repair_id},
+         "status": {"$nin": list(CANCELLED_STATUSES)}}, {"_id": 0, "id": 1}, **_kw(session))
+    return (other or {}).get("id")
+
+
+async def _claim_invoice(tenant: TenantData, invoice_id: Optional[str], repair_id: str,
+                         previous_invoice_id: Optional[str], session) -> None:
+    """In the transaction: re-check the repairs, then a compare-and-set on the invoice
+    (``asset_repair_id`` empty or already this repair). The loser of a race gets 409 and
+    nothing is written. A re-link releases the previous invoice of THIS repair."""
+    if invoice_id is None:
+        return
+    other = await _other_repair_on_invoice(tenant, invoice_id, repair_id, session)
+    if other:
+        raise _invoice_taken(other)
+    done = await tenant.invoices.update_one(
+        {"id": invoice_id, "$or": [{INVOICE_LINK_FIELD: None}, {INVOICE_LINK_FIELD: repair_id}]},
+        {"$set": {INVOICE_LINK_FIELD: repair_id}}, **_kw(session))
+    if not done.matched_count:
+        inv = await tenant.invoices.get(invoice_id, {"_id": 0, INVOICE_LINK_FIELD: 1},
+                                        **_kw(session))
+        raise _invoice_taken((inv or {}).get(INVOICE_LINK_FIELD))
+    if previous_invoice_id and previous_invoice_id != invoice_id:
+        await _release_invoice(tenant, previous_invoice_id, repair_id, session)
+
+
+async def _release_invoice(tenant: TenantData, invoice_id: Optional[str], repair_id: str,
+                           session) -> None:
+    if invoice_id:
+        await tenant.invoices.update_one(
+            {"id": invoice_id, INVOICE_LINK_FIELD: repair_id},
+            {"$set": {INVOICE_LINK_FIELD: None}}, **_kw(session))
+
+
+async def _undo_claim(tenant: TenantData, invoice_id: Optional[str], repair_id: str,
+                      previous_invoice_id: Optional[str], session) -> None:
+    """The repair's own CAS lost after the invoice was claimed: give the claim back (no-op
+    inside a transaction, which aborts anyway; needed where the body runs without one)."""
+    if session is not None or not invoice_id or invoice_id == previous_invoice_id:
+        return
+    await _release_invoice(tenant, invoice_id, repair_id, session)
+    if previous_invoice_id:
+        await tenant.invoices.update_one(
+            {"id": previous_invoice_id, INVOICE_LINK_FIELD: None},
+            {"$set": {INVOICE_LINK_FIELD: repair_id}}, **_kw(session))
+
+
+async def _invoice_ok(tenant: TenantData, invoice_id: Optional[str],
+                      repair_id: Optional[str] = None) -> Optional[str]:
+    """The obligation link: a RECEIVED (supplier) invoice of THIS tenant, not already
+    backing another non-cancelled repair (FG-724 → 409 with that repair's id)."""
     if invoice_id is None:
         return None
     if not isinstance(invoice_id, str) or not invoice_id.strip():
@@ -358,6 +422,10 @@ async def _invoice_ok(tenant: TenantData, invoice_id: Optional[str]) -> Optional
         raise _err(422, "INVOICE_NOT_FOUND", "Фактурата не е намерена в тази фирма")
     if inv.get("direction") != "Received":
         raise _err(422, "INVOICE_NOT_RECEIVED", "Ремонтът се свързва с входяща (доставчик) фактура")
+    if repair_id is not None:
+        other = await _other_repair_on_invoice(tenant, inv["id"], repair_id)
+        if other:
+            raise _invoice_taken(other)
     return inv["id"]
 
 
@@ -530,7 +598,7 @@ async def repair_return(unit_id: str, data: RepairReturn, request: Request,
         await _location_ok(tenant, loc_type, loc_id)
         files = await _evidence(tenant, data.file_ids)
         cost = _cost_number(data.cost) if data.cost is not None else None
-        invoice_id = await _invoice_ok(tenant, data.invoice_id)
+        invoice_id = await _invoice_ok(tenant, data.invoice_id, rec["id"])
 
         # ── warranty (FLOW-039 §9–§10): marker + DQ signal, never silent ──
         in_warranty = _in_warranty(unit.get("purchase_date"), unit.get("warranty_months"))
@@ -587,10 +655,17 @@ async def repair_return(unit_id: str, data: RepairReturn, request: Request,
                 push["cost_versions"] = version
             if dq:
                 push["dq_signals"] = {"$each": dq}
+            # FG-724: the invoice is claimed FIRST, so a refused claim writes nothing
+            if version:
+                await _claim_invoice(tenant, update["invoice_id"], rec["id"],
+                                     rec.get("invoice_id"), session)
             done = await tenant.asset_repairs.update_one(
                 {"id": rec["id"], "status": ST_IN_REPAIR},
                 {"$set": update, "$push": push}, **_kw(session))
             if not done.modified_count:
+                if version:
+                    await _undo_claim(tenant, update["invoice_id"], rec["id"],
+                                      rec.get("invoice_id"), session)
                 raise _changed()
             await _audit(ctx, request, action="asset_repair.return.created", repair=rec,
                          version=handover["id"], key=key, file_ids=files, session=session,
@@ -744,7 +819,8 @@ async def set_repair_cost(repair_id: str, data: RepairCost, request: Request,
         if rec.get("cost") is not None and not reason:
             raise _err(422, "CORRECTION_REASON_REQUIRED",
                        "Промяна на цената изисква причина (нова версия)")
-        invoice_id = await _invoice_ok(tenant, data.invoice_id) if data.invoice_id is not None \
+        invoice_id = await _invoice_ok(tenant, data.invoice_id, repair_id) \
+            if data.invoice_id is not None \
             else rec.get("invoice_id")
         files = await _evidence(tenant, data.file_ids)
         version = _cost_version(rec, cost=cost, reason=reason, invoice_id=invoice_id,
@@ -752,11 +828,14 @@ async def set_repair_cost(repair_id: str, data: RepairCost, request: Request,
         n = len(rec.get("cost_versions") or [])
 
         async def body(session):
+            # FG-724: the invoice is claimed FIRST, so a refused claim writes nothing
+            await _claim_invoice(tenant, invoice_id, repair_id, rec.get("invoice_id"), session)
             done = await tenant.asset_repairs.update_one(
                 {"id": repair_id, "cost_versions": {"$size": n}},
                 {"$set": {"cost": cost, "invoice_id": invoice_id},
                  "$push": {"cost_versions": version}}, **_kw(session))
             if not done.modified_count:
+                await _undo_claim(tenant, invoice_id, repair_id, rec.get("invoice_id"), session)
                 raise _changed()
             corrected = rec.get("cost") is not None
             await _audit(ctx, request,
@@ -827,9 +906,12 @@ async def list_repairs(unit_id: str, request: Request, user: dict = Depends(get_
         r["returned_by_avatar"] = rp.get("avatar_url")
         cost = r.get("cost")
         paid = paid_by_invoice.get(r.get("invoice_id"), 0.0) if r.get("invoice_id") else 0.0
+        if cost is not None:
+            # FG-724: a repair is never shown as paid above its own cost
+            paid = round(min(paid, float(cost)), 2)
         r["paid"] = paid
         r["paid_source"] = "finance_payments"
-        r["remaining"] = round(float(cost) - paid, 2) if cost is not None else None
+        r["remaining"] = round(max(float(cost) - paid, 0.0), 2) if cost is not None else None
         total_cost += float(cost or 0)
         total_ledger_paid += paid
         r.pop("total_paid", None)
@@ -838,7 +920,7 @@ async def list_repairs(unit_id: str, request: Request, user: dict = Depends(get_
     return {"items": items,
             "total_cost": round(total_cost, 2),            # sum of costs (obligations)
             "paid": round(total_ledger_paid, 2),           # from finance_payments only
-            "remaining": round(total_cost - total_ledger_paid, 2),
+            "remaining": round(max(total_cost - total_ledger_paid, 0.0), 2),
             "open": open_repair}
 
 
