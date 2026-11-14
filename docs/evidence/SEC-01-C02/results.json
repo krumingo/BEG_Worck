@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 25.5,
+ "seconds": 21.4,
  "rows": [
   {
    "mode": "off",
@@ -17403,11 +17403,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-09",
-   "to_date": "2026-11-07",
+   "from_date": "2026-10-10",
+   "to_date": "2026-11-08",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-10T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-08T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17415,10 +17415,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-09",
+   "from_date": "2026-11-10",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-10T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   },
@@ -17427,11 +17427,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-09",
-   "to_date": "2026-11-07",
+   "from_date": "2026-10-10",
+   "to_date": "2026-11-08",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-10T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-08T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17439,10 +17439,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-09",
+   "from_date": "2026-11-10",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-10T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   }

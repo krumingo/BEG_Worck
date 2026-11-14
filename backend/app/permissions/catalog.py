@@ -106,6 +106,29 @@ ACTIONS: Set[str] = {
     # the advance to a subcontractor and its explicit deduction on an act.
     "finance.subcontractor_advance.create",     # POST /api/subcontractor-packages/{pkg_id}/advances
     "subcontract.advance_deduction.execute",    # POST /api/subcontractor-acts/{act_id}/advance-deduction
+    # OFF-02 (R67, Krum 09.11.2026; FG-350, OFF89-N1): offers are created and changed
+    # ONLY by Owner, Admin and Accountant — the roles that see the prices. One action per
+    # endpoint; no other role holds any of them. The client's own answer by magic link is
+    # not a staff write and has no action.
+    "offers.offer.create",                      # POST /api/offers
+    "offers.offer.update",                      # PUT  /api/offers/{offer_id}
+    "offers.offer_lines.update",                # PUT  /api/offers/{offer_id}/lines
+    "offers.offer_send.execute",                # POST /api/offers/{offer_id}/send
+    "offers.offer_accept.execute",              # POST /api/offers/{offer_id}/accept (internal, for the client)
+    "offers.offer_reject.execute",              # POST /api/offers/{offer_id}/reject (internal, for the client)
+    "offers.offer_version.create",              # POST /api/offers/{offer_id}/new-version
+    "offers.offer_cancel.execute",              # POST /api/offers/{offer_id}/cancel
+    "offers.offer.delete",                      # DELETE /api/offers/{offer_id}
+    "offers.offer_import.create",               # POST /api/offers/import-confirm
+    "offers.offer_snapshot.create",             # POST /api/offers/{offer_id}/versions
+    "offers.offer_snapshot_restore.execute",    # POST /api/offers/{offer_id}/versions/{version_number}/restore
+    "offers.offer_snapshot.delete",             # DELETE /api/offers/{offer_id}/versions/{version_number}
+    "offers.offer_from_extra_works.create",     # POST /api/extra-works/create-offer
+    "offers.offer_from_smr.create",             # POST /api/projects/{project_id}/smr-to-offer
+    "offers.offer_from_missing_smr.create",     # POST /api/missing-smr/{item_id}/to-offer
+    "offers.offer_from_missing_smr_batch.create", # POST /api/missing-smr/batch-to-offer
+    "offers.offer_from_smr_analysis.create",    # POST /api/smr-analyses/{analysis_id}/to-offer
+    "offers.offer_budget.update",                # PUT /api/offer-budgets/{offer_id} (FG-472)
     # ------------------------------------------------------------------
     # LIVE-OPS-01 / TASK 5C — Canonical warehouse/stock core (FLOW-009).
     # Every canonical movement command is denied by default and granted
@@ -218,6 +241,30 @@ MONEY_WRITE_ACTIONS_C02: Set[str] = {
     "pricing.material_price_refresh.execute",
 }
 MONEY_WRITE_ACTIONS |= MONEY_WRITE_ACTIONS_C02
+
+# OFF-02 (R67): the offer writes, granted to Accountant (Owner/Admin get them through
+# their full set). Kept apart from MONEY_WRITE_ACTIONS (SEC-01's exact set).
+OFFER_WRITE_ACTIONS: Set[str] = {
+    "offers.offer.create",
+    "offers.offer.update",
+    "offers.offer_lines.update",
+    "offers.offer_send.execute",
+    "offers.offer_accept.execute",
+    "offers.offer_reject.execute",
+    "offers.offer_version.create",
+    "offers.offer_cancel.execute",
+    "offers.offer.delete",
+    "offers.offer_import.create",
+    "offers.offer_snapshot.create",
+    "offers.offer_snapshot_restore.execute",
+    "offers.offer_snapshot.delete",
+    "offers.offer_from_extra_works.create",
+    "offers.offer_from_smr.create",
+    "offers.offer_from_missing_smr.create",
+    "offers.offer_from_missing_smr_batch.create",
+    "offers.offer_from_smr_analysis.create",
+    "offers.offer_budget.update",
+}
 
 # SUB-ADV-01 (R39, Krum 07.11.2026): "Дава го само Owner или Accountant" — the advance is
 # granted to Owner and Accountant ONLY; Admin is taken out of its full set below (the one
@@ -342,6 +389,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # project's budget — company
                                                                       # scope, read only.
                                                                       "budget.read",
+                                                                      # OFF-02 (R67): the offer writes
+                                                                      *OFFER_WRITE_ACTIONS,
                                                                       # SUB-ADV-01 (R39): the advance and its deduction
                                                                       *SUBCONTRACTOR_ADVANCE_ACTIONS,
                                                                       *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS}},
