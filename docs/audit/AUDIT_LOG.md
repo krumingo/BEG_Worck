@@ -16,7 +16,7 @@
 | #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
-| #91 MEDIA-SEC-01 | `582eb9d` | **PASS** (code `fdd3ec7`; MEDIA91-M1 closed; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-13 |
+| #91 MEDIA-SEC-01 | `2de0f85` | **PASS** (code `900dc9c`; R88 Owner-only restore + review screen + paging; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
@@ -7017,3 +7017,47 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 
 - `pwa02_attendance_day_unique` / `pwa02_daily_report_sync_unique` are skipped with an ALARM (`ops_alarms`) if duplicates exist.
 - Run `scripts/pwa02_unique_index_dryrun.py` (read-only) per tenant before deploy.
+
+## 2026-11-14 — #91 MEDIA-SEC-01 `2de0f859` (code `900dc9c3`) — PASS (delta over `582eb9d3`)
+
+- **Head:** `2de0f859` = `900dc9c3` + `docs/evidence` only.
+- **Code delta over `582eb9d3`:**
+  - R88 restore (`POST /api/media/{id}/restore`) and the retired list (`GET /api/media-retired`);
+  - the "Файлове за преглед" screen;
+  - FG-693 paging (`/media-retire-requests` is now `{items, total, skip, limit, next_skip}`; the only caller is the new `mediaReview.js`).
+- **Merge check:** clean onto main `3863610`; role-union 0.
+
+### R88 restore (static)
+
+- **Gating:** Owner only (`RESTORE_ROLES`) → otherwise 403; Idempotency-Key → 428; reason → 422 / 400.
+- **One keyed transaction:**
+  - CAS on "still retired" + `ref_version` → otherwise 409 `MEDIA_CHANGED`;
+  - `ref_version` +1;
+  - the retire fields move into `retire_history` (append, nothing lost);
+  - AuditEvent `media.file.restored`.
+- **Retired list:** Owner / Admin, paged, with a per-row `can_restore`.
+
+### PM-01 regen
+
+- Restore: owner → 428 (needs the key), every other role → 403, in off / shadow / enforce.
+- Regen = committed: 0 cells (48 rows for restore / retired list).
+
+### Frontend gating
+
+- `mediaReviewAccess.js`: REVIEW Owner / Admin, DECIDE Owner, RESTORE Owner. It mirrors `media_policy` (`RETIRED_LIST_ROLES`, `RESTORE_ROLES`).
+- `MediaReviewRoute` has its own guard; it is not AdminRoute, which also admits SiteManager / Accountant.
+
+### Gates on `900dc9c3` (real Mongo)
+
+| Gate | Result |
+|---|---|
+| MEDIA-SEC-01 | 60 |
+| PM-01 | 6; regen 0 cells |
+| SEC-01 | 30 |
+| SEC-02 | 31; regen 0 cells |
+| A2C / A1 | 0/247, 0/498 |
+| W0 | 16 = main's 16 |
+| PAY | 630 |
+| R0 | 814 |
+| **warehouse** | **44 / 1121** |
+| jest | 29 / 283 |
