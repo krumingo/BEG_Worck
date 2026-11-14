@@ -12,8 +12,8 @@
 | #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #73 LAB-01 | `a1859bf` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
+| #73 LAB-01 | `74d8b93` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
+| #75 LAB-02 | `b0a52ea` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `39a1e27` | **PASS** (code `c41da0b`; R88 restore + review screen; FG-706 keyset paging; FG-707 --approval-ref required for --apply) | 2026-11-14 |
@@ -7172,3 +7172,62 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | R0 | 814 |
 | W0 | 16 = main's 16 |
 | **warehouse** | **44 / 1121** |
+
+## 2026-11-14 — #73 LAB-01 `74d8b939` / #75 LAB-02 `b0a52ea2` — PASS (delta: FLOW Guard pass 70, FG-718 / 719 / 720; still pending Krum FG-565 / FG-569)
+
+### Heads
+
+- **#73:** `74d8b939` = `eb768c0e` (code) + regenerated evidence; the delta is over `f785e371`.
+- **#75:** `b0a52ea2` contains the #73 merge `6c485da5`. It equals merge-tree except `docs/evidence` (regenerated).
+- Both: clean onto main `3863610`; role-union 0.
+
+### FG-718 — delete / cancel a final invoice releases the advance link
+
+- `delete_invoice` is now one transaction: read, Draft-only delete, release + AuditEvent.
+- `cancel_invoice` releases from the in-transaction `current`.
+- **No other path deletes or cancels an invoice** in `app/`.
+- A concurrent second link is refused by the CAS on `advance_used_by_invoice_id` (None or self).
+
+### FG-719 — a PUT that changes a link field re-validates the kept link
+
+- Covers direction / kind / project_id / counterparty_eik / counterparty_name.
+- The check runs before the transaction and again inside it against `current`. On failure: 409 `ADVANCE_LINK_INVALID`, nothing written.
+- `advance_proforma_ids: []` releases the link.
+
+### FG-720 — AuditEvents
+
+- One canonical W0-04 AuditEvent per real link / unlink (`modified_count`), in the same transaction.
+- An unchanged PUT writes none.
+
+### LAB73-N2 (non-blocking; new)
+
+- **The link from the proforma side.** Cancelling an issued, unpaid proforma that backs a final invoice returns **200**:
+  - the proforma becomes Cancelled but keeps `advance_used_by_invoice_id`;
+  - the final invoice keeps `advance_proforma_ids: [pf]`.
+- **No money effect today:** the final's invoiced / awaiting stay 1000 / 1000 before and after. An unpaid proforma's advance doesn't count, and a paid proforma can't be cancelled (its allocations block it).
+- **Probe:** `docs/audit/probes/lab01/test_probe_lab01_fg718_proforma_cancel.py`.
+- **Suggested fix:** refuse (409 `ADVANCE_PROFORMA_IN_USE`) or release the link + AuditEvent in the cancel transaction.
+
+### Regenerated files
+
+- **A1 inventory:** byte-equal to `scripts/w0_03e_a1_inventory.py` stdout (full redirect) on both heads.
+- **PM-01:** harness regen = committed, 0 cells, both.
+- **SEC-02:** harness regen = committed, 0 cells, both.
+- **Debt, already on main:** the A2C inventory doc is stale (main: 198 committed vs 243 generated modules); no test checks it.
+
+### Gates (real Mongo)
+
+| Gate | #73 | #75 |
+|---|---|---|
+| LAB suites | 250 | 351 + 1 env-only (passes 25 / 25 with `MONGO_URL`) |
+| AUTH | 122 | 122 |
+| A2C / A1 | 0/246, 0/496 | 0/247, 0/498 |
+| PM-01 | 6 | 6 |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31 | 31 |
+| PAY | 630 | 630 |
+| R0 | 814 | 814 |
+| W0 | 16 = main's 16 | 16 = main's 16 |
+| frontend jest | 257 | 266 |
+
+- **W0:** the one non-`legacy_routes` failure is the order-dependent `test_r1`; main fails it here too.
