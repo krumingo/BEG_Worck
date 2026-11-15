@@ -118,7 +118,7 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - run: ops/ci/start_mongo.sh
-      - run: ops/ci/run_gate.sh ${{ matrix.gate }} 2>&1 | tee "$CI_OUT/${{ matrix.gate }}.console.log"
+      - run: mkdir -p "$CI_OUT" && ops/ci/run_gate.sh ${{ matrix.gate }} 2>&1 | tee "$CI_OUT/${{ matrix.gate }}.console.log"
         shell: bash -eo pipefail {0}
         env:
           PYTEST_ADDOPTS: "-v --durations=20"
