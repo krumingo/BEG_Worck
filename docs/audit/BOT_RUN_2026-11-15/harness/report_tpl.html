@@ -1,0 +1,39 @@
+<title>Ботове под лупа</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: една колона; горе числата, после разделите по тежест (пари → данни → права → ниско). Цветове като таблото „BEG_Work на живо“. */
+:root{--bg:#f3f4f2;--panel:#fff;--ink:#1d2321;--muted:#5f6a66;--line:#dde1de;--accent:#e2700f;
+ --pay:#b3372e;--pay-bg:#f6e2e0;--data:#b7791f;--data-bg:#f7efdc;--sec:#6b3fa0;--sec-bg:#ece4f5;--low:#5f6a66;--low-bg:#e8ebe9;
+ --f-body:"Golos Text","Segoe UI",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141817;--panel:#1c2120;--ink:#e7ebe9;--muted:#9aa5a1;--line:#2c3331;--accent:#f08a2c;
+ --pay:#e57b72;--pay-bg:#3a201e;--data:#e0b056;--data-bg:#352b17;--sec:#b996e6;--sec-bg:#2c2238;--low:#9aa5a1;--low-bg:#262c2a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141817;--panel:#1c2120;--ink:#e7ebe9;--muted:#9aa5a1;--line:#2c3331;--accent:#f08a2c;
+ --pay:#e57b72;--pay-bg:#3a201e;--data:#e0b056;--data-bg:#352b17;--sec:#b996e6;--sec-bg:#2c2238;--low:#9aa5a1;--low-bg:#262c2a;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+ padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:1.6rem;margin:0}h3{font-size:1.02rem;margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}h4{font-size:.9rem;margin:12px 0 4px}
+.meta{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.lead{max-width:70ch;margin:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.num{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}.cap{color:var(--muted);font-size:.82rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.why{color:var(--muted);font-size:.88rem;margin:0;max-width:75ch}
+.chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:.76rem;font-weight:600}
+.chip.pay{background:var(--pay-bg);color:var(--pay)}.chip.data{background:var(--data-bg);color:var(--data)}.chip.sec{background:var(--sec-bg);color:var(--sec)}.chip.low{background:var(--low-bg);color:var(--low)}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+th{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td{font-family:var(--f-mono);font-size:.78rem}
+.none{color:var(--muted);font-style:italic;margin:0}
+</style>
+<div class="wrap">
+ <header><h1>Ботове под лупа</h1><div class="meta">демо фирма · main de720f94 · {{GEN}}</div></header>
+ <p class="lead">По един бот за всяка длъжност ползва програмата през браузъра (компютър или телефон). Процесни ботове минават целите процеси през сървъра. Записва се всяка заявка от екрана, всяка заявка в сървъра и всяка промяна в базата. Данните са синтетични. Всяка находка тук е кандидат, докато не бъде проверена в кода.</p>
+ <div class="tiles">{{TILES}}</div>
+ {{PARTS}}
+</div>
