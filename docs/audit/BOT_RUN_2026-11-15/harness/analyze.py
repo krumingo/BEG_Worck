@@ -163,7 +163,7 @@ proc_bad = [p for p in PROC if p.get("ok") is False]
 proc_unknown = [p for p in PROC if p.get("ok") is None]
 
 S = {
-  "generated": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()), "minutes": round((time.time() - START) / 60),
+  "generated": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()), "minutes": round(((json.load(open(f"{RUN}/bots_done.json"))["done"] if os.path.exists(f"{RUN}/bots_done.json") else time.time()) - START) / 60),
   "fe_requests": len(FE), "be_requests": len(BE), "db_changes": len(DB), "actions": len(ACT),
   "fe_not_reaching_backend": len(unmatched), "route_missing": len(route_missing), "422": len(shape), "5xx_fe": len(crash), "5xx_be": len(crash_be),
   "403": len(forbidden), "401": len(unauth), "ok_without_db_write": len(ok_no_write), "write_without_audit": len(mut_no_audit),
@@ -191,8 +191,7 @@ def _grouped(rows):
                  [[k[0], k[1], v[0].get("role"), f'{v[0].get("method","")} {norm(v[0].get("path",""))}', len(v), v[0].get("expected"), v[0].get("actual"), v[0].get("note")] for k, v in g.items()])
 parts = []
 parts.append(sec("Процеси под лупа: нарушени правила", "Процесните ботове минават цял процес през сървъра и след всяка стъпка сравняват резултата с правилото.",
-  table(["Процес", "Стъпка", "Роля", "Заявка", "Статус", "Очаквано", "Получено", "Правило"],
-        _grouped(proc_bad)), "pay", f"{len(proc_bad)} пъти, {len({(p['flow'], p['step']) for p in proc_bad})} правила"))
+  _grouped(proc_bad), "pay", f"{len(proc_bad)} пъти, {len({(p['flow'], p['step']) for p in proc_bad})} правила"))
 parts.append(sec("Процеси: какво не можах да проверя", "Стъпки без отговор „да/не“: или не са нарушение по дефиниция, или средата не позволява проверка.",
   table(["Процес", "Стъпка", "Брой", "Бележка"], [[k[0], k[1], v, k[2]] for k, v in collections.Counter((p["flow"], p["step"], str(p.get("note"))) for p in proc_unknown).most_common()]), "low", len(proc_unknown)))
 VER = [

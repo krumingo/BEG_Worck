@@ -1,7 +1,7 @@
 {
  "summary": {
-  "generated": "2026-11-15 13:32:30 UTC",
-  "minutes": 182,
+  "generated": "2026-11-15 17:37:40 UTC",
+  "minutes": 180,
   "fe_requests": 54642,
   "be_requests": 68111,
   "db_changes": 20074,
@@ -26,81 +26,47 @@
  "rules": {
   "Q1 фактурни редове към обект по статус на фактурата (CLAUDE §7)": [
    {
-    "_id": "Draft",
-    "lines": 1,
-    "sum_ex_vat": 85.0
-   },
-   {
-    "_id": "Cancelled",
-    "lines": 169,
-    "sum_ex_vat": 18590.0
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ],
   "Q2 траншове по договори с бригади (FLOW-006)": [
    {
-    "_id": "paid",
-    "n": 175,
-    "sum": 70000
-   },
-   {
-    "_id": "pending",
-    "n": 175,
-    "sum": 105000
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ],
   "Q3 одобрени дневни отчети: формат × статус на плащане (FLOW-028)": [
    {
-    "_id": {
-     "format": "стар (employee_id)",
-     "payroll": "none"
-    },
-    "n": 175
-   },
-   {
-    "_id": {
-     "format": "нов (worker_id)",
-     "payroll": "paid"
-    },
-    "n": 525
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ],
-  "Q4 ръчни редове за труд (Р96)": [],
+  "Q4 ръчни редове за труд (Р96)": [
+   {
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
+   }
+  ],
   "Двойни дневни отчети за човек и ден": [
    {
-    "people_days_with_more_than_one_report": 175
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ],
-  "Повтарящ се номер на фактура": [],
-  "Повтарящ се код на обект": [],
+  "Повтарящ се номер на фактура": [
+   {
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
+   }
+  ],
+  "Повтарящ се код на обект": [
+   {
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
+   }
+  ],
   "Аванси по човек и ден, повече от един": [
    {
-    "same_person_day_amount_more_than_once": 1
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ],
   "Плащания в регистъра по вид": [
    {
-    "_id": {
-     "dir": "Outflow",
-     "status": "reversed"
-    },
-    "n": 169,
-    "sum": 8450.0
-   },
-   {
-    "_id": {
-     "dir": "Outflow",
-     "status": "?"
-    },
-    "n": 1400,
-    "sum": 87850.0
-   },
-   {
-    "_id": {
-     "dir": "Inflow",
-     "status": "reversal"
-    },
-    "n": 169,
-    "sum": 8450.0
+    "error": "client is configured to connect to a replica set named 'rs0' but this node belongs to a set named 'None', Timeout: 5.0s, Topology Description: <TopologyDescription id: 6af9edb731d58c67cd15aba0, topolo"
    }
   ]
  }
