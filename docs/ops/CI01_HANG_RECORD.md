@@ -24,3 +24,26 @@
 ## Последици
 - **#83 няма PASS.** Минали са static, SEC, PAY. tasks и warehouse не са завършили. W0 не е зелен: 10 неуспеха на #83 срещу 15–16 на main; твърдението на програмиста, че всички са сред известните на main, не е проверено независимо.
 - CI-01 продължава като **диагностичен** workflow: отделни jobs, лимит на времето за всеки, JUnit и логове като артефакти; warehouse, tasks и w0 временно не спират общия резултат.
+
+## Резултати от диагностиката (15.11.2026, main `de720f94`)
+Команда: `python -m pytest --noconftest -v -p no:cacheprovider -x --durations=15 tests/test_warehouse_canonical_*.py` (същата среда като `run_gate.sh warehouse`).
+
+| | Диагностика 1 (Mongo с `--rm`) | Диагностика 2 (Mongo без `--rm`) |
+|---|---|---|
+| Минали преди първата грешка | 730 | 673 |
+| Първи неуспешен тест | `test_warehouse_canonical_c26j_r34_r35_prices.py::test_r35_price_history_rights[LEGACY_TECHNICIAN-True-True-enforce]` (121 s, после ERROR на teardown) | `test_warehouse_canonical_c26i_accept_target_no_oracle.py::test_fg70_a_dispatch_to_p2_cannot_be_accepted_into_p1[site_manager-SiteManager-enforce]` (ERROR на setup) |
+| Грешка | `ServerSelectionTimeoutError` — MongoDB я няма | `MONGO_URL does not point at a replica-set` — MongoDB не приема връзки |
+| MongoDB | процесът е излязъл в 08:54:40 (логът е загубен заради `--rm`) | работи, exit=0, OOMKilled=false |
+| Памет | машина 1.0 → 2.4 GB за 4 мин; Python 160 MB постоянно | контейнер 234 MB → 1.77 GB; лимит 15.7 GB |
+| Лог на MongoDB | — | `TooManyFilesOpen: error in creating eventfd: Too many open files, errno 24` в 09:02:26; отворени файлове 19 982 при лимит 20 000 |
+
+Допълнително: файлът `test_warehouse_canonical_c26j_r34_r35_prices.py`, пуснат сам, дава 58 passed за 25 s. Първият неуспешен тест е различен в двете изпълнения, значи не е дефект на един тест.
+
+**Установено:** по време на складовия пакет MongoDB отваря около 20 000 файла и стига лимита на средата на оркестратора (твърд лимит 20 000, не може да се вдигне: `--ulimit nofile` се отказва). След това или спира да приема връзки, или процесът излиза. Тестовете след този момент чакат по 30–120 s всеки, което изглежда като засичане.
+
+**НЕ е установено:**
+- защо MongoDB държи толкова много файлове (много бази/колекции от тестовете, които не се затварят навреме, или нещо в кода) — ако е от тестовете, това е дълг в тестовата подготовка;
+- дали пакетът минава изцяло при по-висок лимит — това ще покаже първото изпълнение в GitHub Actions (там лимитът е по-висок); `start_mongo.sh` вече иска 200 000 и записва броя отворени файлове като артефакт;
+- дали същото обяснява и tasks на #83 (вероятно, защото ползва същата складова подготовка, но не е проверено).
+
+Памет на Python, deadlock в приложението и OOM са изключени за тези две изпълнения (Python 160 MB, Mongo OOMKilled=false).
