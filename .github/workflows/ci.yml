@@ -126,6 +126,7 @@ jobs:
         if: always()
         run: |
           docker logs ci-mongo > "$CI_OUT/mongo.log" 2>&1 || true
+          docker exec ci-mongo sh -c 'echo "nofile limit: $(ulimit -n); open: $(ls /proc/1/fd | wc -l)"' > "$CI_OUT/mongo_fds.txt" 2>&1 || true
           free -m > "$CI_OUT/memory.txt" || true
       - if: always()
         uses: actions/upload-artifact@v4
