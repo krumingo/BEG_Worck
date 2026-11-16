@@ -2359,19 +2359,30 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["total_hours"] += float(entry.get("hours_worked", 0))
                 wd["report_count"] += 1
 
-    # C) From work_sessions (approved labor)
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "worker_id": 1, "worker_name": 1, "started_at": 1,
-         "duration_hours": 1, "labor_cost": 1},
-    ).to_list(5000)
+    # C) Earned — LAB-R96 step 3b (Р100): the approved labor lines of this site (both stored
+    # formats, the pay run's formula) + the old clock sessions as before (Р101), each visible;
+    # the approval work_sessions are the same approved lines and are not added on top.
+    from app.services.labor_cost_reader import labor_lines, clock_sessions
+    for ln in await labor_lines(org_id, project_id=project_id):
+        wid = ln["worker_id"]
+        if not wid:
+            continue
+        wd = worker_data[wid]
+        if ln["state"] == "reported":
+            wd["earned_forecast"] = wd.get("earned_forecast", 0) + ln["cost"]
+            continue
+        wd["total_earned"] += ln["cost"]
+        wd["earned_approved"] = wd.get("earned_approved", 0) + ln["cost"]
+        wd["approved_hours"] = wd.get("approved_hours", 0) + ln["hours"]
+    sessions = await clock_sessions(org_id, project_id=project_id)
     for s in sessions:
         wid = s.get("worker_id", "")
         if not wid:
             continue
         wd = worker_data[wid]
-        wd["total_earned"] += float(s.get("labor_cost", 0))
-        d = (s.get("started_at") or "")[:10]
+        wd["total_earned"] += s["cost"]
+        wd["earned_clock_legacy"] = wd.get("earned_clock_legacy", 0) + s["cost"]
+        d = s.get("date") or ""
         if d:
             wd["days"].add(d)
             if d < wd["first_date"]:
@@ -2435,6 +2446,11 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
             "report_count": wd["report_count"],
             "total_hours": round(wd["total_hours"], 1),
             "total_earned": round(wd["total_earned"], 2),
+            # LAB-R96 step 3b: the parts of total_earned + the reported (not counted) forecast
+            "earned_approved": round(wd.get("earned_approved", 0), 2),
+            "approved_hours": round(wd.get("approved_hours", 0), 2),
+            "earned_clock_legacy": round(wd.get("earned_clock_legacy", 0), 2),
+            "earned_forecast": round(wd.get("earned_forecast", 0), 2),
         })
 
     result.sort(key=lambda x: x["days_count"], reverse=True)
@@ -2561,15 +2577,30 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     for c in children:
         per_child[c["id"]]["reports"] = await count_report_hours(group[c["id"]])
 
-    # ── Work Sessions (часове + labor cost) ──
+    # ── Labor „Труд (одобрен)" (часове + labor cost) — LAB-R96 step 3b (Р100): the APPROVED
+    # labor lines (labor_cost_reader, the pay run's formula) + the old clock sessions as before
+    # (Р101, visible in clock_legacy); the approval work_sessions are not added on top.
     async def count_work(pids):
-        sessions = await tenant.work_sessions.find(
-            {"org_id": org_id, "site_id": {"$in": pids}},
-            {"_id": 0, "duration_hours": 1, "labor_cost": 1},
-        ).to_list(5000)
-        hours = round(sum(s.get("duration_hours", 0) for s in sessions), 1)
-        cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
-        return {"hours": hours, "labor_cost": cost, "sessions": len(sessions)}
+        from app.services.labor_cost_reader import counted, project_labor
+        hours = cost = forecast = 0.0
+        clock = {"sessions": 0, "hours": 0.0, "cost": 0.0}
+        approved = {"hours": 0.0, "cost": 0.0}
+        for pid in pids:
+            t = (await project_labor(org_id, pid))["totals"]
+            c = counted(t)
+            hours += c["hours"]
+            cost += c["cost"]
+            forecast += t["forecast_cost"]
+            approved["hours"] += t["hours"]
+            approved["cost"] += t["cost"]
+            for k in clock:
+                clock[k] += t["clock"][k]
+        return {"hours": round(hours, 1), "labor_cost": round(cost, 2),
+                "sessions": clock["sessions"],
+                "approved_lines": {k: round(v, 2) for k, v in approved.items()},
+                "clock_legacy": {"label": "часовник (стар)", "sessions": clock["sessions"],
+                                 "hours": round(clock["hours"], 2), "cost": round(clock["cost"], 2)},
+                "forecast_cost": round(forecast, 2)}
 
     own_work = await count_work([project_id])
     child_work = await count_work(subtree_ids) if subtree_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}

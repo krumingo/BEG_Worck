@@ -1,6 +1,9 @@
 """
 Service - Expected vs Actual comparison layer.
-Compares planned (budgets/analyses) vs real (work_sessions) by activity, group, location.
+Compares planned (budgets/analyses) vs real labor by activity, group, location.
+Real labor — LAB-R96 step 3b (Р100): the approved labor lines (labor_cost_reader, the pay
+run's formula) + the old clock sessions as before (Р101, shown as their own component); the
+approval work_sessions are the same approved lines and are not added on top.
 """
 from app.db import db
 from app.routes.activity_budgets import compute_avg_daily_wage, DEFAULT_DAILY_WAGE
@@ -52,22 +55,37 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             r = calculate_budget_formula_sync(lb, coeff, hourly_rate * 8)
             planned_by_type[key]["hours"] += r["planned_man_hours"]
 
-    # ── Actual data (work_sessions) ─────────────────────────────
-    ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
-    if date_from:
-        ws_query.setdefault("started_at", {})["$gte"] = f"{date_from}T00:00:00"
-    if date_to:
-        ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
-
-    sessions = await tenant.work_sessions.find(ws_query, {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
-
+    # ── Actual data (LAB-R96 step 3b: the one labor read) ───────
+    from app.services.labor_cost_reader import (clock_sessions, components, labor_lines,
+                                                summarize)
+    from app.services.labor_report_service import norm_activity
+    lines = await labor_lines(org_id, project_id=project_id, date_from=date_from,
+                              date_to=date_to, include_reported=True)
+    clock = await clock_sessions(
+        org_id, project_id=project_id,
+        started_from=f"{date_from}T00:00:00" if date_from else None,
+        started_before=f"{date_to}T23:59:59.999" if date_to else None)
+    labor_totals = summarize(lines, clock)
+    # one name per activity: the budget's type when it names it, else the reported name
+    name_of = {norm_activity(t): t for t in planned_by_type}
     actual_by_type = {}
-    for s in sessions:
-        key = s.get("smr_type_id") or "Общо"
-        if key not in actual_by_type:
-            actual_by_type[key] = {"hours": 0, "cost": 0}
-        actual_by_type[key]["hours"] += s.get("duration_hours", 0)
-        actual_by_type[key]["cost"] += s.get("labor_cost", 0)
+
+    def _actual(activity):
+        name = name_of.setdefault(norm_activity(activity) or "общо", activity or "Общо")
+        return actual_by_type.setdefault(name, {"hours": 0, "cost": 0, "clock_hours": 0,
+                                                "clock_cost": 0})
+    for ln in lines:
+        if ln["state"] == "reported":
+            continue                                   # Р102: a forecast, not actual
+        a = _actual(ln["activity"])
+        a["hours"] += ln["hours"]
+        a["cost"] += ln["cost"]
+    for cs in clock:
+        a = _actual(cs["activity"])
+        a["hours"] += cs["hours"]
+        a["cost"] += cs["cost"]
+        a["clock_hours"] += cs["hours"]
+        a["clock_cost"] += cs["cost"]
 
     # ── A. By Activity ──────────────────────────────────────────
     all_types = set(list(planned_by_type.keys()) + list(actual_by_type.keys()))
@@ -85,6 +103,9 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
             "actual_cost": round(ac["cost"], 2),
             "variance_cost": round(ac["cost"] - pl["cost"], 2),
             "status": _status(ac["cost"], pl["cost"]) if pl["cost"] > 0 else _status(ac["hours"], pl["hours"]),
+            # LAB-R96 step 3b: the old clock part of actual_hours / actual_cost (Р101)
+            "clock_legacy_hours": round(ac.get("clock_hours", 0), 1),
+            "clock_legacy_cost": round(ac.get("clock_cost", 0), 2),
         })
 
     # ── B. By Group ─────────────────────────────────────────────
@@ -117,8 +138,8 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         total_planned = sum(a.get("planned_cost", 0) for a in activities) or 1
         if planned_c > 0:
             ratio = planned_c / total_planned
-            total_actual_h = sum(s.get("duration_hours", 0) for s in sessions)
-            total_actual_c = sum(s.get("labor_cost", 0) for s in sessions)
+            total_actual_h = sum(a["hours"] for a in actual_by_type.values())
+            total_actual_c = sum(a["cost"] for a in actual_by_type.values())
             actual_h = round(total_actual_h * ratio, 1)
             actual_c = round(total_actual_c * ratio, 2)
 
@@ -186,6 +207,7 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
         "over_count": over_count,
         "biggest_overrun_activity": biggest_act["name"] if biggest_act and biggest_act["variance_cost"] > 0 else None,
         "biggest_overrun_group": biggest_grp["name"] if biggest_grp and biggest_grp.get("variance_cost", 0) > 0 else None,
+        "labor_components": components(labor_totals),   # LAB-R96 step 3b (finance view only)
     }
 
     return {"summary": summary, "activities": activities, "groups": groups, "locations": locations}

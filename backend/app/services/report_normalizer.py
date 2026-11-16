@@ -88,6 +88,7 @@ async def fetch_normalized_report_lines(
             "entry_mode": d.get("entry_mode", ""),
             "created_at": d.get("created_at", ""),
             "slip_number": d.get("slip_number"),
+            "smr_id": d.get("smr_id"),            # LAB-R96 step 3b: package link (labor_smr)
             "regular_hours": float(reg) if reg is not None else None,
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
@@ -153,6 +154,7 @@ async def fetch_normalized_report_lines(
                 "entry_mode": "",
                 "created_at": d.get("created_at", ""),
                 "slip_number": d.get("slip_number"),
+                "smr_id": entry.get("smr_id"),    # LAB-R96 step 3b: package link (labor_smr)
                 "regular_hours": None,
                 "overtime_hours": None,
                 "overtime_coefficient": None,

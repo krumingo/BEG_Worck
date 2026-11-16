@@ -26,8 +26,9 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
                                     with_entries: bool = False) -> dict:
     """
     Build unified reports from:
-    - employee_daily_reports (Draft/Submitted entries)
-    - work_sessions (Approved entries, source of truth for cost)
+    - the labor lines of the ONE reader (labor_cost_reader, LAB-R96 step 3b): reported
+      (forecast, "draft") and approved lines, costed with the pay run's formula
+    - the old clock sessions (Р101), counted as before and shown as their own component
     Returns: unified entries list + three projections.
     """
     tenant = TenantData.for_resolved_org(db, org_id)
@@ -35,111 +36,87 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
     overhead_hourly = round(overhead_rate / 8, 2) if overhead_rate > 0 else 0
 
     # ── Collect all report entries ──────────────────────────────
+    # LAB-R96 step 3b (Р100 "едно четене", Р102): the labor lines of the project through the
+    # ONE reader (both stored formats, the pay run's formula):
+    #   * reported (Submitted, not approved) → approval_status "draft" — the FORECAST (Р102),
+    #     shown in draft_* and never in the finance totals (as before);
+    #   * approved (approved_unpaid / batched / paid) → approval_status "approved";
+    #   * the OLD clock sessions (Р101, not written by an approval, unflagged) → "approved"
+    #     as before, flagged ``clock_legacy`` and shown as their own component.
+    # The approval work_sessions are the same approved lines — no longer read (no double
+    # count). A Draft line (not yet submitted) is not reported labor and is not shown.
+    from app.services.labor_cost_reader import CLOCK_LABEL, clock_sessions, labor_lines
     entries = []
-
-    # A) Draft/Submitted entries from employee_daily_reports
-    drafts = await tenant.employee_daily_reports.find(
-        {"org_id": org_id, "project_id": project_id,
-         "status": {"$in": ["Draft", "Submitted", "SUBMITTED"]}},
-        {"_id": 0},
-    ).to_list(2000)
-
-    # Cache resolved rates per worker
     rate_cache = {}
 
-    for d in drafts:
-        hours = d.get("hours") or d.get("hours_worked", 0)
-        wid = d.get("worker_id", "")
-
-        # Resolve rate using shared helper (cached)
+    async def _rate(wid):
         if wid not in rate_cache:
             rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
-        resolved = rate_cache[wid]
-        rate = resolved["rate"]
+        return rate_cache[wid]
 
-        clean = round(hours * rate, 2)
+    for ln in await labor_lines(org_id, project_id=project_id):
+        wid = ln["worker_id"]
+        hours = ln["hours"]
+        resolved = await _rate(wid) if wid else {"missing_rate": True, "source": "none"}
+        clean = ln["cost"]
         oh_amount = round(hours * overhead_hourly, 2)
-
+        approved = ln["state"] != "reported"
         entries.append({
-            "id": d.get("id"),
+            "id": ln["line_id"],
             "worker_id": wid,
-            "worker_name": d.get("worker_name", ""),
+            "worker_name": ln["worker_name"],
             "project_id": project_id,
-            "report_date": d.get("date", ""),
-            "smr_type": d.get("smr_type") or d.get("activity_type", ""),
+            "report_date": ln["date"],
+            "smr_type": ln["activity"],
             "hours": round(hours, 2),
-            "hourly_rate": rate,
-            "approval_status": "draft",
+            "hourly_rate": round(clean / hours, 2) if hours > 0 else 0,
+            "approval_status": "approved" if approved else "draft",
+            "labor_state": ln["state"],                      # Р102
             "amount_clean_labor": clean,
             "amount_overhead": oh_amount,
             "amount_labor_with_overhead": round(clean + oh_amount, 2),
-            "slip_number": d.get("slip_number"),
-            "created_by": d.get("submitted_by") or d.get("created_by"),
-            "approved_by": None,
-            "payroll_ready": False,
-            "source": "employee_daily_reports",
-            "missing_rate": resolved["missing_rate"],
-            "rate_source": resolved["source"],
+            "slip_number": ln.get("slip_number"),
+            "created_by": ln.get("submitted_by"),
+            "approved_by": ln.get("approved_by") if approved else None,
+            "payroll_ready": ln["state"] in ("approved_unpaid", "batched", "paid"),
+            "source": "labor_cost_reader",
+            "clock_legacy": False,
+            "missing_rate": bool(resolved["missing_rate"]) or (hours > 0 and clean == 0),
+            "rate_source": ln.get("cost_basis") or resolved["source"],
         })
 
-    # B) Approved entries from work_sessions
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
-         "is_flagged": {"$ne": True}},
-        {"_id": 0},
-    ).to_list(5000)
-
-    for s in sessions:
-        hours = s.get("duration_hours", 0)
-        rate = s.get("hourly_rate_at_date", 0)
-        wid = s.get("worker_id", "")
-
-        # If stored rate is 0, resolve from profile
-        missing_rate = False
-        rate_source = "work_session"
+    for s in await clock_sessions(org_id, project_id=project_id):
+        if s["is_flagged"]:
+            continue
+        hours, wid = s["hours"], s["worker_id"]
+        rate = float(s["hourly_rate_at_date"] or 0)
+        missing_rate, rate_source = False, "work_session"
         if rate == 0 and wid:
-            if wid not in rate_cache:
-                rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
-            resolved = rate_cache[wid]
-            rate = resolved["rate"]
-            missing_rate = resolved["missing_rate"]
-            rate_source = resolved["source"]
-
-        clean = round(hours * rate, 2) if rate > 0 else s.get("labor_cost", 0)
+            resolved = await _rate(wid)
+            rate, missing_rate, rate_source = resolved["rate"], resolved["missing_rate"], resolved["source"]
+        clean = round(hours * rate, 2) if rate > 0 else s["cost"]
         oh_amount = round(hours * overhead_hourly, 2)
-
-        # Get report info
-        rid = s.get("approved_report_id")
-        slip = None
-        approved_by = None
-        payroll_ready = False
-        if rid:
-            rep = await tenant.employee_daily_reports.find_one(
-                {"id": rid}, {"_id": 0, "slip_number": 1, "approved_by": 1, "payroll_ready": 1}
-            )
-            if rep:
-                slip = rep.get("slip_number")
-                approved_by = rep.get("approved_by")
-                payroll_ready = rep.get("payroll_ready", False)
-
         entries.append({
-            "id": s.get("id"),
+            "id": s["session_id"],
             "worker_id": wid,
-            "worker_name": s.get("worker_name", ""),
+            "worker_name": s["worker_name"],
             "project_id": project_id,
-            "report_date": s.get("started_at", "")[:10],
-            "smr_type": s.get("smr_type_id", ""),
+            "report_date": s["date"],
+            "smr_type": s["activity"],
             "hours": round(hours, 2),
             "hourly_rate": rate,
             "approval_status": "approved",
+            "labor_state": "clock_legacy",
             "amount_clean_labor": round(clean, 2),
             "amount_overhead": oh_amount,
             "amount_labor_with_overhead": round(clean + oh_amount, 2),
-            "slip_number": slip,
+            "slip_number": None,
             "created_by": None,
-            "approved_by": approved_by,
-            "payroll_ready": payroll_ready,
+            "approved_by": None,
+            "payroll_ready": False,
             "source": "work_sessions",
+            "clock_legacy": True,
+            "clock_label": CLOCK_LABEL,
             "missing_rate": missing_rate,
             "rate_source": rate_source,
         })
@@ -166,6 +143,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         "draft_clean": 0, "approved_clean": 0,
         "draft_oh": 0, "approved_oh": 0,
         "has_missing_rate": False,
+        "clock_hours": 0, "clock_clean": 0,
     })
     for e in entries:
         key = (e["smr_type"] or "").lower().strip()
@@ -179,6 +157,9 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             by_smr[key]["approved_hours"] += e["hours"]
             by_smr[key]["approved_clean"] += e["amount_clean_labor"]
             by_smr[key]["approved_oh"] += e["amount_overhead"]
+            if e.get("clock_legacy"):
+                by_smr[key]["clock_hours"] += e["hours"]
+                by_smr[key]["clock_clean"] += e["amount_clean_labor"]
         if e.get("missing_rate"):
             by_smr[key]["has_missing_rate"] = True
 
@@ -230,6 +211,9 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             "is_extra": False,
             "source": "budget",
             "has_missing_rate": smr.get("has_missing_rate", False),
+            # LAB-R96 step 3b: the old clock part of approved_hours / clean_labor_cost (Р101)
+            "clock_legacy_hours": round(smr.get("clock_hours", 0), 1),
+            "clock_legacy_cost": round(smr.get("clock_clean", 0), 2),
         })
 
     for ex in extras:
@@ -260,13 +244,15 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             "risk_status": "yellow" if (dh + ah) > 0 else "green",
             "is_extra": True, "source": "missing_smr",
             "has_missing_rate": smr.get("has_missing_rate", False),
+            "clock_legacy_hours": round(smr.get("clock_hours", 0), 1),
+            "clock_legacy_cost": round(smr.get("clock_clean", 0), 2),
         })
 
     # ── PROJECTION 2: Personnel ─────────────────────────────────
     by_worker = defaultdict(lambda: {
         "draft_count": 0, "approved_count": 0,
         "clean_amount": 0, "overhead_amount": 0, "total_hours": 0,
-        "missing_rate": False, "rate_source": "",
+        "missing_rate": False, "rate_source": "", "clock_amount": 0,
     })
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_workers = set()
@@ -280,6 +266,8 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         else:
             by_worker[wid]["approved_count"] += 1
         by_worker[wid]["clean_amount"] += e["amount_clean_labor"]
+        if e.get("clock_legacy"):
+            by_worker[wid]["clock_amount"] += e["amount_clean_labor"]
         by_worker[wid]["overhead_amount"] += e["amount_overhead"]
         by_worker[wid]["total_hours"] += e["hours"]
         by_worker[wid]["name"] = e["worker_name"]
@@ -304,6 +292,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             "total_amount": round(w["clean_amount"] + w["overhead_amount"], 2),
             "missing_rate": w["missing_rate"],
             "rate_source": w["rate_source"],
+            "clock_legacy_amount": round(w["clock_amount"], 2),   # LAB-R96 step 3b (Р101)
         })
     personnel.sort(key=lambda x: x["total_hours"], reverse=True)
 
@@ -347,6 +336,20 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         "balance": balance,
         "margin_pct": margin,
         "missing_rate_count": sum(1 for e in entries if e.get("missing_rate")),
+        # LAB-R96 step 3b: the parts of total_clean_labor (approved lines + old clock, Р101)
+        "labor_components": {
+            "approved_lines": round(sum(e["amount_clean_labor"] for e in entries
+                                        if e["approval_status"] == "approved"
+                                        and not e.get("clock_legacy")), 2),
+            "clock_legacy": {
+                "label": "часовник (стар)",
+                "sessions": sum(1 for e in entries if e.get("clock_legacy")),
+                "hours": round(sum(e["hours"] for e in entries if e.get("clock_legacy")), 2),
+                "cost": round(sum(e["amount_clean_labor"] for e in entries
+                                  if e.get("clock_legacy")), 2)},
+            "forecast_cost": draft_clean,          # reported, not approved — not in the totals
+            "source": "labor_cost_reader",
+        },
     }
 
     out = {

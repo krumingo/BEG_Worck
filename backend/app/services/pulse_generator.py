@@ -15,24 +15,40 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     ds = f"{date}T00:00:00"
     de = f"{date}T23:59:59"
 
-    # a. Workers + hours from work_sessions
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": site_id, "ended_at": {"$ne": None},
-         "started_at": {"$gte": ds, "$lte": de}},
-        {"_id": 0},
-    ).to_list(1000)
+    # a. Workers + hours of the day — LAB-R96 step 3b (Р100): the APPROVED labor lines of the
+    # day (labor_cost_reader, the pay run's formula, normal/overtime over the worker's whole
+    # day) + the old clock sessions as before (Р101, their own component). The approval
+    # work_sessions are the same approved lines and are not added on top. A reported line
+    # (not approved) is a forecast (Р102): shown in forecast_labor_cost, not in the day.
+    from app.services.labor_cost_reader import (clock_sessions, components, counted,
+                                                labor_lines, project_labor, summarize)
+    day_lines = await labor_lines(org_id, project_id=site_id, date_from=date, date_to=date)
+    day_clock = await clock_sessions(org_id, project_id=site_id, started_from=ds,
+                                     started_before=de + ".999999")
+    day_totals = summarize(day_lines, day_clock)
+    sessions = [{"worker_id": ln["worker_id"], "worker_name": ln["worker_name"],
+                 "duration_hours": ln["hours"], "labor_cost": ln["cost"],
+                 "overtime_hours": ln["overtime_hours"], "smr_type_id": ln["activity"]}
+                for ln in day_lines if ln["state"] != "reported"]
+    sessions += [{"worker_id": cs["worker_id"], "worker_name": cs["worker_name"],
+                  "duration_hours": cs["hours"], "labor_cost": cs["cost"],
+                  "overtime_hours": cs["hours"] if cs["is_overtime"] else 0,
+                  "smr_type_id": cs["activity"], "clock_legacy": True} for cs in day_clock]
 
-    by_worker = defaultdict(lambda: {"hours": 0, "sessions": 0, "smr_types": set(), "ot": 0, "cost": 0})
+    by_worker = defaultdict(lambda: {"hours": 0, "sessions": 0, "smr_types": set(), "ot": 0,
+                                     "cost": 0, "clock_cost": 0})
     for s in sessions:
         wid = s["worker_id"]
         by_worker[wid]["hours"] += s.get("duration_hours", 0)
         by_worker[wid]["sessions"] += 1
         by_worker[wid]["cost"] += s.get("labor_cost", 0)
-        if s.get("is_overtime"):
-            by_worker[wid]["ot"] += s.get("duration_hours", 0)
+        by_worker[wid]["ot"] += s.get("overtime_hours", 0)
+        if s.get("clock_legacy"):
+            by_worker[wid]["clock_cost"] += s.get("labor_cost", 0)
         if s.get("smr_type_id"):
             by_worker[wid]["smr_types"].add(s["smr_type_id"])
-        by_worker[wid]["name"] = s.get("worker_name", "")
+        if s.get("worker_name") or not by_worker[wid].get("name"):
+            by_worker[wid]["name"] = s.get("worker_name", "")
 
     workers = []
     for wid, d in by_worker.items():
@@ -41,6 +57,7 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
             "hours": round(d["hours"], 2), "sessions_count": d["sessions"],
             "smr_types": list(d["smr_types"]), "overtime_hours": round(d["ot"], 2),
             "labor_cost": round(d["cost"], 2),
+            "clock_legacy_cost": round(d["clock_cost"], 2),   # LAB-R96 step 3b (Р101)
         })
 
     total_hours = round(sum(w["hours"] for w in workers), 2)
@@ -78,12 +95,8 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         {"org_id": org_id, "project_id": site_id}, {"_id": 0, "labor_budget": 1}
     ).to_list(100)
     total_budget = sum(b.get("labor_budget", 0) for b in budgets)
-    all_sessions_cost = 0
-    all_sess = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": site_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1},
-    ).to_list(5000)
-    all_sessions_cost = sum(s.get("labor_cost", 0) for s in all_sess)
+    # LAB-R96 step 3b: spent = the approved lines + the old clock sessions (the burn figure)
+    all_sessions_cost = counted((await project_labor(org_id, site_id))["totals"])["cost"]
     burn_pct = round(all_sessions_cost / total_budget * 100, 1) if total_budget > 0 else 0
     budget_status = "on_track" if burn_pct <= 80 else ("warning" if burn_pct <= 100 else "over_budget")
     budget_snapshot = {
@@ -146,6 +159,8 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         "total_workers": len(workers),
         "total_hours": total_hours,
         "total_labor_cost": total_labor,
+        "labor_components": components(day_totals),     # LAB-R96 step 3b (finance view only)
+        "forecast_labor_cost": day_totals["forecast_cost"],   # Р102: reported, not counted
         "overtime_hours": overtime_hours,
         "smr_summary": smr_summary,
         "materials_used": materials,

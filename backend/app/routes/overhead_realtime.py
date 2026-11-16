@@ -174,16 +174,26 @@ async def sync_from_sessions(
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "ended_at": {"$ne": None},
-         "started_at": {"$gte": f"{target_date}T00:00:00", "$lte": f"{target_date}T23:59:59"}},
-        {"_id": 0, "worker_id": 1, "site_id": 1, "duration_hours": 1},
-    ).to_list(1000)
+    # LAB-R96 step 3b (Р100): the worker's day = his APPROVED labor lines of that date (both
+    # stored formats) + the old clock sessions as before (Р101). The approval work_sessions
+    # are the same approved lines and are not added on top (a 9 h approved day is 9 h, not 18).
+    from app.services.labor_cost_reader import clock_sessions, labor_lines
+    sessions = [{"worker_id": ln["worker_id"], "site_id": ln["project_id"],
+                 "duration_hours": ln["hours"]}
+                for ln in await labor_lines(org_id, date_from=target_date, date_to=target_date,
+                                            include_reported=False)]
+    sessions += [{"worker_id": cs["worker_id"], "site_id": cs["project_id"],
+                  "duration_hours": cs["hours"]}
+                 for cs in await clock_sessions(
+                     org_id, started_from=f"{target_date}T00:00:00",
+                     started_before=f"{target_date}T23:59:59.999")]
 
     from collections import defaultdict
     by_worker = defaultdict(lambda: {"hours": 0, "site_id": None})
     for s in sessions:
         wid = s["worker_id"]
+        if not wid:
+            continue
         by_worker[wid]["hours"] += s.get("duration_hours", 0)
         if s.get("site_id"):
             by_worker[wid]["site_id"] = s["site_id"]

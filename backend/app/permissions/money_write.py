@@ -498,7 +498,7 @@ def strip_pulse_for_non_finance(fn):
 # SEC-02-E (FLOW Guard FG-63): the workers behind a "spent" figure are counted from the SAME
 # source, filter and date window as that figure — a wider count (all history, or another
 # source) could say "2+" while the money shown comes from one person.
-LABOR_SOURCES = ("sessions", "centralized", "daily_logs")
+LABOR_SOURCES = ("sessions", "centralized", "daily_logs", "lines")
 
 
 def _window(field: str, date_from: Optional[str], date_to: Optional[str]) -> dict:
@@ -517,14 +517,18 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
     """Distinct PAID workers per SMR, and of the whole project, behind a "spent" figure.
 
     ``source`` — what the screen sums (same filters and the same pay as its handler):
-      sessions     ended work sessions of the site, pay = ``labor_cost`` (expected-actual,
-                   activities-overview, budget-health, the activity burn);
-      centralized  the entries of ``build_centralized_reports`` — Draft/Submitted daily
-                   reports + ended, unflagged work sessions, pay = ``amount_clean_labor``
+      sessions     LAB-R96 step 3b: the approved labor lines of the project (labor_cost_reader,
+                   pay = the line cost, the pay run's formula) + the OLD clock sessions (Р101,
+                   ``source_method`` != APPROVED_REPORT, pay = their ``labor_cost``) — what
+                   expected-actual, activities-overview, budget-health, the activity burn,
+                   the pulse budget band and the budget alarm count. Approval work_sessions
+                   are the same approved lines and are not counted twice;
+      lines        the approved labor lines only (activity-budget-summary, LAB-R96 step 3);
+      centralized  the entries of ``build_centralized_reports`` — reported (forecast) and
+                   approved labor lines + the old clock sessions, pay = ``amount_clean_labor``
                    (centralized-reports/activities); ``entries`` passes the handler's own;
-      daily_logs   daily work log entries, pay = hours x the work type's
-                   ``default_hourly_rate`` (25 when unset), SMR = its activity type
-                   (activity-budget-summary).
+      daily_logs   daily work log entries x the work type's ``default_hourly_rate`` (25 when
+                   unset) — no screen sums this since LAB-R96 step 3 (kept for SEC-02 FG-74).
     ``date_from`` / ``date_to`` — the same window as the money, when the screen has one.
 
     SEC-02-F (FG-74): a worker counts only with a NON-ZERO pay in that window (per SMR:
@@ -550,8 +554,24 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
             pay[worker] += amount
             pay_by_smr[_norm(smr)][worker] += amount
 
+    if source == "lines":
+        # fail closed (R31 "0 included"): every budget SMR of the screen is listed, so an SMR
+        # with no paid worker in the approved lines hides its row's spent, as the former
+        # daily-log source did for this screen
+        async for b in tenant.activity_budgets.find(
+                {"org_id": org, "project_id": project_id}, {"_id": 0, "type": 1, "subtype": 1}):
+            for name in (b.get("type"), b.get("subtype")):
+                if name:
+                    pay_by_smr.setdefault(_norm(name), defaultdict(float))
+    if source in ("sessions", "lines"):
+        from app.services.labor_cost_reader import labor_lines
+        for ln in await labor_lines(org, project_id=project_id, date_from=date_from,
+                                    date_to=date_to, include_reported=False):
+            add(ln["worker_id"], ln["activity"], ln["cost"])
     if source == "sessions":
+        from app.services.labor_cost_reader import APPROVED_SESSION
         q = {"org_id": org, "site_id": project_id, "ended_at": {"$ne": None},
+             "source_method": {"$ne": APPROVED_SESSION},       # Р101: the old clock records
              **_window("started_at", date_from, date_to)}
         async for s_ in tenant.work_sessions.find(
                 q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1,
@@ -588,8 +608,9 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
 
 
 async def single_paid_sites(user: dict, site_ids) -> set:
-    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (ended work
-    sessions — what the pulse snapshot status and the budget alarm compare to the budget)
+    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (approved labor
+    lines + old clock sessions, LAB-R96 step 3b — what the pulse snapshot status and the
+    budget alarm compare to the budget)
     comes from fewer than 2 paid workers. Their band (status / severity / alert) is not
     shown to a caller without the finance right: moving the budget and watching the band
     flip would bisect that one worker's pay."""
@@ -627,8 +648,18 @@ async def r31_budget_view(user: dict, project_id: str, body, *, source: str = "s
                           date_from: Optional[str] = None, date_to: Optional[str] = None,
                           entries: Optional[list] = None):
     """The Technical Manager's budget view of ``body`` (SEC-02-D), with the workers counted
-    from the money's own source and window (SEC-02-E, FG-63)."""
+    from the money's own source and window (SEC-02-E, FG-63).
+
+    LAB-R96 step 3b: the split of a labor figure into its parts (approved lines / old clock /
+    reported forecast / manual entries not counted — ``LABOR_SPLIT_KEYS``) is never in this
+    view: one part can come from ONE worker even when the figure has 2+."""
     from app.permissions.finance_read import r31_view
     by_smr, n = await project_labor_workers(user, project_id, source, date_from, date_to,
                                             entries=entries)
-    return r31_view(body, by_smr, n)
+    return r31_view(without_keys(body, LABOR_SPLIT_KEYS), by_smr, n)
+
+
+# LAB-R96 step 3b: the keys that split a labor figure into its parts (finance view only).
+LABOR_SPLIT_KEYS = frozenset({
+    "labor_components", "approved_lines", "clock_legacy", "clock_legacy_cost",
+    "clock_legacy_hours", "forecast_cost", "manual_entries_not_counted"})

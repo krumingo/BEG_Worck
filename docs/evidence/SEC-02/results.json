@@ -960,7 +960,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 159.0,
+ "seconds": 219.5,
  "rows": [
   {
    "mode": "off",
@@ -11103,7 +11103,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11130,7 +11136,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11187,7 +11199,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11249,7 +11267,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11270,7 +11293,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11315,7 +11343,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11373,7 +11406,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11400,7 +11439,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11457,7 +11502,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11519,7 +11570,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11540,7 +11596,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11585,7 +11646,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11644,6 +11710,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -11663,6 +11730,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -11709,6 +11777,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -17192,6 +17261,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -17209,6 +17281,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -17254,6 +17329,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -18275,11 +18353,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -18288,10 +18372,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18313,11 +18403,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -18326,10 +18422,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18398,11 +18500,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -18411,10 +18519,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18620,19 +18734,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18654,19 +18780,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18731,19 +18869,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18825,19 +18975,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18859,19 +19021,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -18933,19 +19107,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19382,10 +19568,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19406,10 +19598,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19459,10 +19657,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19519,10 +19723,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19543,10 +19753,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -19591,10 +19807,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -23201,6 +23423,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -23218,6 +23442,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -23263,6 +23489,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -23322,6 +23550,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -23339,6 +23569,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -23384,6 +23616,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -37309,7 +37543,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37336,7 +37576,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37393,7 +37639,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37455,7 +37707,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37476,7 +37733,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37521,7 +37783,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37579,7 +37846,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37606,7 +37879,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37663,7 +37942,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37725,7 +38010,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37746,7 +38036,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37791,7 +38086,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -37850,6 +38150,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -37869,6 +38170,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -37915,6 +38217,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -43398,6 +43701,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -43415,6 +43721,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -43460,6 +43769,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -44481,11 +44793,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -44494,10 +44812,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -44519,11 +44843,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -44532,10 +44862,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -44604,11 +44940,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -44617,10 +44959,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -44826,19 +45174,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -44860,19 +45220,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -44937,19 +45309,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45031,19 +45415,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45065,19 +45461,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45139,19 +45547,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45588,10 +46008,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45612,10 +46038,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45665,10 +46097,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45725,10 +46163,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45749,10 +46193,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -45797,10 +46247,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -49407,6 +49863,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -49424,6 +49882,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -49469,6 +49929,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -49528,6 +49990,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -49545,6 +50009,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -49590,6 +50056,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -54826,7 +55294,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -54847,7 +55320,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -54904,7 +55382,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -54925,7 +55408,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -55725,19 +56213,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -55759,19 +56259,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -55942,10 +56454,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -55966,10 +56484,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -56278,6 +56802,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -56295,6 +56821,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -66961,7 +67489,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -66988,7 +67522,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67045,7 +67585,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67107,7 +67653,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67128,7 +67679,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67173,7 +67729,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67231,7 +67792,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67258,7 +67825,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67315,7 +67888,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67377,7 +67956,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67398,7 +67982,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67443,7 +68032,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -67502,6 +68096,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -67521,6 +68116,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -67567,6 +68163,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -73050,6 +73647,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -73067,6 +73667,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -73112,6 +73715,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -74133,11 +74739,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -74146,10 +74758,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74171,11 +74789,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -74184,10 +74808,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74256,11 +74886,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -74269,10 +74905,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74478,19 +75120,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74512,19 +75166,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74589,19 +75255,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74683,19 +75361,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74717,19 +75407,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -74791,19 +75493,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75240,10 +75954,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75264,10 +75984,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75317,10 +76043,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75377,10 +76109,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75401,10 +76139,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -75449,10 +76193,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -79059,6 +79809,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -79076,6 +79828,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -79121,6 +79875,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -79180,6 +79936,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -79197,6 +79955,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -79242,6 +80002,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -93167,7 +93929,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93194,7 +93962,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93251,7 +94025,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93313,7 +94093,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93334,7 +94119,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93379,7 +94169,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93437,7 +94232,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93464,7 +94265,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93521,7 +94328,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93583,7 +94396,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93604,7 +94422,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93649,7 +94472,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -93708,6 +94536,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -93727,6 +94556,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -93773,6 +94603,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -99256,6 +100087,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -99273,6 +100107,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -99318,6 +100155,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -100339,11 +101179,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -100352,10 +101198,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100377,11 +101229,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -100390,10 +101248,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100462,11 +101326,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -100475,10 +101345,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100684,19 +101560,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100718,19 +101606,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100795,19 +101695,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100889,19 +101801,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100923,19 +101847,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -100997,19 +101933,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101446,10 +102394,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101470,10 +102424,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101523,10 +102483,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101583,10 +102549,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101607,10 +102579,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -101655,10 +102633,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -105265,6 +106249,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -105282,6 +106268,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -105327,6 +106315,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -105386,6 +106376,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -105403,6 +106395,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -105448,6 +106442,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -110684,7 +111680,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -110705,7 +111706,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -110762,7 +111768,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -110783,7 +111794,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -111583,19 +112599,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -111617,19 +112645,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -111800,10 +112840,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -111824,10 +112870,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -112136,6 +113188,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -112153,6 +113207,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -122829,7 +123885,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -122856,7 +123918,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -122913,7 +123981,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -122975,7 +124049,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -122996,7 +124075,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123041,7 +124125,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123099,7 +124188,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123126,7 +124221,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123183,7 +124284,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123245,7 +124352,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123266,7 +124378,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123311,7 +124428,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -123370,6 +124492,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -123389,6 +124512,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -123435,6 +124559,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -128948,6 +130073,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -128965,6 +130093,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -129010,6 +130141,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -130031,11 +131165,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -130044,10 +131184,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130069,11 +131215,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -130082,10 +131234,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130154,11 +131312,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -130167,10 +131331,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130376,19 +131546,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130410,19 +131592,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130487,19 +131681,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130581,19 +131787,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130615,19 +131833,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -130689,19 +131919,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131138,10 +132380,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131162,10 +132410,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131217,10 +132471,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131283,10 +132543,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131307,10 +132573,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -131359,10 +132631,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -135243,6 +136521,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -135260,6 +136540,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -135305,6 +136587,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -135364,6 +136648,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -135381,6 +136667,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -135426,6 +136714,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -149391,7 +150681,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149418,7 +150714,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149475,7 +150777,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149537,7 +150845,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149558,7 +150871,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149603,7 +150921,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149661,7 +150984,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149688,7 +151017,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149745,7 +151080,13 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "clock_legacy_cost",
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149807,7 +151148,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149828,7 +151174,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149873,7 +151224,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -149932,6 +151288,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -149951,6 +151308,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -149997,6 +151355,7 @@
    "actual_keys": [
     "burn_pct_total",
     "clean_labor_cost",
+    "clock_legacy_cost",
     "labor_cost_with_overhead"
    ],
    "worker_detail": [],
@@ -155510,6 +156869,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -155527,6 +156889,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -155572,6 +156937,9 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "earned_approved",
+    "earned_clock_legacy",
+    "earned_forecast",
     "total",
     "total_earned"
    ],
@@ -156593,11 +157961,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -156606,10 +157980,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -156631,11 +158011,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -156644,10 +158030,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -156716,11 +158108,17 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
@@ -156729,10 +158127,16 @@
    ],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -156938,19 +158342,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -156972,19 +158388,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157049,19 +158477,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157143,19 +158583,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157177,19 +158629,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157251,19 +158715,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157700,10 +159176,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157724,10 +159206,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157779,10 +159267,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157845,10 +159339,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157869,10 +159369,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -157921,10 +159427,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -161805,6 +163317,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -161822,6 +163336,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -161867,6 +163383,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -161926,6 +163444,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -161943,6 +163463,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -161988,6 +163510,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -167254,7 +168778,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -167275,7 +168804,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -167332,7 +168866,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -167353,7 +168892,12 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "overtime_cost",
+    "paid_cost",
     "total_actual_cost",
+    "unpaid_cost",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -168153,19 +169697,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -168187,19 +169743,31 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_budget",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -168370,10 +169938,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -168394,10 +169968,16 @@
    ],
    "foreign_ids": false,
    "actual_keys": [
+    "cost",
+    "forecast_cost",
+    "forecast_labor_cost",
+    "overtime_cost",
+    "paid_cost",
     "remaining",
     "total_labor_cost",
     "total_material_cost",
-    "total_spent"
+    "total_spent",
+    "unpaid_cost"
    ],
    "worker_detail": [
     "workers"
@@ -168724,6 +170304,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -168741,6 +170323,8 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "cost",
+    "forecast_cost",
     "total_cost",
     "totals"
    ],
@@ -169437,7 +171021,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -169446,13 +171030,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "scope_id": "13927404-af59-4998-a516-ab531487c10f",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -169468,7 +171052,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "24365e089141e89780f514f926cc6d3908219be666c2e2fc343567acaa70616b"
+     "integrity_hash": "da721e135d39f511c8d6d026bd950b5b2ed785af9671323e69f715f2b24fddeb"
     }
    ]
   },
@@ -169479,7 +171063,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -169488,7 +171072,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169513,7 +171097,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "7e99f2e28e013274c01cd7c5a5f9bb46eff09e6eda7809253a19fe0d0f8db115"
+     "integrity_hash": "1d973e6a2c03b398df89ef45eebb499ef7e19d86d187663e4966f38d66743752"
     }
    ]
   },
@@ -169524,7 +171108,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -169536,7 +171120,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -169545,7 +171129,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169571,7 +171155,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "7c3414fcfdffe7c0f6268bb76faeb975372ba360f3a2a32bbc14a34b9ab9f6fd"
+     "integrity_hash": "f61ea4211424c444551cd536843b3acfb09c94cdfb84d85c9b42b98037332200"
     }
    ]
   },
@@ -169582,7 +171166,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -169594,7 +171178,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -169606,7 +171190,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -169615,13 +171199,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "scope_id": "13927404-af59-4998-a516-ab531487c10f",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -169639,7 +171223,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "d9e5ce80a6aaa184ab129e2f11d77df6c081a7cdced4d4eda1bf1983232b3aa3"
+     "integrity_hash": "930edf3feecc05fbeca84fbf72d044b90fc01ad29be5bfff759b86b3e04886eb"
     }
    ]
   },
@@ -169650,7 +171234,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -169659,7 +171243,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169685,7 +171269,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "1c2ed2dc498d32dea782a53b9daf49a905182caedd6b3e1d756ccfe7366d31e2"
+     "integrity_hash": "dc32d541cc8ec2953dc6bd5091a9dfac27790c3bf35fedaf81f9a2be92a6060a"
     }
    ]
   },
@@ -169696,7 +171280,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -169708,7 +171292,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -169717,7 +171301,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169743,7 +171327,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "b41dc602e14fc6714a795885b18cb70b16db786d9869f98676b5e3e12ddc5df4"
+     "integrity_hash": "de25af0d2703347219487fa70041d564558775c197bd9350fd082bb235fc1190"
     }
    ]
   },
@@ -169754,7 +171338,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -169766,7 +171350,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -169778,7 +171362,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -169787,13 +171371,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "scope_id": "13927404-af59-4998-a516-ab531487c10f",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -169811,7 +171395,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "6034bb1fafe5a8e34be972827e12d0d35a4a6d47d1d1c2b88d34e5738baf9b79"
+     "integrity_hash": "9f3d5e3c71701035d32f8db013bc3d1c133fe3e8951a61603bf5af90b7c454b3"
     }
    ]
   },
@@ -169822,7 +171406,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -169831,7 +171415,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169857,7 +171441,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "93c2221f06f6b0eddfc4e53ba77f173b317faa0230f24237b763304615b96c22"
+     "integrity_hash": "c9ac40c832548b73211e2864d1fcba2ed35e9a0b208b9991d8282af8a7ef0df6"
     }
    ]
   },
@@ -169868,7 +171452,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -169880,7 +171464,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -169889,7 +171473,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+     "tenant_id": "13927404-af59-4998-a516-ab531487c10f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -169915,7 +171499,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "f32e2bcb9e916a228df767e11b25da55b76d7e5952981eb0f68d7c56d5467208"
+     "integrity_hash": "9eadfedf9a6237fe70b97bd89e4edc458f73b679437f3e2058cea8173a697eec"
     }
    ]
   },
@@ -169926,7 +171510,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -169938,7 +171522,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a83f0729-b8ac-4bb1-b31f-7c3804e314e0",
+   "expected_tenant": "13927404-af59-4998-a516-ab531487c10f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
@@ -170229,8 +171813,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -170260,8 +171844,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -170389,8 +171973,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -170420,8 +172004,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -170549,8 +172133,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -170580,8 +172164,8 @@
    ],
    "budget_snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    }
@@ -171464,8 +173048,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -171645,8 +173229,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },
@@ -171796,8 +173380,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -171977,8 +173561,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },
@@ -172128,8 +173712,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6200,
-    "remaining": -1200,
+    "total_spent": 6200.0,
+    "remaining": -1200.0,
     "burn_pct": 124.0,
     "status": "over_budget"
    },
@@ -172309,8 +173893,8 @@
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
-    "total_spent": 6700,
-    "remaining": -1700,
+    "total_spent": 6700.0,
+    "remaining": -1700.0,
     "burn_pct": 134.0,
     "status": "over_budget"
    },

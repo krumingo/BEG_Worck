@@ -331,16 +331,25 @@ async def _recompute_package_labor(project_id: str, user: dict) -> dict:
         {"_id": settings_id(WORKER_RATES, org_id)})
     default_rate = 18  # EUR/h fallback
 
-    # Aggregate used hours from labor_entries
-    entries = await tenant.labor_entries.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "execution_package_id": 1, "hours": 1, "labor_cost": 1}).to_list(5000)
+    # Used hours / actual labor cost per package — LAB-R96 step 3b (Р100, Р96): the APPROVED
+    # labor lines of the project (labor_cost_reader, the pay run's formula) attributed to the
+    # package (the line's smr_id, else its activity when one package has it). labor_entries
+    # ("ръчни редове") are no longer labor cost: kept on the package as
+    # manual_entries_not_counted, for the ОП-2 check only.
+    from app.services.labor_cost_reader import manual_entries, package_labor
+    attributed = await package_labor(org_id, project_id, pkgs)
     used_by_pkg = {}
     cost_by_pkg = {}
-    for e in entries:
+    for ep_id, lns in attributed["by_package"].items():
+        used_by_pkg[ep_id] = sum(ln["hours"] for ln in lns)
+        cost_by_pkg[ep_id] = sum(ln["cost"] for ln in lns)
+    manual_by_pkg = {}
+    for e in (await manual_entries(org_id, project_id=project_id))["rows"]:
         ep_id = e.get("execution_package_id")
         if ep_id:
-            used_by_pkg[ep_id] = used_by_pkg.get(ep_id, 0) + float(e.get("hours", 0))
-            if e.get("labor_cost") is not None:
-                cost_by_pkg[ep_id] = cost_by_pkg.get(ep_id, 0) + float(e["labor_cost"])
+            m = manual_by_pkg.setdefault(ep_id, {"counted": False, "hours": 0.0, "cost": 0.0})
+            m["hours"] = round(m["hours"] + float(e.get("hours") or 0), 2)
+            m["cost"] = round(m["cost"] + float(e.get("labor_cost") or 0), 2)
 
     updated = 0
     for pkg in pkgs:
@@ -379,6 +388,8 @@ async def _recompute_package_labor(project_id: str, user: dict) -> dict:
             "actual_labor_cost": labor_actual_cost,
             "labor_variance_value": labor_variance_value,
             "labor_variance_percent": labor_variance_percent,
+            "labor_source": "labor_cost_reader",                         # LAB-R96 step 3b
+            "manual_entries_not_counted": manual_by_pkg.get(pkg["id"]),  # Р96: not labor cost
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         await tenant.execution_packages.update_one({"id": pkg["id"]}, {"$set": update_fields})
@@ -404,9 +415,21 @@ async def get_labor_cost_by_exec_pkg(
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await tenant.labor_entries.find(
-        {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
-    ).sort("date", -1).to_list(500)
+    # LAB-R96 step 3b (Р100, Р96): the APPROVED labor lines attributed to this package
+    # (labor_cost_reader, the pay run's formula) — not labor_entries ("ръчни редове"), which
+    # are shown as manual_entries_not_counted only.
+    from app.services.labor_cost_reader import manual_entries, package_labor
+    siblings = await tenant.execution_packages.find(
+        {"org_id": org_id, "project_id": pkg.get("project_id")},
+        {"_id": 0, "id": 1, "activity_name": 1}).to_list(200) if pkg.get("project_id") else [pkg]
+    attributed = await package_labor(org_id, pkg.get("project_id"), siblings) \
+        if pkg.get("project_id") else {"by_package": {}}
+    lines = attributed["by_package"].get(pkg_id, [])
+    entries = [{"employee_id": ln["worker_id"], "hours": ln["hours"], "labor_cost": ln["cost"],
+                "hourly_rate": round(ln["cost"] / ln["hours"], 2) if ln["hours"] > 0 else 0.0,
+                "date": ln["date"], "state": ln["state"]}
+               for ln in sorted(lines, key=lambda x: x["date"], reverse=True)]
+    manual = await manual_entries(org_id, package_id=pkg_id)
 
     # Load employee names
     emp_ids = list(set(e["employee_id"] for e in entries))
@@ -463,6 +486,12 @@ async def get_labor_cost_by_exec_pkg(
         "partial_cost_data": partial_cost,
         "by_employee": sorted(by_employee.values(), key=lambda x: x["cost"], reverse=True),
         "by_date": sorted(by_date.values(), key=lambda x: x["date"], reverse=True),
+        # LAB-R96 step 3b
+        "unpaid_cost": round(sum(ln["cost"] for ln in lines if ln["state"] != "paid"), 2),
+        "paid_cost": round(sum(ln["cost"] for ln in lines if ln["state"] == "paid"), 2),
+        "data_source": "labor_cost_reader (approved labor lines × pay run formula)",
+        "manual_entries_not_counted": ({k: manual[k] for k in ("counted", "entries", "hours", "cost")}
+                                       if manual["entries"] else None),
     }
 
 
@@ -488,12 +517,14 @@ async def get_labor_warnings(project_id: str, request: Request,
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
-    # Count unmapped entries
-    # SEC-01-C02: count the active rows only (a reversal and the row it reverses cancel out).
-    unmapped = await tenant.labor_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW}
-    )
-    total_entries = await tenant.labor_entries.count_documents(
+    # Unmapped labor — LAB-R96 step 3b (Р100, Р96): the APPROVED labor lines of the project
+    # that no package takes (labor_cost_reader attribution), not labor_entries ("ръчни
+    # редове", shown as manual_entries_not_counted only; active rows — SEC-01-C02).
+    from app.services.labor_cost_reader import package_labor
+    attributed = await package_labor(org_id, project_id, pkgs)
+    unmapped = len(attributed["unmapped"])
+    total_entries = len(attributed["lines"])
+    manual_active = await tenant.labor_entries.count_documents(
         {"org_id": org_id, "project_id": project_id, **ACTIVE_LABOR_ROW}
     )
 
@@ -542,6 +573,8 @@ async def get_labor_warnings(project_id: str, request: Request,
         "packages": pkg_summaries,
         "total_entries": total_entries,
         "unmapped_entries": unmapped,
+        "manual_entries_not_counted": ({"counted": False, "entries": manual_active}
+                                       if manual_active else None),     # Р96
         "metrics_available": {
             "labor_entries": total_entries > 0,
             "execution_packages": len(pkgs) > 0,
@@ -555,7 +588,9 @@ async def get_labor_warnings(project_id: str, request: Request,
 # ═══════════════════════════════════════════════════════════════════
 
 async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
-    """Get aggregated labor summary for project profit integration"""
+    """The labor_entries ("ръчни редове") of a project, summed — LAB-R96 (Р96): NOT labor
+    cost. Its callers (/project-profit, project-net-profit) show it only as
+    ``manual_entries_not_counted``; the labor cost is the one reader (labor_cost_reader)."""
     tenant = TenantData.for_resolved_org(db, org_id)
     # Mapped labor (linked to execution packages)
     mapped = await tenant.labor_entries.find(

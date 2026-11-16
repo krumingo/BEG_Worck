@@ -63,10 +63,10 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             total_budget = sum(b.get("labor_budget", 0) for b in budgets)
             if total_budget <= 0:
                 continue
-            sessions = await tenant.work_sessions.find(
-                {"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}
-            ).to_list(5000)
-            spent = sum(s.get("labor_cost", 0) for s in sessions)
+            # LAB-R96 step 3b: spent = the approved labor lines + the old clock sessions
+            # (Р101) — the burn figure; approval work_sessions are not added on top
+            from app.services.labor_cost_reader import counted, project_labor
+            spent = counted((await project_labor(org_id, pid))["totals"])["cost"]
             burn_pct = round(spent / total_budget * 100, 1)
 
             if not _compare(burn_pct, op, threshold):
@@ -95,11 +95,23 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
 
     elif rtype == "overtime":
         week_ago = (now - timedelta(days=7)).isoformat()
-        pipeline = [
-            {"$match": {"org_id": org_id, "ended_at": {"$ne": None}, "is_overtime": True, "started_at": {"$gte": week_ago}}},
-            {"$group": {"_id": "$worker_id", "total_ot": {"$sum": "$duration_hours"}, "name": {"$first": "$worker_name"}}},
-        ]
-        results = await tenant.work_sessions.aggregate(pipeline).to_list(500)
+        # LAB-R96 step 3b (Р100 one normal/overtime split): the overtime hours of the APPROVED
+        # labor lines of the last 7 days (over the worker's whole day) + the overtime old
+        # clock sessions (Р101); approval work_sessions are not added on top.
+        from app.services.labor_cost_reader import clock_sessions, labor_lines
+        ot = {}
+        for ln in await labor_lines(org_id, date_from=week_ago[:10], include_reported=False):
+            if ln["overtime_hours"] > 0 and ln["worker_id"]:
+                r = ot.setdefault(ln["worker_id"], {"_id": ln["worker_id"], "total_ot": 0,
+                                                    "name": ln["worker_name"]})
+                r["total_ot"] += ln["overtime_hours"]
+                r["name"] = r["name"] or ln["worker_name"]
+        for cs in await clock_sessions(org_id, started_from=week_ago):
+            if cs["is_overtime"] and cs["worker_id"]:
+                r = ot.setdefault(cs["worker_id"], {"_id": cs["worker_id"], "total_ot": 0,
+                                                    "name": cs["worker_name"]})
+                r["total_ot"] += cs["hours"]
+        results = list(ot.values())
         for r in results:
             if _compare(r["total_ot"], op, threshold):
                 wid = r["_id"]
@@ -119,9 +131,15 @@ async def evaluate_rule(rule: dict, org_id: str) -> list:
             found_workers = False
             for d in range(1, days_back + 1):
                 check_date = (now - timedelta(days=d)).strftime("%Y-%m-%d")
-                count = await tenant.work_sessions.count_documents(
-                    {"org_id": org_id, "site_id": p["id"], "started_at": {"$gte": f"{check_date}T00:00:00", "$lte": f"{check_date}T23:59:59"}}
-                )
+                # LAB-R96 step 3b: people on the site that day = its labor lines (reported or
+                # approved, both formats) + the old clock sessions (Р101)
+                from app.services.labor_cost_reader import clock_sessions, labor_lines
+                count = len(await labor_lines(org_id, project_id=p["id"], date_from=check_date,
+                                              date_to=check_date))
+                if not count:
+                    count = len(await clock_sessions(
+                        org_id, project_id=p["id"], started_from=f"{check_date}T00:00:00",
+                        started_before=f"{check_date}T23:59:59.999"))
                 if count > 0:
                     found_workers = True
                     break

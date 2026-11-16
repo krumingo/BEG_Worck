@@ -20,7 +20,6 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_money_write, require_finance_read
 from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
-from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -458,7 +457,12 @@ async def get_financial_alerts(
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW})
+    # LAB-R96 step 3b (Р96): the APPROVED labor lines no package takes (labor_cost_reader
+    # attribution) — labor_entries ("ръчни редове") are not labor and raise no alert
+    from app.services.labor_cost_reader import package_labor
+    _pkgs = await tenant.execution_packages.find(
+        {"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "activity_name": 1}).to_list(200)
+    lab_unmapped = len((await package_labor(org_id, project_id, _pkgs))["unmapped"]) if _pkgs else 0
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 

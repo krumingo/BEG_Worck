@@ -1309,6 +1309,16 @@ def _fake_tenant(collections):
     return t
 
 
+def _no_labor_lines(monkeypatch):
+    """LAB-R96 step 3b: the "sessions" source is the approved labor lines (labor_cost_reader)
+    + the old clock sessions; these fake-tenant cases hold clock sessions only."""
+    from app.services import labor_cost_reader
+
+    async def none(*_a, **_k):
+        return []
+    monkeypatch.setattr(labor_cost_reader, "labor_lines", none)
+
+
 def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
     """SEC-02-E (FLOW Guard FG-63; R31): the 2+ rule uses the workers of the SAME source,
     filter and window as the "spent" figure."""
@@ -1323,6 +1333,7 @@ def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
                               sess("w3", "2026-11-02", ended=False)]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _no_labor_lines(monkeypatch)   # LAB-R96 step 3b: these sessions are old clock records (no source_method)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # whole history, ended sessions only: w1 + w2 (w3 not ended, w4 is a draft report)
@@ -1365,6 +1376,7 @@ def test_fg74_only_workers_with_pay_in_the_window_count(monkeypatch):
              "entries": [{"user_id": "u3", "hours": 8}]}]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _no_labor_lines(monkeypatch)   # LAB-R96 step 3b: these sessions are old clock records (no source_method)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # sessions: only w1 (Мазилка) and w5 (Шпакловка) are paid

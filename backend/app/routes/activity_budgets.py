@@ -171,7 +171,7 @@ async def delete_activity_budget(project_id: str, budget_id: str, user: dict = D
 
 
 @router.get("/projects/{project_id}/activity-budget-summary")
-@strip_for_budget_view(labor_source="daily_logs")   # FG-63: spent = daily work log hours   # SEC-02-B (R20-5B, FG-43)
+@strip_for_budget_view(labor_source="lines")   # FG-63: spent = the approved labor lines (LAB-R96 step 3)   # SEC-02-B (R20-5B, FG-43)
 async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_current_user)):
     """
     Get budget vs spent summary grouped by type/subtype.
@@ -829,94 +829,117 @@ async def get_activity_reports(
     tenant = _tenant(user)
     org_id = user["org_id"]
 
-    # Find work_sessions matching this project + smr_type
-    ws_query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
-    smr_lower = smr_type.lower().strip()
-    # Match by case-insensitive smr_type_id
-    ws_query["$or"] = [
-        {"smr_type_id": smr_type},
-        {"smr_type_id": {"$regex": f"^{smr_lower}$", "$options": "i"}},
-    ]
-    if date_from:
-        ws_query.setdefault("started_at", {})["$gte"] = f"{date_from}T00:00:00"
-    if date_to:
-        ws_query.setdefault("started_at", {})["$lte"] = f"{date_to}T23:59:59"
-
-    sessions = await tenant.work_sessions.find(ws_query, {"_id": 0}).sort("started_at", -1).to_list(2000)
-
-    # Group by worker_id + date
+    # LAB-R96 step 3b (Р100 "едно четене", Р102): the labor LINES of this project + activity
+    # through the one reader (both stored formats, the pay run's formula) — one row per line,
+    # with its state (reported = forecast, not counted / approved_unpaid / batched / paid) —
+    # and the old clock sessions (Р101) as before, one row per worker-day, marked
+    # ``clock_legacy``. The approval work_sessions are the same approved lines: not listed.
+    # ``session_ids`` keeps its meaning for the frontend: the ids /work-sessions/{id}/detail
+    # opens (a labor line id, or an old clock session id).
     from collections import defaultdict
+    from app.services.labor_cost_reader import CLOCK_LABEL, clock_sessions, labor_lines
+    lines = await labor_lines(org_id, project_id=project_id, activity=smr_type,
+                              date_from=date_from, date_to=date_to)
+    clock = await clock_sessions(
+        org_id, project_id=project_id, activity=smr_type,
+        started_from=f"{date_from}T00:00:00" if date_from else None,
+        started_before=f"{date_to}T23:59:59.999" if date_to else None)
+    names = await _worker_names(tenant, org_id, {ln["worker_id"] for ln in lines if not ln["worker_name"]})
+
+    rows = []
+    for ln in lines:
+        counted_ = ln["state"] != "reported"
+        h = ln["hours"]
+        rows.append({
+            "worker_id": ln["worker_id"],
+            "worker_name": ln["worker_name"] or names.get(ln["worker_id"], ""),
+            "date": ln["date"],
+            "total_hours": round(h, 2),
+            "total_cost": round(ln["cost"], 2),
+            "hourly_rate": round(ln["cost"] / h, 2) if h > 0 else 0.0,
+            "status": ln["status"],
+            "state": ln["state"],                     # Р102
+            "counted": counted_,                      # a reported line is a forecast only
+            "slip_number": ln.get("slip_number"),
+            "created_by": ln.get("submitted_by"),
+            "approved_by": ln.get("approved_by") if counted_ else None,
+            "source_report_id": ln["report_id"],
+            "line_ids": [ln["line_id"]],
+            "session_ids": [ln["line_id"]],
+            "source_method": "labor_line",
+            "payroll_status": ln["payroll_status"],
+            "pay_run_number": ln.get("pay_run_number"),
+        })
+
     grouped = defaultdict(lambda: {"hours": 0, "cost": 0, "sessions": [], "rate": 0})
-    for s in sessions:
-        wid = s.get("worker_id", "")
-        d = s.get("started_at", "")[:10]
-        key = f"{wid}|{d}"
-        grouped[key]["hours"] += s.get("duration_hours", 0)
-        grouped[key]["cost"] += s.get("labor_cost", 0)
-        grouped[key]["rate"] = s.get("hourly_rate_at_date", 0)
-        grouped[key]["sessions"].append(s)
-        grouped[key]["worker_id"] = wid
-        grouped[key]["worker_name"] = s.get("worker_name", "")
-        grouped[key]["date"] = d
-        grouped[key]["source_method"] = s.get("source_method", "")
-        grouped[key]["approved_report_id"] = s.get("approved_report_id")
-
-    # Enrich with report info
-    reports = []
-    for key, g in grouped.items():
-        report_status = "Approved" if g.get("approved_report_id") else "Unknown"
-        slip = None
-        created_by = None
-        approved_by = None
-
-        # Try to find the linked report
-        rid = g.get("approved_report_id")
-        if rid:
-            rep = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0, "approval_status": 1, "status": 1, "slip_number": 1, "submitted_by": 1, "approved_by": 1})
-            if rep:
-                report_status = rep.get("status") or rep.get("approval_status", "Unknown")
-                slip = rep.get("slip_number")
-                approved_by = rep.get("approved_by")
-                created_by = rep.get("submitted_by")
-
-        # Status filter
-        if status and report_status.lower() != status.lower():
-            continue
-
-        reports.append({
-            "worker_id": g["worker_id"],
-            "worker_name": g["worker_name"],
-            "date": g["date"],
-            "total_hours": round(g["hours"], 2),
-            "total_cost": round(g["cost"], 2),
-            "hourly_rate": round(g["rate"], 2),
-            "status": report_status,
-            "slip_number": slip,
-            "created_by": created_by,
-            "approved_by": approved_by,
-            "source_report_id": rid,
-            "session_ids": [s["id"] for s in g["sessions"]],
+    for s in clock:
+        g = grouped["%s|%s" % (s["worker_id"], s["date"])]
+        g["hours"] += s["hours"]
+        g["cost"] += s["cost"]
+        g["rate"] = s["hourly_rate_at_date"]
+        g["sessions"].append(s)
+        g.update(worker_id=s["worker_id"], worker_name=s["worker_name"], date=s["date"],
+                 source_method=s["source_method"] or "")
+    for g in grouped.values():
+        rows.append({
+            "worker_id": g["worker_id"], "worker_name": g["worker_name"], "date": g["date"],
+            "total_hours": round(g["hours"], 2), "total_cost": round(g["cost"], 2),
+            "hourly_rate": round(g["rate"] or 0, 2),
+            "status": "Unknown",                      # a clock record has no report (as before)
+            "state": "clock_legacy", "clock_label": CLOCK_LABEL, "counted": True,
+            "slip_number": None, "created_by": None, "approved_by": None,
+            "source_report_id": None, "line_ids": [],
+            "session_ids": [s["session_id"] for s in g["sessions"]],
             "source_method": g["source_method"],
         })
 
-    reports.sort(key=lambda x: x["date"], reverse=True)
+    if status:
+        rows = [r for r in rows if (r["status"] or "").lower() == status.lower()]
+    reports = sorted(rows, key=lambda x: x["date"], reverse=True)
 
     # Paginate
     total = len(reports)
     start = (page - 1) * page_size
     paged = reports[start:start + page_size]
 
+    counted_rows = [r for r in reports if r["counted"]]
+    clock_rows = [r for r in reports if r["state"] == "clock_legacy"]
+    line_rows = [r for r in counted_rows if r["state"] != "clock_legacy"]
     return {
         "project_id": project_id,
         "smr_type": smr_type,
         "reports": paged,
         "totals": {
-            "total_hours": round(sum(r["total_hours"] for r in reports), 2),
-            "total_cost": round(sum(r["total_cost"] for r in reports), 2),
+            # approved lines + old clock (as before); a reported line is not counted
+            "total_hours": round(sum(r["total_hours"] for r in counted_rows), 2),
+            "total_cost": round(sum(r["total_cost"] for r in counted_rows), 2),
             "reports_count": total,
+            # LAB-R96 step 3b: the parts (finance view; the decorator strips the money)
+            "approved_lines": {"hours": round(sum(r["total_hours"] for r in line_rows), 2),
+                               "cost": round(sum(r["total_cost"] for r in line_rows), 2)},
+            "clock_legacy": {"label": CLOCK_LABEL, "sessions": sum(len(r["session_ids"]) for r in clock_rows),
+                             "hours": round(sum(r["total_hours"] for r in clock_rows), 2),
+                             "cost": round(sum(r["total_cost"] for r in clock_rows), 2)},
+            "forecast_cost": round(sum(r["total_cost"] for r in reports if not r["counted"]), 2),
         },
         "pagination": {"page": page, "page_size": page_size, "total": total},
     }
+
+
+async def _worker_names(tenant, org_id: str, ids) -> dict:
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    users = await tenant.users.find({"org_id": org_id, "id": {"$in": ids}},
+                                    {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(len(ids) + 10)
+    return {u["id"]: ("%s %s" % (u.get("first_name", ""), u.get("last_name", ""))).strip() for u in users}
+
+
+async def _user_name(tenant, uid):
+    if not uid:
+        return None
+    u = await tenant.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1})
+    return ("%s %s" % (u.get("first_name", ""), u.get("last_name", ""))).strip() if u else None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -926,16 +949,35 @@ async def get_activity_reports(
 @router.get("/work-sessions/{session_id}/detail")
 @strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_session_detail(session_id: str, user: dict = Depends(get_current_user)):
-    """Level 3 drill-down: detailed view of a work session / worker-day."""
-    tenant = _tenant(user)
-    session = await tenant.work_sessions.find_one(
-        {"id": session_id, "org_id": user["org_id"]}, {"_id": 0}
-    )
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    """Level 3 drill-down: one worker-day line.
 
+    LAB-R96 step 3b (Р100): ``session_id`` is what Level 2 lists — a labor line id (its
+    hours / cost / state from the one reader, the pay run's formula), an approval
+    work_session (shown as the labor line it was written from), or an old clock session
+    (Р101, its stored figures as before, marked ``clock_legacy``)."""
+    from app.services.labor_cost_reader import (APPROVED_SESSION, CLOCK_LABEL, labor_lines,
+                                                line_by_id)
+    tenant = _tenant(user)
     org_id = user["org_id"]
-    wid = session.get("worker_id", "")
+    session = await tenant.work_sessions.find_one(
+        {"id": session_id, "org_id": org_id}, {"_id": 0}
+    )
+    line = None
+    if session is None:
+        line = await line_by_id(org_id, session_id)
+        if line is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+    elif session.get("source_method") == APPROVED_SESSION and session.get("approved_report_id"):
+        d = (session.get("started_at") or "")[:10]
+        cands = [ln for ln in await labor_lines(org_id, worker_id=session.get("worker_id"),
+                                                date_from=d, date_to=d)
+                 if ln["report_id"] == session["approved_report_id"]
+                 and ln["project_id"] == session.get("site_id")]
+        key = norm_activity(session.get("smr_type_id"))
+        line = next((ln for ln in cands if ln["activity_key"] == key),
+                    cands[0] if len(cands) == 1 else None)
+
+    wid = line["worker_id"] if line else session.get("worker_id", "")
 
     # Worker profile
     profile = await tenant.employee_profiles.find_one(
@@ -944,36 +986,62 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
     pay_type_raw = (profile.get("pay_type", "Monthly") if profile else "Monthly").strip()
     pay_type_display = {"Hourly": "Почасово", "Daily": "Дневно", "Monthly": "Месечно"}.get(pay_type_raw, pay_type_raw)
 
-    # Report info
+    if line is not None:
+        rep = await tenant.employee_daily_reports.find_one(
+            {"org_id": org_id, "id": line["report_id"]}, {"_id": 0, "updated_at": 1})
+        project = await tenant.projects.find_one({"id": line["project_id"]}, {"_id": 0, "name": 1})
+        h = line["hours"]
+        name = line["worker_name"] or (await _worker_names(tenant, org_id, [wid])).get(wid, "")
+        return {
+            "session_id": session_id,
+            "line_id": line["line_id"],
+            "worker_name": name or (session or {}).get("worker_name", ""),
+            "worker_id": wid,
+            "date": line["date"],
+            "project_name": (project or {}).get("name", ""),
+            "project_id": line["project_id"],
+            "smr_type": line["activity"],
+            "pay_type": pay_type_display,
+            "hourly_rate": round(line["cost"] / h, 2) if h > 0 else 0.0,
+            "hours": h,
+            "normal_hours": line["normal_hours"],
+            "overtime_hours": line["overtime_hours"],
+            "total_cost": line["cost"],
+            "cost_basis": line.get("cost_basis"),
+            "slip_number": line.get("slip_number"),
+            "status": line["status"],
+            "state": line["state"],                                   # Р102
+            "counted": line["state"] != "reported",
+            "payroll_status": line["payroll_status"],
+            "pay_run_number": line.get("pay_run_number"),
+            "approved_by_name": await _user_name(tenant, line.get("approved_by")),
+            "approved_at": line.get("approved_at"),
+            "created_by_name": await _user_name(tenant, line.get("submitted_by")),
+            "created_at": line.get("created_at") or None,
+            "updated_at": (rep or {}).get("updated_at"),
+            "is_paid": line["state"] == "paid",
+            "is_overtime": line["overtime_hours"] > 0,
+            "overtime_type": (session or {}).get("overtime_type"),
+            "source_method": "labor_line",
+        }
+
+    # An old clock session (Р101) — or an approval session whose line is gone (reset / voided):
+    # its stored figures as before; only a clock record is counted.
+    is_clock = session.get("source_method") != APPROVED_SESSION
     rid = session.get("approved_report_id")
     report_status = "Unknown"
-    slip = None
-    approved_by_name = None
-    approved_at = None
-    created_by_name = None
-    created_at = session.get("created_at")
+    slip = approved_by_name = approved_at = created_by_name = None
     is_paid = None
-
     if rid:
         rep = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
         if rep:
             report_status = rep.get("status") or rep.get("approval_status", "Unknown")
             slip = rep.get("slip_number")
             approved_at = rep.get("approved_at")
-            # Get approver name
-            if rep.get("approved_by"):
-                approver = await tenant.users.find_one({"id": rep["approved_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
-                if approver:
-                    approved_by_name = f"{approver.get('first_name', '')} {approver.get('last_name', '')}".strip()
-            if rep.get("submitted_by"):
-                creator = await tenant.users.find_one({"id": rep["submitted_by"]}, {"_id": 0, "first_name": 1, "last_name": 1})
-                if creator:
-                    created_by_name = f"{creator.get('first_name', '')} {creator.get('last_name', '')}".strip()
+            approved_by_name = await _user_name(tenant, rep.get("approved_by"))
+            created_by_name = await _user_name(tenant, rep.get("submitted_by"))
             is_paid = rep.get("payroll_ready", False) and report_status == "APPROVED"
-
-    # Project name
     project = await tenant.projects.find_one({"id": session.get("site_id")}, {"_id": 0, "name": 1})
-
     return {
         "session_id": session_id,
         "worker_name": session.get("worker_name", ""),
@@ -988,10 +1056,13 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
         "total_cost": session.get("labor_cost", 0),
         "slip_number": slip,
         "status": report_status,
+        "state": "clock_legacy" if is_clock else "approval_session_without_line",
+        "clock_label": CLOCK_LABEL if is_clock else None,
+        "counted": is_clock,
         "approved_by_name": approved_by_name,
         "approved_at": approved_at,
         "created_by_name": created_by_name,
-        "created_at": created_at,
+        "created_at": session.get("created_at"),
         "updated_at": session.get("updated_at"),
         "is_paid": is_paid,
         "is_overtime": session.get("is_overtime", False),

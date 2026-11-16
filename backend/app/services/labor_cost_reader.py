@@ -215,6 +215,9 @@ def _view(ln: dict) -> dict:
         "payroll_source": ln.get("payroll_source"), "pay_run_id": run_id_of(ln),
         "payroll_batch_id": ln.get("payroll_batch_id"), "notes": ln.get("notes") or "",
         "created_at": ln.get("created_at") or "",
+        "smr_id": ln.get("smr_id"), "slip_number": ln.get("slip_number"),
+        "submitted_by": ln.get("submitted_by"), "approved_by": ln.get("approved_by"),
+        "approved_at": ln.get("approved_at"),
         "regular_hours": ln.get("regular_hours"), "overtime_hours": ln.get("overtime_hours"),
         "state": state_of(ln),
     }
@@ -411,3 +414,84 @@ async def project_labor(org_id: str, project_id: str, *, include_clock: bool = T
             started_from=("%sT00:00:00" % date_from) if date_from else None,
             started_before=("%sT23:59:59.999" % date_to) if date_to else None)
     return {"project_id": project_id, "lines": lines, "clock": clock, "totals": summarize(lines, clock)}
+
+
+# ═══════════════════════════════════════════════════════════════════ step 3b helpers
+def counted(totals: dict) -> dict:
+    """What a screen that used to sum EVERY ended work session now counts: the approved lines
+    + the old clock component (Р101: kept, visibly, until ОП-2) — never the approval sessions
+    (they are the same approved lines). ``{"hours", "cost"}``."""
+    return {"hours": round(totals["hours"] + totals["clock"]["hours"], 2),
+            "cost": round(totals["cost"] + totals["clock"]["cost"], 2)}
+
+
+def components(totals: dict) -> dict:
+    """The visible split of a labor figure (the P&L ``labor_components`` shape, short)."""
+    return {"approved_lines": {"hours": totals["hours"], "cost": totals["cost"],
+                               "unpaid_cost": totals["unpaid_cost"],
+                               "paid_cost": totals["paid_cost"]},
+            "clock_legacy": totals["clock"],
+            "forecast_cost": totals["forecast_cost"],     # reported, not approved — not counted
+            "source": "labor_cost_reader"}
+
+
+async def line_by_id(org_id: str, line_id: str) -> Optional[dict]:
+    """One labor line (any of the four states) by its id — flat ``<report id>`` or old format
+    ``<report>_<entry>`` — costed like every report (the worker's whole day)."""
+    if not line_id:
+        return None
+    tenant = TenantData.for_resolved_org(_appdb.db, org_id)
+    doc = await tenant.employee_daily_reports.find_one({"org_id": org_id, "id": line_id}, {"_id": 0})
+    if doc is None and "_" in line_id:
+        doc = await tenant.employee_daily_reports.find_one(
+            {"org_id": org_id, "id": line_id.rsplit("_", 1)[0]}, {"_id": 0})
+    if doc is None:
+        return None
+    wid = doc.get("worker_id") or doc.get("employee_id")
+    day = doc.get("date") or doc.get("report_date")
+    if not wid or not day:
+        return None
+    for ln in await labor_lines(org_id, worker_id=wid, date_from=day, date_to=day):
+        if ln["line_id"] == line_id:
+            return ln
+    return None
+
+
+async def package_labor(org_id: str, project_id: str, packages: List[dict]) -> dict:
+    """The approved labor lines of a project attributed to its execution packages: the line's
+    own ``smr_id`` (the package chosen in the report), else its activity when exactly one
+    package of the project has that activity name. ``labor_entries`` ("ръчни редове") are NOT
+    a source (Р96). ``{"by_package": {pkg_id: [lines]}, "unmapped": [lines], "lines": [...]}``
+    — approved lines only (cost states)."""
+    lines = await labor_lines(org_id, project_id=project_id, include_reported=False)
+    ids = {p.get("id") for p in packages if p.get("id")}
+    names = defaultdict(list)
+    for p in packages:
+        names[norm_activity(p.get("activity_name"))].append(p.get("id"))
+    by_pkg: Dict[str, List[dict]] = defaultdict(list)
+    unmapped = []
+    for ln in lines:
+        pid = ln.get("smr_id") if ln.get("smr_id") in ids else None
+        if pid is None and len(names.get(ln["activity_key"], [])) == 1:
+            pid = names[ln["activity_key"]][0]
+        (by_pkg[pid] if pid else unmapped).append(ln)
+    return {"by_package": dict(by_pkg), "unmapped": unmapped, "lines": lines}
+
+
+async def manual_entries(org_id: str, *, project_id: Optional[str] = None,
+                         package_id: Optional[str] = None) -> dict:
+    """``labor_entries`` ("ръчни редове", no screen) — NOT labor cost (Р96). Shown only, as
+    ``manual_entries_not_counted``, where a screen counted them before (read-only, for the
+    ОП-2 check). Net of reversals (a reversal row cancels the row it reverses)."""
+    tenant = TenantData.for_resolved_org(_appdb.db, org_id)
+    q: Dict[str, Any] = {"org_id": org_id}
+    if project_id:
+        q["project_id"] = project_id
+    if package_id:
+        q["execution_package_id"] = package_id
+    rows = await tenant.labor_entries.find(q, {"_id": 0, "hours": 1, "labor_cost": 1, "date": 1,
+                                               "execution_package_id": 1}).to_list(5000)
+    return {"counted": False, "entries": len(rows),
+            "hours": round(sum(float(r.get("hours") or 0) for r in rows), 2),
+            "cost": round(sum(float(r.get("labor_cost") or 0) for r in rows), 2),
+            "rows": rows}

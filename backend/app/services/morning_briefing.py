@@ -48,9 +48,10 @@ async def build_morning_briefing(org_id: str, date: str = None, *,
         budgets = await tenant.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
         total_budget = sum(b.get("labor_budget", 0) for b in budgets)
         if total_budget > 0 and pid not in hidden_sites:   # SEC-02-G (SEC71-05): no band
-            sessions_cost = 0
-            async for s in tenant.work_sessions.find({"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}):
-                sessions_cost += s.get("labor_cost", 0)
+            # LAB-R96 step 3b: spent = the approved labor lines + the old clock sessions
+            # (Р101) — the burn figure; approval work_sessions are not added on top
+            from app.services.labor_cost_reader import counted, project_labor
+            sessions_cost = counted((await project_labor(org_id, pid))["totals"])["cost"]
             burn = sessions_cost / total_budget * 100
             if burn > 100:
                 reasons.append("Бюджетът е надхвърлен")
@@ -145,13 +146,15 @@ async def build_morning_briefing(org_id: str, date: str = None, *,
 
     # ── F. Quick Totals ─────────────────────────────────────────
     active_projects = len(projects)
-    workers_today = 0
-    today_sessions = await tenant.work_sessions.count_documents(
-        {"org_id": org_id, "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"}}
-    )
-    workers_today = await tenant.work_sessions.distinct(
-        "worker_id", {"org_id": org_id, "started_at": {"$gte": f"{today}T00:00:00", "$lte": f"{today}T23:59:59"}}
-    )
+    # LAB-R96 step 3b: the people with labor today — their labor lines (reported or
+    # approved, both stored formats) + the old clock sessions (Р101)
+    from app.services.labor_cost_reader import clock_sessions, labor_lines
+    workers_today = {ln["worker_id"] for ln in await labor_lines(org_id, date_from=today,
+                                                                 date_to=today) if ln["worker_id"]}
+    workers_today |= {cs["worker_id"] for cs in await clock_sessions(
+        org_id, started_from=f"{today}T00:00:00", started_before=f"{today}T23:59:59.999")
+        if cs["worker_id"]}
+    workers_today = sorted(workers_today)
 
     summary = {
         "active_projects": active_projects,

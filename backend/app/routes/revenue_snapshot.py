@@ -140,11 +140,15 @@ async def get_profit_by_period(
         {"_id": 0, "issue_date": 1, "subtotal": 1, "total": 1, "paid_amount": 1}
     ).to_list(500)
 
-    # Labor by month
-    labor_entries = await tenant.labor_entries.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "date": 1, "labor_cost": 1, "hours": 1}
-    ).to_list(5000)
+    # Labor by month — LAB-R96 step 3b (Р100: the same approved lines as the P&L, the pay run
+    # and „Приходи/разходи"; one formula). labor_entries ("ръчни редове", Р96) are no longer
+    # labor cost — shown per month in manual_entries_not_counted. Old clock sessions were
+    # never counted here and still are not (Р101) — shown as clock_legacy, not counted.
+    from app.services.labor_cost_reader import (labor_lines, manual_entries, clock_sessions,
+                                                summarize)
+    labor = await labor_lines(org_id, project_id=project_id, include_reported=False)
+    manual = await manual_entries(org_id, project_id=project_id)
+    clock_t = summarize([], await clock_sessions(org_id, project_id=project_id))["clock"]
 
     # Material by month — 5C-C22: the ONE shared helper (canonical
     # consumption + „фира" + legacy issues dated before the tenant cutover,
@@ -189,13 +193,24 @@ async def get_profit_by_period(
             periods[pk]["billed"] += inv.get("subtotal", 0) or inv.get("total", 0)
             periods[pk]["collected"] += inv.get("paid_amount", 0)
 
-    for le in labor_entries:
+    for ln in labor:
+        pk = (ln.get("date") or "")[:7]
+        if pk:
+            ensure_period(pk)
+            periods[pk]["labor"] += ln["cost"]
+            periods[pk]["labor_hours"] += ln["hours"]
+            if ln["state"] == "paid":
+                periods[pk]["labor_paid"] = periods[pk].get("labor_paid", 0) + ln["cost"]
+            else:
+                periods[pk]["labor_unpaid"] = periods[pk].get("labor_unpaid", 0) + ln["cost"]
+    for le in manual["rows"]:
         pk = (le.get("date") or "")[:7]
         if pk:
             ensure_period(pk)
-            if le.get("labor_cost") is not None:
-                periods[pk]["labor"] += le["labor_cost"]
-            periods[pk]["labor_hours"] += float(le.get("hours", 0))
+            m = periods[pk].setdefault("manual_entries_not_counted",
+                                       {"counted": False, "hours": 0.0, "cost": 0.0})
+            m["hours"] = round(m["hours"] + float(le.get("hours") or 0), 2)
+            m["cost"] = round(m["cost"] + float(le.get("labor_cost") or 0), 2)
 
     # 5C-C23 F-14: ``material`` = consumption (+ pre-cutover legacy) and
     # ``waste`` = „фира", the same meaning as in every other report; the
@@ -223,6 +238,8 @@ async def get_profit_by_period(
     # Calculate profits per period
     for pk, p in periods.items():
         p["waste"] = p.get("waste", 0)
+        p["labor_paid"] = round(p.get("labor_paid", 0), 2)        # LAB-R96 step 3b (Р102)
+        p["labor_unpaid"] = round(p.get("labor_unpaid", 0), 2)
         for k in ["earned", "billed", "collected", "material", "waste", "labor", "subcontract", "overhead", "labor_hours"]:
             p[k] = round(p[k], 2) if k != "labor_hours" else round(p[k], 1)
         p["material_total"] = round(p["material"] + p["waste"], 2)
@@ -245,7 +262,12 @@ async def get_profit_by_period(
             # report shows (material_cost_basis.total_cost).
             "material_undated": undated.get("material", 0.0),
             "waste_undated": undated.get("waste", 0.0),
-            "material_cost_basis": cost_basis(mat_cost)}
+            "material_cost_basis": cost_basis(mat_cost),
+            # LAB-R96 step 3b: labor = the approved labor lines (labor_cost_reader)
+            "labor_source": "labor_cost_reader",
+            "clock_legacy": dict(clock_t, counted=False),
+            "manual_entries_not_counted": ({k: manual[k] for k in ("counted", "entries", "hours", "cost")}
+                                           if manual["entries"] else None)}
 
 
 # ═══════════════════════════════════════════════════════════════════

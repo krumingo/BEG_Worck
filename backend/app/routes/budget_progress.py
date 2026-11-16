@@ -388,15 +388,14 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
             "message": f"{missing_updates} от {len(pkgs)} пакета нямат въведен прогрес",
         })
 
-    # Budget burn warnings from work_sessions
+    # Budget burn warnings — LAB-R96 step 3b (Р100): the approved labor lines (pay run
+    # formula) + the old clock sessions as before (Р101), the same figure as the activity
+    # burn; the approval work_sessions are not added on top.
     budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1},
-    ).to_list(5000)
-    total_session_cost = sum(s.get("labor_cost", 0) for s in sessions)
+    from app.services.labor_cost_reader import counted, project_labor
+    total_session_cost = counted((await project_labor(org_id, project_id))["totals"])["cost"]
     total_labor_budget = sum(b.get("labor_budget", 0) for b in budgets)
     if total_labor_budget > 0:
         burn_pct = total_session_cost / total_labor_budget * 100
