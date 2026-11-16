@@ -124,6 +124,53 @@ def embedded_as_line(el: dict) -> dict:
     return {"qty": el.get("qty"), "allocations": allocs}
 
 
+async def invoices_with_line_docs(tenant, org_id: str, invoice_ids, *, session=None) -> set:
+    """FIX-MAT-03 — the ids among ``invoice_ids`` that have ``invoice_lines``
+    documents in THIS tenant. ONE precedence rule (FG-200), per invoice:
+    an invoice with ``invoice_lines`` documents is read from them only; an
+    invoice without them is read from its embedded ``invoices.lines[]``. So
+    a line is read from exactly one representation and is counted once —
+    also if a later backfill adds ``invoice_lines`` for a finance-UI invoice
+    (its embedded copy then drops out)."""
+    ids = sorted({i for i in invoice_ids if i})
+    if not ids:
+        return set()
+    kw = {"session": session} if session is not None else {}
+    return set(await tenant.invoice_lines.distinct(
+        "invoice_id", {"org_id": org_id, "invoice_id": {"$in": ids}}, **kw))
+
+
+def embedded_line_doc(invoice: dict, el: dict, index: int) -> dict:
+    """FIX-MAT-03 — an embedded line of a supplier invoice made in the finance
+    UI, read in the shape of an ``invoice_lines`` document (read time only,
+    nothing stored): ex-VAT total = the line's ``line_total`` (qty × price),
+    VAT = that × the invoice's ``vat_percent`` (the finance UI has one VAT
+    rate per invoice), destination = ``embedded_as_line`` (its
+    ``allocations[]``, else its ``project_id`` for the whole line)."""
+    qty = el.get("qty")
+    ex = el.get("line_total")
+    if ex is None:
+        ex = float(qty or 0) * float(el.get("unit_price") or 0)
+    ex = float(ex or 0)
+    vat_percent = float(invoice.get("vat_percent") or 0)
+    return {
+        "id": el.get("id") or f"{invoice.get('id')}:embedded-{index}",
+        "invoice_id": invoice.get("id"),
+        "line_no": el.get("sort_order", index),
+        "description": el.get("description"),
+        "unit": el.get("unit"),
+        "qty": qty,
+        "unit_price": el.get("unit_price"),
+        "vat_percent": vat_percent,
+        "line_total_ex_vat": ex,
+        "vat_amount": ex * vat_percent / 100,
+        "allocations": embedded_as_line(el)["allocations"],
+        "cost_category": el.get("cost_category"),
+        "created_at": invoice.get("created_at") or invoice.get("issue_date"),
+        "embedded": True,
+    }
+
+
 def is_supplier_invoice(invoice: Optional[dict]) -> bool:
     return bool(invoice) and invoice.get("direction") == "Received"
 

@@ -150,7 +150,11 @@ def test_f81_01_company_finance_summary_and_compare_count_only_the_allocated_par
 def test_f81_01_project_pnl_fallback_reads_the_line_share(monkeypatch, backend, mode, allocated):
     """revenue_expense subcontract fallback: a supplier invoice with EMBEDDED
     lines (finance UI) reaches the project only by its line share — not by its
-    header project_id (main: the whole subtotal 1000)."""
+    header project_id (main: the whole subtotal 1000).
+
+    FIX-MAT-03 (F1-3): that line share is Path B material cost now (the one
+    selection reads embedded lines too), so it is NOT also the subcontract
+    fallback — the same amount, counted once, under material."""
     async def scenario(c, op):
         allocs = [{"type": "project", "ref_id": "prj-1", "qty": allocated}] if allocated else []
         await op.invoices.insert_one({
@@ -161,7 +165,9 @@ def test_f81_01_project_pnl_fallback_reads_the_line_share(monkeypatch, backend, 
                        "line_total": 1000.0, "allocations": allocs}]})
         r = await c.get("/api/project-profit/prj-1", headers=hdr("owner-a"))
         assert r.status_code == 200, r.text
-        assert r.json()["expenses"]["subcontract"] == EXPECTED[allocated]
+        e = r.json()["expenses"]
+        assert (e["material"], e["subcontract"]) == (EXPECTED[allocated], 0)
+        assert e["total"] == EXPECTED[allocated]
     run(monkeypatch, backend, mode, scenario)
 
 
