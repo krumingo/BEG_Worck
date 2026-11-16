@@ -80,8 +80,8 @@
 | app/routes/finance.py:_invoice_lock | (helper) | invoices | update_one(flt) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_invoice_lock | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_invoice_remaining | (helper) | payment_allocations | find(active_allocations(flt)) | TenantData org_id (session) | new read | SAFE |
-| app/routes/finance.py:_reverse_one | (helper) | finance_payments | find_one_and_update(active_payments({'id': payment_id})) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_reverse_one | (helper) | finance_payments | get(id = payment_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:reverse_ledger_row | (helper) | finance_payments | find_one_and_update(active_payments({'id': payment_id})) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | find_one(id, invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | finance_payments | get(id = alloc['payment_id']) | TenantData org_id (session) | BARE@base | FIXED |
