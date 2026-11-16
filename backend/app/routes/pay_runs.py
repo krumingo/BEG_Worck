@@ -185,6 +185,24 @@ def _build_report_lines(employee_row: dict) -> list:
 # LAB-R96 step 3 (Р100 "една формула"): the formula lives in labor_cost_reader so P&L,
 # „Приходи/разходи", activity budgets and this pay run compute through ONE function.
 from app.services.labor_cost_reader import calc_earned, pay_run_lines  # noqa: E402,F401
+from app.services.labor_cost_reader import (  # noqa: E402  (FIX-PAY-03)
+    AKORD, STATE_APPROVED, STATE_BATCHED, STATE_PAID, pay_type_of, run_earned)
+
+# FIX-PAY-03: what a pay run row records so the reader costs its lines as it paid them.
+FIX_PAY_03_ROW_FIELDS = ("day_rate_dates", "already_paid_dates", "akord_line_amounts", "blocked_lines")
+
+
+def _fix_pay_03_fields(e: dict, blocked: list) -> dict:
+    out = {"day_rate_dates": e.get("day_rate_dates", []),
+           "already_paid_dates": e.get("already_paid_dates", []),
+           "blocked_lines": list(blocked)}
+    if "akord_line_amounts" in e:
+        out["akord_line_amounts"] = e["akord_line_amounts"]
+    return out
+
+
+def _frozen_fix_pay_03(row: dict) -> dict:
+    return {k: row[k] for k in FIX_PAY_03_ROW_FIELDS if k in row}
 from app.services.report_normalizer import fetch_normalized_report_lines  # noqa: E402  (the report query, passed to the reader)
 
 
@@ -329,9 +347,23 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
     Same lines and calc_earned as generate_pay_run, restricted to the selected reports."""
     eid = row["employee_id"]
     wanted = list(report_ids)  # canonical: _check_selected_report_ids ran first
-    lines = await pay_run_lines(org_id, period_start, period_end, worker_id=eid,   # LAB-R96 step 3
-                                fetch=fetch_normalized_report_lines)
-    by_id = {ln["id"]: ln for ln in lines if ln.get("id") and ln.get("worker_id") == eid}
+    all_lines = await pay_run_lines(org_id, period_start, period_end, worker_id=eid,   # LAB-R96 step 3
+                                    include_locked=True, fetch=fetch_normalized_report_lines)
+    all_lines = [ln for ln in all_lines if ln.get("worker_id") == eid]
+    prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
+    locked_hours = {}
+    for ln in all_lines:   # FIX-PAY-03 (A): days whose day rate another pay run already holds
+        if ln["state"] in (STATE_BATCHED, STATE_PAID):
+            locked_hours[ln["date"]] = locked_hours.get(ln["date"], 0.0) + ln["hours"]
+    lines = [ln for ln in all_lines if ln["state"] == STATE_APPROVED]
+    if pay_type_of(prof) == AKORD:   # FIX-PAY-03 (B): a blocked akord line is never payable
+        blocked = {ln["id"]: ln["akord_blocked"] for ln in lines if ln.get("akord_blocked")}
+        refused = [(rid, blocked[rid]) for rid in wanted if rid in blocked]
+        if refused:
+            raise HTTPException(status_code=400, detail=(
+                f"selected_report_ids of employee_id={eid} are not payable: "
+                + "; ".join(f"{rid}: {why}" for rid, why in refused)))
+    by_id = {ln["id"]: ln for ln in lines if ln.get("id")}
     missing = [rid for rid in wanted if rid not in by_id]
     if missing:
         raise HTTPException(
@@ -341,11 +373,10 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         )
     sel = [by_id[rid] for rid in wanted]
 
-    prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
     period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
     total_hours = round(sum(ln["hours"] for ln in sel), 1)
-    approved_days = len({ln["date"] for ln in sel})
-    e = calc_earned(prof, total_hours, approved_days, period_days)
+    e = run_earned(prof, sel, period_days, locked_hours)   # FIX-PAY-03
+    approved_days = e["approved_days"]
 
     keep = set(wanted)
     day_cells = []
@@ -390,6 +421,8 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         "sites": sorted({s for dc in day_cells for s in dc["sites"]}),
         "day_cells": day_cells,
     })
+    out.pop("akord_line_amounts", None)
+    out.update(_fix_pay_03_fields(e, row.get("blocked_lines", [])))
     return out
 
 
@@ -421,9 +454,17 @@ async def generate_pay_run(
         payroll_filter_arg = ["!paid", "!batched"]  # FIX 1 — selection mode
 
     # LAB-R96 step 3: the one labor read (both stored formats, one normal/overtime split).
-    lines = await pay_run_lines(org_id, period_start, period_end,
-                                include_locked=payroll_filter_arg is None,
-                                fetch=fetch_normalized_report_lines)
+    # FIX-PAY-03 (A): the locked (batched / paid) lines are read too — a day that already
+    # holds a paid line already earned its day rate.
+    all_lines = await pay_run_lines(org_id, period_start, period_end, include_locked=True,
+                                    fetch=fetch_normalized_report_lines)
+    lines = all_lines if payroll_filter_arg is None else [ln for ln in all_lines if ln["state"] == STATE_APPROVED]
+    locked_hours = {}
+    if payroll_filter_arg is not None:
+        for ln in all_lines:
+            if ln["state"] in (STATE_BATCHED, STATE_PAID):
+                per = locked_hours.setdefault(ln["worker_id"], {})
+                per[ln["date"]] = per.get(ln["date"], 0.0) + ln["hours"]
 
     employees = await tenant.users.find(
         {"org_id": org_id, "is_active": True},
@@ -439,7 +480,21 @@ async def generate_pay_run(
     ).to_list(200)
     prof_map = {p["user_id"]: p for p in profiles}
 
-    by_emp = {}
+    # FIX-PAY-03 (B): an unpaid akord line without an approved quantity / unit price is not
+    # payable — it is shown as blocked with its reason and never enters the pay run.
+    blocked_by_emp = {}
+    payable = []
+    for ln in lines:
+        if (ln["state"] == STATE_APPROVED and ln.get("akord_blocked")
+                and pay_type_of(prof_map.get(ln["worker_id"], {})) == AKORD):
+            blocked_by_emp.setdefault(ln["worker_id"], []).append({
+                "report_id": ln["id"], "date": ln["date"], "project_id": ln.get("project_id", ""),
+                "hours": round(float(ln.get("hours") or 0), 1), "reason": ln["akord_blocked"]})
+        else:
+            payable.append(ln)
+    lines = payable
+
+    by_emp = {wid: [] for wid in blocked_by_emp}
     for ln in lines:
         wid = ln["worker_id"]
         if wid not in by_emp:
@@ -502,10 +557,9 @@ async def generate_pay_run(
         total_hours = round(sum(ln["hours"] for ln in emp_lines), 1)
         normal_hours = round(sum(ln.get("normal_hours", 0) for ln in emp_lines), 1)
         overtime_hours = round(sum(ln.get("overtime_hours", 0) for ln in emp_lines), 1)
-        days_set = {ln["date"] for ln in emp_lines}
-        approved_days = len(days_set)
-
-        e = calc_earned(prof, total_hours, approved_days, period_days)
+        # FIX-PAY-03: the day rate once per worker × day across pay runs; akord by quantity
+        e = run_earned(prof, emp_lines, period_days, locked_hours.get(wid))
+        approved_days = e["approved_days"]
         prev_paid = round(already_paid.get(wid, 0), 2)
         remaining = round(e["earned"] - prev_paid, 2)
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
@@ -557,6 +611,11 @@ async def generate_pay_run(
                 "report_status": ln_report_status,        # APPROVED / REJECTED / DRAFT
                 "payroll_status": ln_payroll_status,      # none / batched / paid
                 "payroll_batch_id": ln_batch_id,          # PR-XXXX if locked
+                **({"akord_amount": ln.get("akord_amount", 0),          # FIX-PAY-03 (B)
+                    "approved_quantity": ln.get("approved_quantity"),
+                    "piece_rate": ln.get("piece_rate"), "unit": ln.get("unit") or ""}
+                   if pay_type_of(prof) == AKORD else {}),
+                "day_rate_paid_elsewhere": d in e["already_paid_dates"],   # FIX-PAY-03 (A)
                 "selectable": is_approved and not is_locked_by_payroll and not is_rejected,
                 "locked_reason": (
                     f"Платен в {ln_batch_id}" if ln_payroll_status == "paid" else
@@ -635,6 +694,7 @@ async def generate_pay_run(
             "open_advances": adv_by_user.get(wid, []),
             "sites": sites,
             "day_cells": day_cells,
+            **_fix_pay_03_fields(e, blocked_by_emp.get(wid, [])),
         })
 
     rows.sort(key=lambda r: (0 if r["earned_amount"] > 0 else 1, r["last_name"]))
@@ -751,6 +811,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "notes": notes,
             # P0-2A.2: explicit per-report selection. Empty means "use day-level fallback" (old behavior).
             "selected_report_ids": selected_report_ids,
+            **_frozen_fix_pay_03(row),   # FIX-PAY-03: day-rate dates / akord amounts / blocked
         }
         employee_rows.append(frozen_row)
 
@@ -1385,6 +1446,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
             "sites": row.get("sites", []), "notes": ovr.notes,
             "day_cells": day_cells,
             "selected_report_ids": selected_report_ids,
+            **_frozen_fix_pay_03(row),   # FIX-PAY-03: day-rate dates / akord amounts / blocked
         }
         _validate_no_overpayment(frozen_row)
         employee_rows.append(frozen_row)

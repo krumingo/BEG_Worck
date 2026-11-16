@@ -36,6 +36,24 @@ Design note
   totals), ``approved_unpaid``, ``batched`` (in a confirmed pay run, not yet paid), ``paid``.
   A reported line's forecast is the increment it would add to its worker's unpaid day.
 * Tenant: every read goes through ``TenantData.for_resolved_org`` (Tenant Guard).
+
+FIX-PAY-03 (FLOW-028 "един отчетен ред не може да бъде платен два пъти", "Pay Run използва
+само одобрени и неплатени source records", "заработка = одобрено измерено количество ×
+договорена единична цена труд")
+* A. The day rate (Daily; Monthly ÷ working days) is earned ONCE per worker × calendar day
+  across all pay runs. A later pay run that holds more lines of a day already batched / paid
+  adds only what the rule genuinely adds (``_increment``: nothing for Daily / Monthly; the
+  extra over the day for mixed; Hourly is additive and unchanged). A pay run row written
+  after this fix records the dates it paid the day rate for (``day_rate_dates``); the reader
+  costs each batch exactly as its run paid it, so a row WITHOUT that field (written before)
+  keeps its full day (what was paid — existing paid data is not changed).
+* B. Akord: a line's earned = the approved quantity × the agreed unit labor price from a
+  ``labor_quantity_approvals`` record (the LAB-02 data model: status "approved", bound to the
+  line's report + entry + report_version, approver ≠ worker; price = the record's
+  ``piece_rate`` snapshot, else the approver-named ``execution_packages.labor_piece_rate`` of
+  the line's project). No such record / no price → amount 0 and ``akord_blocked`` (the reason);
+  never hours × rate. A paid / batched akord line keeps what its run paid
+  (``akord_line_amounts`` on the row; a row written before keeps hours × frozen rate).
 """
 from __future__ import annotations
 
@@ -55,6 +73,10 @@ COST_STATES = (STATE_APPROVED, STATE_BATCHED, STATE_PAID)       # what is owed o
 ALL_STATES = (STATE_REPORTED,) + COST_STATES
 CLOCK_LABEL = "часовник (стар)"
 APPROVED_SESSION = "APPROVED_REPORT"
+AKORD = "Akord"
+DAY_RATE_TYPES = ("Daily", "Monthly")
+AKORD_NO_QTY = "Акорд: няма одобрено количество"
+AKORD_NO_PRICE = "Акорд: няма договорена единична цена труд"
 
 
 # ═══════════════════════════════════════════════════════════════════ the formula
@@ -94,16 +116,15 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
                 "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
 
     elif pay == "Akord":
-        # Piecework: use approved_value if available, else hours × rate
+        # FIX-PAY-03 (FLOW-028): akord = approved quantity × agreed unit labor price
+        # (``approved_value``, see ``akord_terms``). Without it there is no payable amount —
+        # hours × rate is never an akord earning.
         if approved_value > 0:
             earned = round(approved_value, 2)
-            formula = f"Одобрена стойност: {approved_value} EUR"
-        elif hr > 0:
-            earned = round(approved_hours * hr, 2)
-            formula = f"{approved_hours}ч × {hr} EUR/ч (акорд)"
+            formula = f"Одобрено количество × ед. цена труд: {earned} EUR"
         else:
             earned = 0
-            formula = "Няма ставка / стойност"
+            formula = "Няма одобрено количество / ед. цена труд — няма задължение"
         return {"earned": earned, "rate": hr, "rate_type": "piecework",
                 "daily_rate": 0, "hourly_rate": hr, "formula": formula}
 
@@ -142,6 +163,67 @@ def frozen_profile(row: dict, current: dict) -> dict:
 def day_cost(profile: dict, hours: float) -> float:
     """One worker-day of one payment batch, through the pay run's formula."""
     return calc_earned(profile, round(hours, 2), 1, 1)["earned"]
+
+
+def pay_type_of(profile: dict) -> str:
+    return ((profile or {}).get("pay_type") or "Monthly").strip()
+
+
+def _increment(profile: dict, prior_hours: float, hours: float) -> float:
+    """FIX-PAY-03 (A): what ``hours`` more add to a worker-day whose day rate was already
+    earned with ``prior_hours`` (in another pay run). Hourly is additive (unchanged: its own
+    hours); Daily / Monthly add nothing; mixed adds only its extra over the day."""
+    if pay_type_of(profile) == "Hourly":
+        return day_cost(profile, hours)
+    return round(day_cost(profile, prior_hours + hours) - day_cost(profile, prior_hours), 2)
+
+
+def run_earned(profile: dict, lines: List[dict], period_days: int = 7,
+               locked_hours: Optional[Dict[str, float]] = None) -> dict:
+    """FIX-PAY-03: the earned amount of ONE worker's ``lines`` in ONE pay run.
+
+    ``locked_hours`` = {date: hours of that worker's lines already batched / paid by another
+    pay run}. Those dates already earned the day rate: Daily / Monthly earn nothing more for
+    them, mixed only its extra over the day; Hourly is unchanged. Akord lines carry their
+    ``akord_amount`` (approved quantity × unit price; blocked lines are not passed in).
+    Returns ``calc_earned``'s dict plus ``approved_days`` (the days this run pays the day rate
+    for), ``day_rate_dates``, ``already_paid_dates`` and, for akord, ``akord_line_amounts``."""
+    locked_hours = locked_hours or {}
+    pay = pay_type_of(profile)
+    total_hours = round(sum(ln["hours"] for ln in lines), 1)
+    dates = sorted({ln["date"] for ln in lines})
+    fresh = [d for d in dates if d not in locked_hours]
+    topup = [d for d in dates if d in locked_hours]
+    extra = {}
+    if pay == AKORD:
+        amounts = {ln["id"]: round(float(ln.get("akord_amount") or 0), 2) for ln in lines}
+        e = calc_earned(profile, total_hours, len(dates), period_days,
+                        approved_value=round(sum(amounts.values()), 2))
+        e.update(approved_days=len(dates), day_rate_dates=dates)
+        extra["akord_line_amounts"] = amounts
+    elif pay == "Hourly":
+        e = calc_earned(profile, total_hours, len(dates), period_days)
+        e.update(approved_days=len(dates), day_rate_dates=dates)
+    elif pay in DAY_RATE_TYPES:
+        e = calc_earned(profile, total_hours, len(fresh), period_days)
+        e.update(approved_days=len(fresh), day_rate_dates=fresh)
+    else:  # mixed: fresh days by the formula, already-paid days only their extra
+        fresh_h = round(sum(ln["hours"] for ln in lines if ln["date"] in fresh), 1)
+        e = calc_earned(profile, fresh_h, len(fresh), period_days)
+        add = 0.0
+        for d in topup:
+            add += _increment(profile, locked_hours[d],
+                              sum(ln["hours"] for ln in lines if ln["date"] == d))
+        add = round(add, 2)
+        if add:
+            e["earned"] = round(e["earned"] + add, 2)
+            e["formula"] += f" + {add} EUR в вече платени дни"
+        e.update(approved_days=len(fresh), day_rate_dates=fresh)
+    if topup and pay not in ("Hourly", AKORD):
+        e["formula"] += f" ({len(topup)}д вече платени — надницата се плаща веднъж)"
+    e["already_paid_dates"] = topup
+    e.update(extra)
+    return e
 
 
 def _split(total: float, lines: List[dict], field: str = "cost") -> None:
@@ -192,19 +274,90 @@ async def _run_rows(tenant: TenantData, org_id: str, run_ids: Iterable[str]) -> 
     if not ids:
         return {}
     runs = await tenant.pay_runs.find({"org_id": org_id, "id": {"$in": ids}},
-                                      {"_id": 0, "id": 1, "number": 1, "status": 1,
+                                      {"_id": 0, "id": 1, "number": 1, "status": 1, "created_at": 1,
                                        "employee_rows": 1}).to_list(len(ids) + 10)
     out = {}
     for run in runs:
         for row in run.get("employee_rows") or []:
             out[(run["id"], row.get("employee_id"))] = dict(row, _run_number=run.get("number"),
-                                                            _run_status=run.get("status"))
+                                                            _run_status=run.get("status"),
+                                                            _run_created_at=run.get("created_at") or "")
+    return out
+
+
+def _num(value) -> Optional[float]:
+    try:
+        f = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return f if f == f and f not in (float("inf"), float("-inf")) else None
+
+
+async def akord_terms(tenant: TenantData, org_id: str, lines: List[dict]) -> Dict[str, dict]:
+    """FIX-PAY-03 (B): per line id, the akord terms from records the worker cannot write —
+    ``{approval_id, approved_quantity, unit, piece_rate, amount, blocked}``.
+
+    Source: ``labor_quantity_approvals`` (LAB-02 data model, read only here): status
+    "approved", same tenant, bound to the line's (report_id, entry_id, report_version), an
+    ``approved_by`` who is not the line's worker; the earliest such record wins. Price: the
+    record's ``piece_rate`` snapshot, else ``execution_packages.labor_piece_rate`` of the
+    package the approver named, of the line's own project. amount = quantity × price
+    (rounded to the cent); without either → amount 0 and ``blocked`` = the reason."""
+    by_key = {}
+    for ln in lines:
+        by_key[(ln["report_id"], ln.get("entry_id") or "", int(ln.get("report_version") or 0))] = ln
+    report_ids = sorted({k[0] for k in by_key if k[0]})
+    chosen: Dict[str, dict] = {}
+    if report_ids:
+        recs = await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": {"$in": report_ids}, "status": "approved"},
+            {"_id": 0}).to_list(len(by_key) * 4 + 10)
+        recs.sort(key=lambda r: (str(r.get("approved_at") or ""), str(r.get("id") or "")))
+        for r in recs:
+            ln = by_key.get((r.get("report_id"), r.get("entry_id") or "", int(r.get("report_version") or 0)))
+            if ln is None:
+                continue
+            by = r.get("approved_by")
+            if not by or by == ln["worker_id"]:          # no self-approval
+                continue
+            if r.get("worker_id") and r["worker_id"] != ln["worker_id"]:
+                continue
+            chosen.setdefault(ln["line_id"], r)
+    pkg_ids = sorted({r.get("execution_package_id") for r in chosen.values()
+                      if r.get("execution_package_id") and not ((_num(r.get("piece_rate")) or 0) > 0)})
+    packages = {}
+    if pkg_ids:
+        rows = await tenant.execution_packages.find(
+            {"org_id": org_id, "id": {"$in": pkg_ids}},
+            {"_id": 0, "id": 1, "project_id": 1, "labor_piece_rate": 1}).to_list(len(pkg_ids) + 5)
+        packages = {p["id"]: p for p in rows}
+    out = {}
+    for ln in lines:
+        r = chosen.get(ln["line_id"])
+        qty = _num((r or {}).get("approved_quantity"))
+        t = {"approval_id": (r or {}).get("id"), "approved_quantity": qty,
+             "unit": (r or {}).get("unit") or "", "piece_rate": None, "amount": 0.0, "blocked": None}
+        if r is None or qty is None or qty <= 0:
+            t["blocked"] = AKORD_NO_QTY
+            out[ln["line_id"]] = t
+            continue
+        rate = _num(r.get("piece_rate"))
+        if not (rate and rate > 0):
+            pkg = packages.get(r.get("execution_package_id") or "") or {}
+            rate = _num(pkg.get("labor_piece_rate")) if pkg.get("project_id") == ln["project_id"] else None
+        if not (rate and rate > 0):
+            t["blocked"] = AKORD_NO_PRICE
+            out[ln["line_id"]] = t
+            continue
+        t.update(piece_rate=rate, amount=round(qty * rate, 2))
+        out[ln["line_id"]] = t
     return out
 
 
 def _view(ln: dict) -> dict:
     return {
         "line_id": ln.get("id"), "report_id": ln.get("report_id") or ln.get("id"),
+        "entry_id": ln.get("entry_id") or None, "report_version": int(ln.get("report_version") or 0),
         "format": "old" if ln.get("source_type") == "old" else "flat",
         "worker_id": ln.get("worker_id"), "worker_name": ln.get("worker_name") or "",
         "date": ln.get("date"), "project_id": ln.get("project_id") or "",
@@ -261,16 +414,41 @@ async def labor_lines(org_id: str, *, project_id: Optional[str] = None,
 
     profiles = await _profiles(tenant, org_id, (v["worker_id"] for v in everything))
     runs = await _run_rows(tenant, org_id, (v["pay_run_id"] for v in everything))
-    _cost(everything, profiles, runs)
+    akord = await akord_terms(tenant, org_id, everything)
+    _cost(everything, profiles, runs, akord)
     return [v for v in everything if v["line_id"] in ids]
 
 
-def _cost(lines: List[dict], profiles: Dict[str, dict], runs: Dict[tuple, dict]) -> None:
+def _akord_cost(group: List[dict], row: Optional[dict], prof: dict, akord: Dict[str, dict]) -> None:
+    """FIX-PAY-03 (B): akord lines are costed per line — what their run paid when batched /
+    paid (``akord_line_amounts``; a row written before this fix: hours × its frozen rate, as
+    it was paid), else approved quantity × unit price, else 0 and blocked."""
+    paid = (row or {}).get("akord_line_amounts")
+    if row is not None and paid is None:
+        _split(day_cost(prof, sum(g["hours"] for g in group)), group)   # legacy row: as paid
+        return
+    for g in group:
+        t = akord.get(g["line_id"]) or {}
+        g["approved_quantity"], g["piece_rate"], g["unit"] = (
+            t.get("approved_quantity"), t.get("piece_rate"), t.get("unit") or "")
+        if paid is not None and g["line_id"] in paid:
+            g["cost"] = round(float(paid[g["line_id"]] or 0), 2)
+        else:
+            g["cost"] = round(float(t.get("amount") or 0), 2)
+            g["akord_blocked"] = t.get("blocked")
+
+
+def _cost(lines: List[dict], profiles: Dict[str, dict], runs: Dict[tuple, dict],
+          akord: Optional[Dict[str, dict]] = None) -> None:
+    akord = akord or {}
     # normal / overtime per worker-day over every line of the day (frozen at approval)
     split = [dict(ln, id=ln["line_id"]) for ln in lines]
     enrich_hours_batch(split)
     for ln, s in zip(lines, split):
         ln["normal_hours"], ln["overtime_hours"] = s["normal_hours"], s["overtime_hours"]
+    for ln in lines:   # FIX-PAY-03 (B): the akord terms of every line, for the pay run
+        t = akord.get(ln["line_id"]) or {}
+        ln["akord_amount"], ln["akord_blocked"] = round(float(t.get("amount") or 0), 2), t.get("blocked")
 
     groups = defaultdict(list)
     for ln in lines:
@@ -278,28 +456,67 @@ def _cost(lines: List[dict], profiles: Dict[str, dict], runs: Dict[tuple, dict])
             continue
         batch = ln["pay_run_id"] if ln["state"] in (STATE_BATCHED, STATE_PAID) else None
         groups[(ln["worker_id"], ln["date"], batch)].append(ln)
-    for (wid, _d, batch), group in groups.items():
-        group.sort(key=lambda x: (x["created_at"], x["line_id"]))
-        current = profiles.get(wid, {})
-        row = runs.get((batch, wid)) if batch else None
-        prof = frozen_profile(row, current) if row else current
-        _split(day_cost(prof, sum(g["hours"] for g in group)), group)
-        for g in group:
-            g["cost_basis"] = "pay_run_frozen" if row else "profile"
-            g["pay_run_number"] = (row or {}).get("_run_number")
 
-    # Р102 forecast: what a reported line would ADD to its worker's unpaid day
+    # FIX-PAY-03 (A): the day rate once per worker × day — the batches of a day in the order
+    # they were paid (the runs by creation, the unpaid lines last); each batch costs what its
+    # run paid (``day_rate_dates`` on the row; a row without it, written before, paid its
+    # own full day), the unpaid lines only what they add to the day.
+    days = defaultdict(list)
+    for (wid, d, batch) in groups:
+        days[(wid, d)].append(batch)
+    for (wid, d), batches in days.items():
+        locked = sorted((b for b in batches if b),
+                        key=lambda b: ((runs.get((b, wid)) or {}).get("_run_created_at") or "", b))
+        prior_h, claimed = 0.0, False
+        day_total, day_lines = 0.0, []    # the day amount of the day-rate types, re-split below
+        for batch in locked + ([None] if None in batches else []):
+            group = sorted(groups[(wid, d, batch)], key=lambda x: (x["created_at"], x["line_id"]))
+            current = profiles.get(wid, {})
+            row = runs.get((batch, wid)) if batch else None
+            prof = frozen_profile(row, current) if row else current
+            hours = sum(g["hours"] for g in group)
+            if pay_type_of(prof) == AKORD:
+                _akord_cost(group, row, prof, akord)
+            else:
+                if row is not None and "day_rate_dates" in row:
+                    total = day_cost(prof, hours) if d in (row.get("day_rate_dates") or []) \
+                        else _increment(prof, prior_h, hours)
+                elif row is not None or not claimed:
+                    total = day_cost(prof, hours)
+                else:
+                    total = _increment(prof, prior_h, hours)
+                _split(total, group)
+                if pay_type_of(prof) != "Hourly":
+                    day_total += total
+                    day_lines += group
+            for g in group:
+                g["cost_basis"] = "pay_run_frozen" if row else "profile"
+                g["pay_run_number"] = (row or {}).get("_run_number")
+            prior_h, claimed = prior_h + hours, True
+        if len(locked) + (None in batches) > 1 and day_lines:
+            # FIX-PAY-03 (A): ONE day amount (what the runs paid + what the unpaid lines add),
+            # split over ALL the day's lines / projects by hours — project cost by hours.
+            _split(round(day_total, 2), sorted(day_lines, key=lambda x: (x["created_at"], x["line_id"])))
+
+    # Р102 forecast: what a reported line would ADD to its worker's day
     reported = defaultdict(list)
     for ln in lines:
         if ln["state"] == STATE_REPORTED:
             reported[(ln["worker_id"], ln["date"])].append(ln)
     for (wid, d), group in reported.items():
         prof = profiles.get(wid, {})
-        unpaid = groups.get((wid, d, None))
-        base = sum(g["hours"] for g in unpaid or [])
-        base_cost = day_cost(prof, base) if unpaid else 0.0
-        inc = day_cost(prof, base + sum(g["hours"] for g in group)) - base_cost
-        _split(round(inc, 2), sorted(group, key=lambda x: (x["created_at"], x["line_id"])))
+        group = sorted(group, key=lambda x: (x["created_at"], x["line_id"]))
+        if pay_type_of(prof) == AKORD:
+            _akord_cost(group, None, prof, akord)
+        else:
+            if pay_type_of(prof) == "Hourly":   # unchanged: over the unpaid lines of the day
+                held = groups.get((wid, d, None)) or []
+            else:                               # FIX-PAY-03: over every approved line of the day
+                held = [g for b in days.get((wid, d), []) for g in groups[(wid, d, b)]]
+            base = sum(g["hours"] for g in held)
+            base_cost = day_cost(prof, base) if held else 0.0
+            inc = day_cost(prof, base + sum(g["hours"] for g in group)) - base_cost
+            _split(round(inc, 2), group)
         for g in group:
             g["cost_basis"] = "forecast"
             g["pay_run_number"] = None

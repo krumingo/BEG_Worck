@@ -91,6 +91,7 @@ async def fetch_normalized_report_lines(
             "regular_hours": float(reg) if reg is not None else None,
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
+            "report_version": int(d.get("report_version") or 0),   # FIX-PAY-03: approval binding
         })
 
     # ── B) Old-style (structured with employee_id + day_entries) ───
@@ -156,6 +157,7 @@ async def fetch_normalized_report_lines(
                 "regular_hours": None,
                 "overtime_hours": None,
                 "overtime_coefficient": None,
+                "report_version": int(d.get("report_version") or 0),   # FIX-PAY-03: approval binding
             })
 
     return lines
