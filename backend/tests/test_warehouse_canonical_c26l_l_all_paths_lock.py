@@ -53,8 +53,11 @@ async def _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode, all
     from app.permissions import service as perm
     client, db = canonical_mongo_db
     run = await _setup(client, allow_always_gate, db, monkeypatch, allocations)
-    await db["invoices"].insert_one({"id": "inv-c26", "org_id": T, "status": "Draft",
-                                     "type": "Received"})
+    # FIX-MAT-02: _invoice_line now creates the line's (Sent) invoice; this
+    # suite needs it Draft (line writes) — the same document as before.
+    await db["invoices"].replace_one({"id": "inv-c26", "org_id": T},
+                                     {"id": "inv-c26", "org_id": T, "status": "Draft",
+                                      "type": "Received"}, upsert=True)
     monkeypatch.setattr(perm, "_load_assignments", _loader(_real("owner")))
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     return client, db, run, CommandService(client)      # production gates
@@ -298,6 +301,20 @@ async def test_fg109_unlinked_line_still_reallocates(
     assert [c[3] for c in routes.audit_calls] == ["invoice_line_allocated"]
 
 
+async def _assert_costs_draft_then_official(db, run, want, want_official):
+    """(P, Q) live + after rebuild x2 while L's invoice is Draft, then again
+    after it is officially entered (Sent) - FIX-MAT-02 / Р99."""
+    for wanted, status in ((want, None), (want_official, "Sent")):
+        if status:
+            await db["invoices"].update_one({"id": "inv-c26", "org_id": T},
+                                            {"$set": {"status": status}})
+        for i in range(3):
+            if i:
+                await rebuild_from_ledger(db, tenant_id=T)
+            got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
+            assert got == (pytest.approx(wanted[0]), pytest.approx(wanted[1])), (status, i)
+
+
 @pytest.mark.parametrize("rep", range(10))
 @pytest.mark.parametrize("mode", MODES)
 async def test_fg109_reallocation_racing_a_delivery_never_counts_twice(
@@ -315,15 +332,14 @@ async def test_fg109_reallocation_racing_a_delivery_never_counts_twice(
     if isinstance(delivery, Exception):
         assert isinstance(delivery, InvoiceLineProjectMismatchError), delivery
         assert not isinstance(realloc, Exception), realloc
-        want = (0.0, 100.0)
+        # FIX-MAT-02 (Р99): L's invoice is still Draft, so its Path B on Q is
+        # not cost yet (c0ee4613 expected Q = 100 here); once the invoice is
+        # officially entered it is Q = 100, once.
+        want, want_official = (0.0, 0.0), (0.0, 100.0)
     else:
         assert isinstance(realloc, HTTPException) and realloc.status_code == 409, realloc
-        want = (100.0, 0.0)
-    for i in range(3):
-        if i:
-            await rebuild_from_ledger(db, tenant_id=T)
-        got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
-        assert got == (pytest.approx(want[0]), pytest.approx(want[1])), i
+        want = want_official = (100.0, 0.0)            # the canonical delivery
+    await _assert_costs_draft_then_official(db, run, want, want_official)
 
 
 # ═══════════════════ Addendum M — FG-124: the deprecated allocation path ═══════════════════
@@ -391,15 +407,14 @@ async def test_fg124_deprecated_reallocation_racing_a_delivery(
     if isinstance(delivery, Exception):
         assert isinstance(delivery, InvoiceLineProjectMismatchError), delivery
         assert not isinstance(realloc, Exception), realloc
-        want = (0.0, 100.0)
+        # FIX-MAT-02 (Р99): L's invoice is still Draft, so its Path B on Q is
+        # not cost yet (c0ee4613 expected Q = 100 here); once the invoice is
+        # officially entered it is Q = 100, once.
+        want, want_official = (0.0, 0.0), (0.0, 100.0)
     else:
         assert isinstance(realloc, HTTPException) and realloc.status_code == 409, realloc
-        want = (100.0, 0.0)
-    for i in range(3):
-        if i:
-            await rebuild_from_ledger(db, tenant_id=T)
-        got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
-        assert got == (pytest.approx(want[0]), pytest.approx(want[1])), i
+        want = want_official = (100.0, 0.0)            # the canonical delivery
+    await _assert_costs_draft_then_official(db, run, want, want_official)
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -486,6 +501,12 @@ async def test_f55_c26_04_a_paused_notes_put_never_writes_stale_money(
     line = await _line(db)
     assert line["notes"] == "review-paused"
     assert (line["unit_price"], line["line_total_ex_vat"]) == (20, 200)
+    # FIX-MAT-02 (Р99): while L's invoice is Draft only the canonical delivery
+    # (5 @20 = 100) is cost — c0ee4613 expected 200 here; once the invoice is
+    # officially entered the uncovered Path B rest (5 @20) joins: 200, the
+    # fresh price, never the stale 100 line total.
+    await _p_cost(db, run, 100.0)
+    await db["invoices"].update_one({"id": "inv-c26", "org_id": T}, {"$set": {"status": "Sent"}})
     await _p_cost(db, run, 200.0)
 
 

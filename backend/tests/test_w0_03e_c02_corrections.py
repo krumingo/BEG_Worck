@@ -201,9 +201,10 @@ async def _report_world():
                 {"id": "inv-a2", "supplier_counterparty_id": "cp3", "direction": "Received"},
                 {"id": "inv-a3", "supplier_counterparty_id": "cp-b", "direction": "Received"},
                 {"id": "inv-a4", "supplier_counterparty_id": "cp3", "direction": "Issued"}):
+        # FIX-MAT-02 (Р99): purchases count only officially entered invoices
         await db["invoices"].insert_one(dict(inv, org_id=ORG_A, issue_date="2026-09-01", total=10,
                                              subtotal=8, vat_amount=2, paid_amount=0,
-                                             remaining_amount=10))
+                                             remaining_amount=10, status="Sent"))
     await db["invoice_lines"].insert_one({"id": "l1", "org_id": ORG_A, "invoice_id": "inv-a1",
                                           "description": "Цимент", "purchased_by_user_id": "u1",
                                           "created_at": "2026-09-01", "allocations": []})

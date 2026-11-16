@@ -53,6 +53,15 @@ async def _invoice_line(db, *, line_id=IL, qty=10, value=100.0, unit="bag",
     if deprecated:
         row.update(allocation_type="project", allocation_ref_id=PROJECT)
     await db["invoice_lines"].insert_one(row)
+    # FIX-MAT-02 (Р99): a line is Path B cost only while its invoice is
+    # officially entered — the line now has its (Sent) supplier invoice, as
+    # routes/invoice_lines always does (a line is only ever added to an
+    # existing invoice). A test that needs another status sets it itself.
+    await db["invoices"].update_one(
+        {"id": "inv-c26", "org_id": tenant},
+        {"$setOnInsert": {"id": "inv-c26", "org_id": tenant, "direction": "Received",
+                          "kind": "Invoice", "status": "Sent", "lines": []}},
+        upsert=True)
 
 
 def _project_level(reports):

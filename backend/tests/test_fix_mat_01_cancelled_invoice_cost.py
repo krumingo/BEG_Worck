@@ -10,8 +10,9 @@ line (+110) and the input VAT (+22); cancelling the invoice
 both in the P&L. Fix: the readers (``canonical_material_cost.
 project_allocated_invoice_lines`` — Path B and ``project_input_vat``) skip the
 lines of an invoice whose status is ``Cancelled``. The lines themselves are not
-changed (no hard delete, no migration). Draft is NOT decided here: a Draft
-invoice's allocated line counts exactly as before.
+changed (no hard delete, no migration). Draft was NOT decided by FIX-MAT-01;
+Р99 (Крум 16.11.2026, FIX-MAT-02) then decided it: a Draft is not officially
+entered and does not count either (``app.services.official_invoice``).
 
 Cases:
   1. allocated line of a Sent invoice counts: material +110, VAT +22;
@@ -19,7 +20,8 @@ Cases:
   3. another, non-cancelled invoice on the same project still counts;
   4. tenant isolation: another org's Cancelled invoice (same invoice id, its
      own line on the project) changes nothing in this org;
-  5. Draft unchanged: its allocated line still counts (+110 / +22).
+  5. Draft: Р99 (FIX-MAT-02) — not officially entered, so 0 / 0 (FIX-MAT-01
+     itself had left Draft counting; that expectation is replaced).
 
 PAY-01 harness (HTTP finance router, PERMISSION_SERVICE_MODE off / shadow /
 enforce) on mongomock and, with W0_03_REAL_MONGO_URL (a disposable LOCAL
@@ -152,12 +154,14 @@ def test_03_other_tenant_cancelled_invoice_does_not_affect(monkeypatch, backend,
     run(monkeypatch, backend, mode, scenario)
 
 
-def test_04_draft_unchanged(monkeypatch, backend, mode):
-    """Draft is an open business question — FIX-MAT-01 keeps today's
-    behaviour: the allocated line of a Draft invoice counts."""
+def test_04_draft_is_not_cost_r99(monkeypatch, backend, mode):
+    """Р99 (Крум 16.11.2026, FIX-MAT-02) replaces FIX-MAT-01's "Draft
+    unchanged": a Draft invoice is not officially entered, so its allocated
+    line is neither material cost nor input VAT (c0ee4613 asserted
+    (110, 22, 110, 22) here). Cancelling it keeps it at 0."""
     async def scenario(c, op):
         await _supplier_invoice(op, "inv-mat-draft", status="Draft")
-        assert await _project() == (110.0, 22.0, 110.0, 22.0)
+        assert await _project() == (0, 0, 0, 0)
         await _cancel(c, "inv-mat-draft")
         assert await _project() == (0, 0, 0, 0)
     run(monkeypatch, backend, mode, scenario)
@@ -167,7 +171,8 @@ def test_05_one_selection_for_cost_and_vat():
     """Both readers go through the one selection helper (cannot diverge)."""
     import inspect
     from app.services import canonical_material_cost as m
-    assert m.VOID_INVOICE_STATUSES == ("Cancelled",)
+    # Р99 (FIX-MAT-02): the selection keeps officially entered invoices only
+    assert m.OFFICIAL_INVOICE_STATUSES == ("Sent", "PartiallyPaid", "Paid", "Overdue")
     for fn in (m.project_invoice_lines, m.project_input_vat):
         src = inspect.getsource(fn)
         assert "project_allocated_invoice_lines(" in src

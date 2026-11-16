@@ -535,14 +535,26 @@ def _shares(line: dict):
         yield a["type"], a["ref_id"], share
 
 
-async def received_line_allocations(tenant, org_id: str, invoices: List[dict]) -> Dict[str, List[dict]]:
+async def received_line_allocations(tenant, org_id: str, invoices: List[dict], *,
+                                    official_only: bool = True) -> Dict[str, List[dict]]:
     """{invoice_id: [{type, ref_id, ex, inc}]} — the allocated part of every
     supplier invoice in ``invoices`` (docs with ``RECEIVED_LINE_FIELDS``), by
     line. ``invoice_lines`` documents win; an invoice without them is read from
     its embedded lines (FG-200: a line's ``allocations[]`` or its
-    ``project_id``). Non-Received invoices are skipped."""
+    ``project_id``). Non-Received invoices are skipped.
+
+    FIX-MAT-02 (Р99): by default this is the part IN THE RESULT, so an invoice
+    that is not officially entered (Draft / Cancelled —
+    ``app.services.official_invoice``, read from the invoice documents, not
+    from the caller's projection) has no part (``[]``). ``official_only=False``
+    returns the pure allocation facts (used only to size what is still „за
+    разпределяне")."""
     by_id = {i["id"]: i for i in invoices if i.get("id") and under_r45(i)}
     out: Dict[str, List[dict]] = {iid: [] for iid in by_id}
+    if official_only and by_id:
+        from app.services.official_invoice import official_invoice_ids
+        official = await official_invoice_ids(tenant, org_id, by_id)
+        by_id = {iid: inv for iid, inv in by_id.items() if iid in official}
     if not by_id:
         return out
     with_docs = set()
@@ -590,7 +602,8 @@ def allocated_amount(parts: List[dict], *, basis: str = "ex", dest_type: Optiona
 async def received_result(tenant, org_id: str, invoices: List[dict], *, basis: str = "ex",
                           dest_type: Optional[str] = None,
                           ref_id: Optional[str] = None) -> Dict[str, float]:
-    """{invoice_id: the part of it in the official result} for supplier invoices."""
+    """{invoice_id: the part of it in the official result} for supplier
+    invoices — 0 for one that is not officially entered (Р99)."""
     parts = await received_line_allocations(tenant, org_id, invoices)
     return {iid: allocated_amount(p, basis=basis, dest_type=dest_type, ref_id=ref_id)
             for iid, p in parts.items()}
