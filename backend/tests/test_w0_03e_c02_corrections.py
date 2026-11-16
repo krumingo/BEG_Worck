@@ -41,7 +41,9 @@ from app.routes import (
 )
 
 from tests.test_w0_03e_legacy_migration import ORG_A, ORG_B, T_A, Ctx, dry, go, repo, run, seeded
-from tests.test_w0_03e_legacy_routes import ADMIN, client_for, enforce_with, find_all, landmines
+from tests.test_w0_03e_legacy_routes import (
+    ADMIN, client_for, enforce_with, find_all, landmines, post_advance,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -72,7 +74,7 @@ def canonical(ctx, db, collection, legacy_id):
 
 
 def _advance(monkeypatch, db, body):
-    return client_for(monkeypatch, hr, db, ADMIN).post("/api/advances", json=body)
+    return post_advance(monkeypatch, db, body)        # FIX-ADV-01 / R29: with a key
 
 
 def hooks_into(monkeypatch, db, ctx):

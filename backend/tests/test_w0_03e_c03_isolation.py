@@ -35,7 +35,9 @@ from app.routes import hr, projects, reports
 from tests.test_w0_03e_legacy_migration import (
     ORG_A, ORG_B, T_A, T_B, Ctx, dry, go, repo, run, seed, seeded,
 )
-from tests.test_w0_03e_legacy_routes import ADMIN, client_for, enforce_with, find_all, landmines
+from tests.test_w0_03e_legacy_routes import (
+    ADMIN, client_for, enforce_with, find_all, landmines, post_advance,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -287,7 +289,7 @@ def test_a_recipient_that_exists_only_in_b_is_refused_without_b_evidence(monkeyp
                        ({"type": "Advance", "user_id": "u3", "person_id": u1},
                         la.REASON_ADVANCE_MISMATCH)):
         before = run(db["advances"].count_documents({})), run(db["finance_payments"].count_documents({}))
-        r = client_for(monkeypatch, hr, db, ADMIN).post("/api/advances", json=dict(body, amount=5))
+        r = post_advance(monkeypatch, db, dict(body, amount=5))     # FIX-ADV-01 / R29
         assert r.status_code == 422 and r.json()["detail"]["error_code"] == code
         assert (run(db["advances"].count_documents({})),
                 run(db["finance_payments"].count_documents({}))) == before
