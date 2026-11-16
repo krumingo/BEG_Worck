@@ -298,20 +298,57 @@ def effective_allocations(line: dict) -> List[dict]:
     return []
 
 
-async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
-    """Path B candidates: supplier invoice lines with ANY allocation to the
-    project (``allocations[]`` or the deprecated single allocation)."""
+# FIX-MAT-01 (CLAUDE.md §7: material cost is recognised once, from VALID
+# documents) — an invoice in one of these statuses is not a source of project
+# material cost nor of project input VAT. Its lines stay untouched (no hard
+# delete, no migration); the readers skip them. ``Cancelled`` is the only
+# void status of ``models.finance.INVOICE_STATUSES``. Draft is NOT here: its
+# lines count as before (open business question, not decided by this fix).
+VOID_INVOICE_STATUSES: Tuple[str, ...] = ("Cancelled",)
+
+
+async def void_invoice_ids(tenant, org_id: str, invoice_ids: Iterable[Any]) -> set:
+    """The ids among ``invoice_ids`` whose invoice (of this tenant) has a
+    status in ``VOID_INVOICE_STATUSES``. A line whose invoice is missing is
+    not excluded (unchanged behaviour)."""
+    ids = sorted({i for i in invoice_ids if i})
+    if not ids:
+        return set()
+    return {inv["id"] async for inv in tenant.invoices.find(
+        {"org_id": org_id, "id": {"$in": ids},
+         "status": {"$in": list(VOID_INVOICE_STATUSES)}},
+        {"_id": 0, "id": 1})}
+
+
+async def project_allocated_invoice_lines(tenant, org_id: str, project_id: str,
+                                          projection: Dict[str, int]) -> List[dict]:
+    """THE selection of supplier invoice lines that may become project
+    material cost (Path B) or project input VAT: ANY allocation to the
+    project (``allocations[]`` or the deprecated single allocation), and the
+    parent invoice is not void (FIX-MAT-01). Every such reader goes through
+    here so the cost and the VAT cannot diverge."""
     cursor = tenant.invoice_lines.find(
         {"org_id": org_id,
          "$or": [
              {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
              {"allocation_type": "project", "allocation_ref_id": project_id},
          ]},
-        {"_id": 0, "id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
-         "qty": 1, "created_at": 1, "invoice_id": 1, "allocations": 1,
-         "allocation_type": 1, "allocation_ref_id": 1},
+        {**projection, "_id": 0, "invoice_id": 1},
     )
-    return [row async for row in cursor]
+    rows = [row async for row in cursor]
+    void = await void_invoice_ids(tenant, org_id, (r.get("invoice_id") for r in rows))
+    return [r for r in rows if r.get("invoice_id") not in void]
+
+
+async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
+    """Path B candidates: supplier invoice lines with ANY allocation to the
+    project (``allocations[]`` or the deprecated single allocation), from a
+    non-void invoice (FIX-MAT-01)."""
+    return await project_allocated_invoice_lines(
+        tenant, org_id, project_id,
+        {"id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
+         "qty": 1, "created_at": 1, "invoice_id": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1})
 
 
 async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
@@ -321,18 +358,14 @@ async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
     ``vat_amount`` × the share of its qty allocated to the project. A stale
     deprecated ``allocation_type=project`` on a line re-allocated elsewhere
     adds nothing. VAT is a tax fact of the allocation, not a cost lot, so a
-    canonical receipt of the line does not change it."""
-    cursor = tenant.invoice_lines.find(
-        {"org_id": org_id,
-         "$or": [
-             {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
-             {"allocation_type": "project", "allocation_ref_id": project_id},
-         ]},
-        {"_id": 0, "qty": 1, "vat_amount": 1, "allocations": 1,
-         "allocation_type": 1, "allocation_ref_id": 1},
-    )
+    canonical receipt of the line does not change it. A line of a void
+    (``Cancelled``) invoice adds nothing (FIX-MAT-01, same selection)."""
+    rows = await project_allocated_invoice_lines(
+        tenant, org_id, project_id,
+        {"qty": 1, "vat_amount": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1})
     total = 0.0
-    async for line in cursor:
+    for line in rows:
         vat = float(line.get("vat_amount", 0) or 0)
         mine = [a for a in effective_allocations(line)
                 if a["type"] == "project" and a["ref_id"] == project_id]
