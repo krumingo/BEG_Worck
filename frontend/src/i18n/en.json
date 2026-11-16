@@ -1483,7 +1483,16 @@
     "created": "Payment created",
     "tranchePaid": "Tranche paid",
     "payTranche": "Pay",
-    "confirmDelete": "Delete this payment?"
+    "confirmDelete": "Delete this payment?",
+    "payDialogTitle": "Pay tranche",
+    "payDialogDesc": "the payment is recorded in the payment register",
+    "account": "Account (Cash/Bank)",
+    "accountPlaceholder": "Select account",
+    "payDate": "Payment date",
+    "confirmPay": "Confirm payment",
+    "accountRequired": "Select an account",
+    "dateRequired": "Enter a date",
+    "accountsLoadError": "Accounts could not be loaded"
   },
   "projectDetails": {
     "saved": "Data saved",

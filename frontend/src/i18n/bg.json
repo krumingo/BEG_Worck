@@ -1665,7 +1665,16 @@
     "created": "Плащането е създадено",
     "tranchePaid": "Траншът е платен",
     "payTranche": "Плати",
-    "confirmDelete": "Изтриване на плащането?"
+    "confirmDelete": "Изтриване на плащането?",
+    "payDialogTitle": "Плащане на транш",
+    "payDialogDesc": "плащането се записва в платежния регистър",
+    "account": "Сметка (Каса/Банка)",
+    "accountPlaceholder": "Изберете сметка",
+    "payDate": "Дата на плащане",
+    "confirmPay": "Потвърди плащането",
+    "accountRequired": "Изберете сметка",
+    "dateRequired": "Въведете дата",
+    "accountsLoadError": "Сметките не могат да се заредят"
   },
   "projectDetails": {
     "saved": "Данните са запазени",

@@ -1,9 +1,10 @@
 /**
  * ContractPaymentsPage — Външни работници / договорни плащания.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,12 @@ export default function ContractPaymentsPage() {
   const [showDetail, setShowDetail] = useState(false);
   const [payingTranche, setPayingTranche] = useState(false);
 
+  // FIX-PAY-01 (Р97): "Плати" asks for the account (Каса/Банка) and the date; the payment is
+  // recorded in the single payment ledger. One Idempotency-Key per opened dialog (R29).
+  const [accounts, setAccounts] = useState([]);
+  const [payDialog, setPayDialog] = useState(null); // { idx, amount, account_id, date }
+  const payKey = useRef(createKeyHolder()).current;
+
   useEffect(() => {
     API.get("/projects").then(r => setProjects(r.data.items || r.data || [])).catch(() => {});
   }, []);
@@ -82,15 +89,41 @@ export default function ContractPaymentsPage() {
     finally { setSaving(false); }
   };
 
-  const handlePayTranche = async (idx) => {
+  const openPayDialog = async (idx) => {
     if (!selected) return;
+    payKey.settle(null); // a new dialog = a new submission = a new key
+    let list = accounts;
+    try {
+      const res = await API.get("/finance/accounts");
+      list = (res.data || []).filter(a => a.active !== false);
+      setAccounts(list);
+    } catch (err) { toast.error(apiErrorText(err, t("contractPayments.accountsLoadError"))); }
+    setPayDialog({
+      idx,
+      amount: selected.tranches?.[idx]?.amount || 0,
+      account_id: list[0]?.id || "",
+      date: new Date().toISOString().split("T")[0],
+    });
+  };
+
+  const handlePayTranche = async () => {
+    if (!selected || !payDialog) return;
+    if (!payDialog.account_id) { toast.error(t("contractPayments.accountRequired")); return; }
+    if (!payDialog.date) { toast.error(t("contractPayments.dateRequired")); return; }
     setPayingTranche(true);
     try {
-      const res = await API.post(`/contract-payments/${selected.id}/pay-tranche`, { tranche_index: idx });
+      const res = await API.post(`/contract-payments/${selected.id}/pay-tranche`, {
+        tranche_index: payDialog.idx, account_id: payDialog.account_id, date: payDialog.date,
+      }, idempotencyHeaders(payKey.get()));
+      payKey.settle(null);
       setSelected(res.data);
+      setPayDialog(null);
       toast.success(t("contractPayments.tranchePaid"));
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    } catch (err) {
+      payKey.settle(err); // keep the key only for a retry after a network error
+      toast.error(apiErrorText(err, t("common.error")));
+    }
     finally { setPayingTranche(false); }
   };
 
@@ -251,7 +284,7 @@ export default function ContractPaymentsPage() {
                     {tr.status === "paid" ? (
                       <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 text-xs"><Check className="w-3 h-3 mr-1" />{t("contractPayments.paid")}</Badge>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => handlePayTranche(i)} disabled={payingTranche} data-testid={`pay-tranche-${i}`}>
+                      <Button size="sm" variant="outline" onClick={() => openPayDialog(i)} disabled={payingTranche} data-testid={`pay-tranche-${i}`}>
                         <DollarSign className="w-3 h-3 mr-1" /> {t("contractPayments.payTranche")}
                       </Button>
                     )}
@@ -265,6 +298,43 @@ export default function ContractPaymentsPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay tranche Dialog — FIX-PAY-01 (Р97) */}
+      <Dialog open={!!payDialog} onOpenChange={o => { if (!o && !payingTranche) setPayDialog(null); }}>
+        <DialogContent className="max-w-sm" data-testid="pay-tranche-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("contractPayments.payDialogTitle")}</DialogTitle>
+            <DialogDescription>{selected?.worker_name} · {t("contractPayments.payDialogDesc")}</DialogDescription>
+          </DialogHeader>
+          {payDialog && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>{t("contractPayments.total")}</Label>
+                <Input value={`${Number(payDialog.amount).toFixed(2)} €`} readOnly disabled data-testid="pay-tranche-amount" />
+              </div>
+              <div className="space-y-1">
+                <Label>{t("contractPayments.account")} *</Label>
+                <Select value={payDialog.account_id || undefined} onValueChange={v => setPayDialog(d => ({ ...d, account_id: v }))}>
+                  <SelectTrigger data-testid="pay-tranche-account"><SelectValue placeholder={t("contractPayments.accountPlaceholder")} /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>{t("contractPayments.payDate")} *</Label>
+                <Input type="date" value={payDialog.date} onChange={e => setPayDialog(d => ({ ...d, date: e.target.value }))} data-testid="pay-tranche-date" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialog(null)} disabled={payingTranche}>{t("common.cancel")}</Button>
+            <Button onClick={handlePayTranche} disabled={payingTranche || !payDialog?.account_id || !payDialog?.date} data-testid="pay-tranche-confirm">
+              {payingTranche && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}{t("contractPayments.confirmPay")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

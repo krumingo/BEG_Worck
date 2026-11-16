@@ -1,7 +1,7 @@
 """
 Routes - HR / Payroll (M4) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -12,6 +12,8 @@ from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value
+from pymongo.errors import DuplicateKeyError
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import advance_master_person
@@ -812,7 +814,11 @@ class ContractPaymentUpdate(PydanticBaseModel):
 
 class PayTrancheRequest(PydanticBaseModel):
     tranche_index: int
-    paid_date: Optional[str] = None
+    # FIX-PAY-01 (Р97): the "Платен" button asks for the account (Каса/Банка) and the date.
+    # Optional in the model so a refused caller still gets 403 (not 422); required in the
+    # handler, after the permission check.
+    account_id: Optional[str] = None
+    date: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -899,13 +905,59 @@ async def update_contract_payment(payment_id: str, data: ContractPaymentUpdate, 
     return await tenant.contract_payments.find_one({"id": payment_id}, {"_id": 0})
 
 
+# FIX-PAY-01 (Р97, Krum 16.11.2026): category of the ledger row of a paid contract tranche.
+CONTRACT_TRANCHE_CATEGORY = "Договорно плащане"
+_TRANCHE_LEDGER_NS = uuid.UUID("5f0a9d43-2b7e-4c1e-9d0b-f1c0a97e0001")
+
+
+def _tranche_ledger_id(org_id: str, contract_id: str, idx: int, generation: int) -> str:
+    """THE ledger row of one payment of one tranche — the same id whatever the key, so two
+    requests under different keys can never both write an Outflow for the same tranche
+    (``_id`` is unique). ``generation`` is the tranche's ``payment_generation`` (0 today);
+    a future tranche reversal would raise it so the tranche can be paid again."""
+    return str(uuid.uuid5(_TRANCHE_LEDGER_NS, "%s\x1f%s\x1f%d\x1f%d" % (
+        org_id, contract_id, idx, generation)))
+
+
+def _valid_iso_date(value) -> Optional[str]:
+    if not isinstance(value, str) or len(value) != 10:
+        return None
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return value
+
+
 @router.post("/contract-payments/{payment_id}/pay-tranche")
-async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Depends(require_m4)):
+async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Depends(require_m4),
+                      idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
+    """Pay one tranche of a crew/worker contract (FIX-PAY-01, Р97).
+
+    The tranche is an obligation (FLOW-028); the payment is ONE Outflow row in the single
+    payment ledger ``finance_payments`` (FLOW-006, CLAUDE.md §2.5/§7). The tranche becomes
+    ``paid`` only after that row exists, and points to it (``payment_id``).
+
+      * ``account_id`` (Каса/Банка of THIS tenant) and ``date`` (YYYY-MM-DD) are required
+        (422; an unknown/foreign account -> 404), checked before any write;
+      * R29: no ``Idempotency-Key`` -> 428, nothing written; the same key + body replays the
+        original response; the same key + another body -> 409;
+      * a tranche already paid -> 400 "Tranche already paid" (as before);
+      * the ledger row id is derived from the tranche (not from the key): a second request
+        under another key cannot write a second Outflow for the same tranche.
+
+    Correction: the ledger row carries ``contract_payment_id`` -> its source module is
+    ``contract_payment`` (``app.services.payment_state.source_module``), so the generic
+    finance reversal refuses it (409 SOURCE_MODULE_REVERSAL_REQUIRED, FG-45) instead of
+    leaving a "paid" tranche with a reversed payment. A tranche reversal in this module does
+    not exist yet (open item for Krum).
+    """
     tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    org_id = user["org_id"]
 
-    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": user["org_id"]})
+    doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": org_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -913,24 +965,102 @@ async def pay_tranche(payment_id: str, data: PayTrancheRequest, user: dict = Dep
     idx = data.tranche_index
     if idx < 0 or idx >= len(tranches):
         raise HTTPException(status_code=400, detail="Invalid tranche index")
-    if tranches[idx]["status"] == "paid":
-        raise HTTPException(status_code=400, detail="Tranche already paid")
 
-    now = datetime.now(timezone.utc).isoformat()
-    tranches[idx]["status"] = "paid"
-    tranches[idx]["paid_date"] = data.paid_date or now[:10]
-    tranches[idx]["paid_by"] = user["id"]
-    tranches[idx]["notes"] = data.notes or tranches[idx].get("notes", "")
+    # Р97: the button asks for the account and the date — both required, nothing defaulted.
+    if not isinstance(data.account_id, str) or not data.account_id.strip():
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PAYMENT_ACCOUNT_REQUIRED",
+            "message": "Изберете сметка (Каса/Банка)"})
+    pay_date = _valid_iso_date(data.date)
+    if pay_date is None:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PAYMENT_DATE_INVALID",
+            "message": "Въведете дата на плащане (ГГГГ-ММ-ДД)"})
+    account = await tenant.financial_accounts.get(data.account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    acc_type = (account.get("type") or "").lower()
+    method = "Cash" if acc_type in ("cash", "каса") else "BankTransfer"   # as create_advance
 
-    # Check if all tranches paid → complete
-    all_paid = all(t["status"] == "paid" for t in tranches)
-    new_status = "completed" if all_paid else "active"
+    mw = await MoneyWrite.begin(user, "finance.contract_tranche_payment.create",
+                                idempotency_key, {"contract_payment_id": payment_id,
+                                                  **data.model_dump()})
+    if mw.replay_id:            # the same request again: the original answer, no new row
+        return mw.replay_payload()
 
-    await tenant.contract_payments.update_one(
-        {"id": payment_id},
-        {"$set": {"tranches": tranches, "status": new_status, "updated_at": now}},
-    )
-    return await tenant.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+    async with mw:
+        # Re-read inside the key: the state the write starts from.
+        doc = await tenant.contract_payments.find_one({"id": payment_id, "org_id": org_id})
+        tranche = (doc.get("tranches") or [])[idx]
+        generation = int(tranche.get("payment_generation") or 0)
+        ledger_id = _tranche_ledger_id(org_id, payment_id, idx, generation)
+        attempt_ref = mw.new_id("contract_tranche_payment")
+        # Paid already -> 400, unless it is THIS key's own earlier (interrupted) attempt.
+        # A tranche paid before FIX-PAY-01 has no payment_id: it is paid, not re-paid.
+        if tranche.get("status") == "paid" and (
+                tranche.get("payment_id") != ledger_id
+                or tranche.get("payment_attempt_ref") != attempt_ref):
+            raise HTTPException(status_code=400, detail="Tranche already paid")
+        try:
+            amount = money_value(tranche.get("amount"), "amount")
+        except HTTPException:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "TRANCHE_AMOUNT_INVALID",
+                "message": "Сумата на транша не е валидна — коригирайте договора"})
+
+        now = datetime.now(timezone.utc).isoformat()
+        worker = doc.get("worker_name") or "Работник"
+        ledger_row = {
+            "id": ledger_id, "org_id": org_id, "direction": "Outflow", "amount": amount,
+            "currency": account.get("currency") or "EUR", "date": pay_date, "method": method,
+            "account_id": account["id"], "counterparty_name": worker,
+            "reference": "Транш %d" % (idx + 1),
+            "note": "%s · %s · транш %d" % (CONTRACT_TRANCHE_CATEGORY, worker, idx + 1),
+            "category": CONTRACT_TRANCHE_CATEGORY,
+            "contract_payment_id": payment_id, "tranche_index": idx,
+            "payment_attempt_ref": attempt_ref,
+            "project_id": doc.get("site_id"), "user_id": doc.get("worker_id"),
+            "created_by": user["id"], "created_at": now, "updated_at": now,
+        }
+        ledger_row = {k: v for k, v in ledger_row.items()
+                      if not (k in ("project_id", "user_id") and v is None)}
+        try:
+            await tenant.finance_payments.insert_one(mw.unique(ledger_row))
+        except DuplicateKeyError as exc:
+            pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
+            if set(pattern) not in (set(), {"_id"}):
+                raise
+            existing = await tenant.finance_payments.get(ledger_id, {"_id": 0})
+            if not existing or existing.get("payment_attempt_ref") != attempt_ref:
+                # another request (another key) holds this tranche's payment
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "TRANCHE_PAYMENT_IN_PROGRESS",
+                    "message": "Траншът вече се плаща от друга заявка"})
+            # else: this key's own earlier attempt wrote it — resume
+
+        # Only now, after the ledger row: the tranche is paid and points to it.
+        p = "tranches.%d." % idx
+        await tenant.contract_payments.update_one(
+            {"id": payment_id, "org_id": org_id, p + "status": {"$ne": "paid"}},
+            {"$set": {p + "status": "paid", p + "paid_date": pay_date, p + "paid_by": user["id"],
+                      p + "notes": data.notes or tranche.get("notes", ""),
+                      p + "payment_id": ledger_id, p + "payment_attempt_ref": attempt_ref,
+                      p + "account_id": account["id"], p + "paid_at": now,
+                      "status": "active", "updated_at": now}})
+        # All tranches paid -> completed (one conditional write; the last payer sees it).
+        await tenant.contract_payments.update_one(
+            {"id": payment_id, "org_id": org_id,
+             "tranches": {"$not": {"$elemMatch": {"status": {"$ne": "paid"}}}}},
+            {"$set": {"status": "completed", "updated_at": now}})
+
+        await mw.step("audit", lambda: log_audit(
+            org_id, user["id"], user.get("email", ""), "contract_tranche_paid", "payment",
+            ledger_id, {"amount": amount, "contract_payment_id": payment_id,
+                        "tranche_index": idx, "account_id": account["id"], "date": pay_date},
+            entry_id=mw.new_id("audit_contract_tranche_payment")))
+        result = await tenant.contract_payments.find_one({"id": payment_id}, {"_id": 0})
+        mw.result_payload = result
+    return result
 
 
 @router.delete("/contract-payments/{payment_id}")
