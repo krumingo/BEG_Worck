@@ -912,11 +912,16 @@ async def get_lines_by_project(
     ]
     
     lines = await tenant.invoice_lines.aggregate(pipeline).to_list(1000)
-    
+
     # Calculate totals based on allocated qty proportion
+    # FIX-MAT-02 (Р99): every allocated line stays listed, with its invoice's
+    # status; only lines of an officially entered invoice are in the totals.
+    from app.services.official_invoice import official_invoice_ids
+    official = await official_invoice_ids(tenant, user["org_id"],
+                                          (ln.get("invoice_id") for ln in lines))
     total_ex_vat = 0
     total_vat = 0
-    
+
     for line in lines:
         # Proportional cost based on allocated qty
         alloc_qty = line.get("allocated_qty", 0)
@@ -929,17 +934,20 @@ async def get_lines_by_project(
         line["allocated_value_ex_vat"] = line_value
         line["allocated_vat"] = line_vat
         line["allocated_value_inc_vat"] = round(line_value + line_vat, 2)
-        
-        total_ex_vat += line_value
-        total_vat += line_vat
-        
+        line["in_result"] = line.get("invoice_id") in official
+
+        if line["in_result"]:
+            total_ex_vat += line_value
+            total_vat += line_vat
+
         # Get invoice info
-        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1})
+        invoice = await tenant.invoices.find_one({"id": line["invoice_id"]}, {"_id": 0, "invoice_no": 1, "issue_date": 1, "direction": 1, "status": 1})
         if invoice:
             line["invoice_no"] = invoice["invoice_no"]
             line["invoice_date"] = invoice["issue_date"]
             line["invoice_direction"] = invoice["direction"]
-        
+            line["invoice_status"] = invoice.get("status")
+
         # Get purchaser name
         if line.get("purchased_by_user_id"):
             buyer = await tenant.users.find_one({"id": line["purchased_by_user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})

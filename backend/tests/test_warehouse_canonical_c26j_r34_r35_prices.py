@@ -165,7 +165,8 @@ async def _invoice(db, *, line_id, desc, qty, price, supplier, issue_date, linke
     await db["invoices"].update_one(
         {"id": "inv-" + line_id},
         {"$set": {"id": "inv-" + line_id, "org_id": T, "direction": "Expense",
-                  "counterparty_name": supplier, "issue_date": issue_date}},
+                  "counterparty_name": supplier, "issue_date": issue_date,
+                  "status": "Sent"}},     # FIX-MAT-02 (Р99): officially entered
         upsert=True)
     await db["invoice_lines"].insert_one({
         "id": line_id, "org_id": T, "invoice_id": "inv-" + line_id, "description": desc,

@@ -517,8 +517,10 @@ async def get_project_profit_summary(
         # are already in the material cost (Path B, FG-17), so only invoices
         # whose lines are EMBEDDED (FG-200) are read here.
         from app.services.invoice_allocation import RECEIVED_LINE_FIELDS, received_result
+        from app.services.official_invoice import official_status_query
+        # FIX-MAT-02 (Р99): the one shared rule (officially entered), not a local list
         received_invoices = await tenant.invoices.find(
-            {"org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]},
+            {"org_id": org_id, "direction": "Received", "status": official_status_query(),
              "$or": [{"project_id": project_id}, {"lines.project_id": project_id},
                      {"lines.allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}}]},
             {"_id": 0, **RECEIVED_LINE_FIELDS}

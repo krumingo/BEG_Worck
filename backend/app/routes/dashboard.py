@@ -11,6 +11,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.services.paid_labor import paid_labor_v3
 from app.services.invoice_allocation import RECEIVED_LINE_FIELDS
+from app.services.official_invoice import official_status_expr, official_status_query
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m5
@@ -441,7 +442,11 @@ async def _received_in_result(tenant, org_id: str, received: list, *, basis: str
     invoice header / whole subtotal. A project / warehouse filter reads only
     the part allocated to it (and lists nothing to allocate)."""
     from app.services.invoice_allocation import received_line_allocations, allocated_amount
+    # FIX-MAT-02 (Р99): the amount in the result is only the officially entered
+    # invoices' part (``parts``); what is still „за разпределяне" is sized by the
+    # allocation facts of every non-cancelled invoice (``facts``) — unchanged.
     parts = await received_line_allocations(tenant, org_id, received)
+    facts = await received_line_allocations(tenant, org_id, received, official_only=False)
     if warehouse_id:
         dest = ("warehouse", warehouse_id)
     elif project_id:
@@ -460,7 +465,8 @@ async def _received_in_result(tenant, org_id: str, received: list, *, basis: str
                 whole = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
             else:
                 whole = inv.get("total", 0)
-            left = float(whole or 0) - allocated_amount(plist, basis=basis)
+            left = float(whole or 0) - allocated_amount(facts.get(inv.get("id"), []),
+                                                        basis=basis)
             if left > 0.005:
                 rest += left
                 rest_count += 1
@@ -668,7 +674,9 @@ async def get_finance_by_counterparty(
         {"$group": {
             "_id": "$supplier_counterparty_id",
             "total_income": {"$sum": {"$cond": [{"$eq": ["$direction", "Issued"]}, "$total", 0]}},
-            "total_expenses": {"$sum": {"$cond": [{"$eq": ["$direction", "Received"]}, "$total", 0]}},
+            # FIX-MAT-02 (Р99): a supplier invoice is an expense only when officially entered
+            "total_expenses": {"$sum": {"$cond": [{"$and": [
+                {"$eq": ["$direction", "Received"]}, official_status_expr()]}, "$total", 0]}},
             "invoice_count": {"$sum": 1},
         }},
         {"$project": {
@@ -1049,7 +1057,10 @@ async def get_top_counterparties(
             "org_id": org_id,
             "issue_date": {"$gte": date_from, "$lte": date_to},
             "direction": inv_direction,
-            "supplier_counterparty_id": {"$exists": True, "$ne": None}
+            "supplier_counterparty_id": {"$exists": True, "$ne": None},
+            # FIX-MAT-02 (Р99): spend = officially entered supplier invoices only;
+            # the income side (Issued) is unchanged here.
+            **({"status": official_status_query()} if inv_direction == "Received" else {}),
         }},
         {"$group": {
             "_id": "$supplier_counterparty_id",

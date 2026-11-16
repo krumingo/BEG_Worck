@@ -127,6 +127,13 @@ def _project_totals(reports):
 
 # ═════════════════════════════ Р17 — cost at ACCEPT ═════════════════════════════
 
+
+async def _official_invoice(db, inv_id):
+    """FIX-MAT-02 (Р99): a Path B line counts only while its supplier invoice
+    is officially entered — the line gets its (Sent) invoice."""
+    await db["invoices"].insert_one({"id": inv_id, "org_id": T, "direction": "Received",
+                                     "kind": "Invoice", "status": "Sent", "lines": []})
+
 async def test_r17_accept_10_return_3_costs_7_times_price_on_every_report(
         canonical_mongo_db, allow_always_gate, monkeypatch):
     """Accept 10 @10 = 100 → return 3 → 70 everywhere (dbda909: 0, consumption-only)."""
@@ -198,8 +205,9 @@ async def test_r17_every_report_shows_one_number_with_fira_return_and_invoice(
     _patch_dbs(monkeypatch, db)
     monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
     await _seed(db)
+    await _official_invoice(db, "inv-il-c25")      # FIX-MAT-02 (Р99)
     await db["invoice_lines"].insert_one({
-        "id": "il-c25", "org_id": T, "allocation_type": "project",
+        "id": "il-c25", "org_id": T, "invoice_id": "inv-il-c25", "allocation_type": "project",
         "allocation_ref_id": PROJECT, "line_total_ex_vat": 40.0, "vat_amount": 8.0,
         "description": "Лепило (директно)", "qty": 4, "created_at": "2026-11-01T10:00:00+00:00"})
     run = _Run(client, allow_always_gate, db)
@@ -235,8 +243,9 @@ async def test_fg17_pnl_has_no_max_and_matches_net_profit(
     _patch_dbs(monkeypatch, db)
     monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
     await _seed(db)
+    await _official_invoice(db, "inv-il-fg17")      # FIX-MAT-02 (Р99)
     await db["invoice_lines"].insert_one({
-        "id": "il-fg17", "org_id": T, "allocation_type": "project",
+        "id": "il-fg17", "org_id": T, "invoice_id": "inv-il-fg17", "allocation_type": "project",
         "allocation_ref_id": PROJECT, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
         "description": "фактурен ред", "created_at": "2026-11-01T10:00:00+00:00"})
     run = _Run(client, allow_always_gate, db)
@@ -263,8 +272,9 @@ async def test_fg17_invoice_line_linked_to_a_canonical_receipt_is_counted_once(
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)
+    await _official_invoice(db, "inv-il-linked")      # FIX-MAT-02 (Р99)
     await db["invoice_lines"].insert_one({
-        "id": "il-linked", "org_id": T, "allocation_type": "project",
+        "id": "il-linked", "org_id": T, "invoice_id": "inv-il-linked", "allocation_type": "project",
         "allocation_ref_id": PROJECT, "line_total_ex_vat": 30.0,
         "created_at": "2026-11-01T10:00:00+00:00"})
     run = _Run(client, allow_always_gate, db)

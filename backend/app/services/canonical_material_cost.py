@@ -66,6 +66,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from app.services.official_invoice import OFFICIAL_INVOICE_STATUSES, official_invoice_ids  # noqa: F401  (Р99)
+
 CANONICAL_SOURCE = "canonical_warehouse_service"
 
 # 5C-C25 (Р17) — the `material_entries` kinds that ARE project cost
@@ -298,20 +300,44 @@ def effective_allocations(line: dict) -> List[dict]:
     return []
 
 
-async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
-    """Path B candidates: supplier invoice lines with ANY allocation to the
-    project (``allocations[]`` or the deprecated single allocation)."""
+# FIX-MAT-01 / FIX-MAT-02 (Р99, Крум 16.11.2026): a supplier invoice line is
+# project material cost (Path B) and project input VAT only while its invoice
+# is OFFICIALLY ENTERED — the one rule of ``app.services.official_invoice``
+# (status not Draft, not Cancelled; a line whose invoice is missing in the
+# tenant does not count either). Its lines stay untouched (no hard delete, no
+# migration); the readers skip them.
+
+
+async def project_allocated_invoice_lines(tenant, org_id: str, project_id: str,
+                                          projection: Dict[str, int]) -> List[dict]:
+    """THE selection of supplier invoice lines that may become project
+    material cost (Path B) or project input VAT: ANY allocation to the
+    project (``allocations[]`` or the deprecated single allocation), and the
+    parent invoice is officially entered (Р99 — FIX-MAT-02; FIX-MAT-01 for
+    Cancelled). Every such reader goes through here so the cost and the VAT
+    cannot diverge."""
     cursor = tenant.invoice_lines.find(
         {"org_id": org_id,
          "$or": [
              {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
              {"allocation_type": "project", "allocation_ref_id": project_id},
          ]},
-        {"_id": 0, "id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
-         "qty": 1, "created_at": 1, "invoice_id": 1, "allocations": 1,
-         "allocation_type": 1, "allocation_ref_id": 1},
+        {**projection, "_id": 0, "invoice_id": 1},
     )
-    return [row async for row in cursor]
+    rows = [row async for row in cursor]
+    official = await official_invoice_ids(tenant, org_id, (r.get("invoice_id") for r in rows))
+    return [r for r in rows if r.get("invoice_id") in official]
+
+
+async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
+    """Path B candidates: supplier invoice lines with ANY allocation to the
+    project (``allocations[]`` or the deprecated single allocation), from an
+    officially entered invoice (Р99)."""
+    return await project_allocated_invoice_lines(
+        tenant, org_id, project_id,
+        {"id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
+         "qty": 1, "created_at": 1, "invoice_id": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1})
 
 
 async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
@@ -321,18 +347,15 @@ async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
     ``vat_amount`` × the share of its qty allocated to the project. A stale
     deprecated ``allocation_type=project`` on a line re-allocated elsewhere
     adds nothing. VAT is a tax fact of the allocation, not a cost lot, so a
-    canonical receipt of the line does not change it."""
-    cursor = tenant.invoice_lines.find(
-        {"org_id": org_id,
-         "$or": [
-             {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
-             {"allocation_type": "project", "allocation_ref_id": project_id},
-         ]},
-        {"_id": 0, "qty": 1, "vat_amount": 1, "allocations": 1,
-         "allocation_type": 1, "allocation_ref_id": 1},
-    )
+    canonical receipt of the line does not change it. A line of an invoice
+    that is not officially entered (Draft / Cancelled, Р99) adds nothing
+    (same selection)."""
+    rows = await project_allocated_invoice_lines(
+        tenant, org_id, project_id,
+        {"qty": 1, "vat_amount": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1})
     total = 0.0
-    async for line in cursor:
+    for line in rows:
         vat = float(line.get("vat_amount", 0) or 0)
         mine = [a for a in effective_allocations(line)
                 if a["type"] == "project" and a["ref_id"] == project_id]

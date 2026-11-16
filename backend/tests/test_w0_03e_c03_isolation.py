@@ -68,7 +68,8 @@ async def _world(db=None):
             {"id": "inv-shared", "org_id": ORG_B, "invoice_no": "B-SECRET-INVOICE",
              "issue_date": "2026-09-02", "supplier_counterparty_id": "cp-b-hidden-supplier",
              "direction": "Received", "total": 999999, "subtotal": 999999, "vat_amount": 0,
-             "paid_amount": 0, "remaining_amount": 999999},
+             "paid_amount": 0, "remaining_amount": 999999,
+             "status": "Sent"},   # FIX-MAT-02 (Р99): officially entered, so a leak would show
             {"id": "inv-only-b", "org_id": ORG_B, "invoice_no": "B-SECRET-INVOICE",
              "issue_date": "2026-09-02", "supplier_counterparty_id": "cp1",
              "direction": "Issued", "total": 999999, "subtotal": 999999, "vat_amount": 0,
@@ -101,7 +102,8 @@ async def _world(db=None):
         "invoices": [
             {"id": "inv-shared", "org_id": ORG_A, "invoice_no": "A-INV-1", "issue_date": "2026-09-01",
              "supplier_counterparty_id": "cp1", "direction": "Received", "total": 10, "subtotal": 8,
-             "vat_amount": 2, "paid_amount": 0, "remaining_amount": 10},
+             "vat_amount": 2, "paid_amount": 0, "remaining_amount": 10,
+             "status": "Sent"},   # FIX-MAT-02 (Р99): a supplier expense must be officially entered
             {"id": "inv-a-foreign", "org_id": ORG_A, "invoice_no": "A-INV-2",
              "issue_date": "2026-09-01", "supplier_counterparty_id": "cp-only-b",
              "direction": "Issued", "total": 5, "subtotal": 4, "vat_amount": 1, "paid_amount": 0,

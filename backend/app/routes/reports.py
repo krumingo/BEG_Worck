@@ -12,6 +12,7 @@ from app.tenancy.data_access import TenantData
 from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.services.paid_labor import paid_labor_v3
 from app.services.invoice_allocation import RECEIVED_LINE_FIELDS, received_result
+from app.services.official_invoice import official_status_query
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.permissions.money_write import require_money_write, require_finance_read
@@ -185,9 +186,16 @@ async def get_turnover_by_counterparty(
     
     if type == "purchases":
         match_stage["direction"] = "Received"
+        # FIX-MAT-02 (Р99): purchases = officially entered supplier invoices only
+        match_stage["status"] = official_status_query()
     elif type == "sales":
         match_stage["direction"] = "Issued"
-    
+    else:
+        # FIX-MAT-02 (Р99): the supplier side follows the same rule; the
+        # Issued side is unchanged (its revenue rules are a separate area).
+        match_stage["$or"] = [{"direction": {"$ne": "Received"}},
+                              {"status": official_status_query()}]
+
     if counterparty_id:
         match_stage["supplier_counterparty_id"] = counterparty_id
     

@@ -250,7 +250,7 @@ async def test_fg154_finance_by_project_splits_by_the_line_allocation(
         await db["projects"].insert_one({"id": pid, "org_id": T, "code": pid, "name": pid})
     await db["invoices"].insert_one({
         "id": "inv-154", "org_id": T, "direction": "Received", "total": 1200.0,
-        "issue_date": "2026-11-01",
+        "issue_date": "2026-11-01", "status": "Sent",   # FIX-MAT-02 (Р99): officially entered
         "allocations": [{"type": "project", "ref_id": "p-1"},
                         {"type": "project", "ref_id": "p-2"}]})
     await db["invoice_lines"].insert_one({
