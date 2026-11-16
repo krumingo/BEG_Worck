@@ -91,6 +91,7 @@ async def fetch_normalized_report_lines(
             "regular_hours": float(reg) if reg is not None else None,
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
+            "overtime_reason": d.get("overtime_reason"),   # Р108: the approver's override
             "report_version": int(d.get("report_version") or 0),   # FIX-PAY-03: approval binding
         })
 

@@ -189,13 +189,16 @@ from app.services.labor_cost_reader import (  # noqa: E402  (FIX-PAY-03)
     AKORD, STATE_APPROVED, STATE_BATCHED, STATE_PAID, pay_type_of, run_earned)
 
 # FIX-PAY-03: what a pay run row records so the reader costs its lines as it paid them.
-FIX_PAY_03_ROW_FIELDS = ("day_rate_dates", "already_paid_dates", "akord_line_amounts", "blocked_lines")
+FIX_PAY_03_ROW_FIELDS = ("day_rate_dates", "already_paid_dates", "akord_line_amounts", "blocked_lines",
+                         "overtime_rule", "overtime_premium")
 
 
 def _fix_pay_03_fields(e: dict, blocked: list) -> dict:
     out = {"day_rate_dates": e.get("day_rate_dates", []),
            "already_paid_dates": e.get("already_paid_dates", []),
-           "blocked_lines": list(blocked)}
+           "blocked_lines": list(blocked),
+           "overtime_rule": e.get("overtime_rule"),            # Р108
+           "overtime_premium": e.get("overtime_premium", 0)}
     if "akord_line_amounts" in e:
         out["akord_line_amounts"] = e["akord_line_amounts"]
     return out

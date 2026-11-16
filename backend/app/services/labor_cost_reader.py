@@ -58,6 +58,7 @@ FIX-PAY-03 (FLOW-028 "един отчетен ред не може да бъде
 from __future__ import annotations
 
 from collections import defaultdict
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, Iterable, List, Optional
 
 import app.db as _appdb   # read at call time: the database the app (or a test) points app.db.db at
@@ -80,11 +81,69 @@ AKORD_NO_PRICE = "Акорд: няма договорена единична ц�
 
 
 # ═══════════════════════════════════════════════════════════════════ the formula
+OT_DAY_HOURS = 8   # Р108: the day-rate premium hour = day rate ÷ 8
+OT_RULE = "R108"   # marks a pay run row paid with the approved-coefficient premium
+
+
+def _cents_half_up(value) -> float:
+    """Р108 premium only: to the cent, half up (0.625 → 0.63). Base pay keeps ``round``."""
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def approved_coefficient(line: dict) -> Optional[float]:
+    """Р108: the overtime coefficient the APPROVER put on the line — stored with the approval
+    override (``overtime_coefficient`` with its ``overtime_reason``, approve_report_one). The
+    default split of an approval without an override (coefficient 1.0, no reason) is not an
+    approved coefficient: no premium."""
+    coef = line.get("overtime_coefficient")
+    if coef is None or not (line.get("overtime_reason") or "").strip():
+        return None
+    try:
+        coef = float(coef)
+    except (TypeError, ValueError):
+        return None
+    return coef if coef >= 1 and coef == coef and coef != float("inf") else None
+
+
+def overtime_of(lines: Iterable[dict]) -> List[tuple]:
+    """(overtime hours, approved coefficient) of the lines that carry an approved coefficient."""
+    out = []
+    for ln in lines:
+        coef = approved_coefficient(ln)
+        ot = float(ln.get("overtime_hours") or 0)
+        if coef is not None and ot > 0:
+            out.append((ot, coef))
+    return out
+
+
+def overtime_premium(pay: str, hourly: float, day_rate: float, overtime) -> tuple:
+    """Р108 (Krum 16.11.2026): (premium, overtime hours, formula part). Only lines with an
+    approved coefficient: Hourly — the hours over the norm are already paid × rate, the
+    premium adds × (coefficient − 1), so they are paid × rate × coefficient; Daily / Monthly /
+    mixed — hours over 8 in the day × (day rate ÷ 8) × coefficient. Akord: none."""
+    if pay == AKORD or not overtime:
+        return 0.0, 0.0, ""
+    total, hours, parts = Decimal(0), 0.0, []
+    for ot, coef in overtime:
+        if pay == "Hourly":
+            total += Decimal(str(ot)) * Decimal(str(hourly)) * (Decimal(str(coef)) - 1)
+            parts.append(f"{ot}ч × {hourly} × {coef}")
+        else:
+            total += Decimal(str(ot)) * Decimal(str(day_rate)) / OT_DAY_HOURS * Decimal(str(coef))
+            parts.append(f"{ot}ч × ({day_rate}/{OT_DAY_HOURS}) × {coef}")
+        hours += ot
+    premium = _cents_half_up(total)
+    return premium, round(hours, 2), (" + извънреден " + " + ".join(parts) + f" = {premium} EUR"
+                                      if premium else "")
+
+
 def calc_earned(profile: dict, approved_hours: float, approved_days: int,
-                period_days: int = 7, approved_value: float = 0) -> dict:
+                period_days: int = 7, approved_value: float = 0, overtime=None) -> dict:
     """
     Multi pay-type earned engine (the pay run's formula — canonical, LAB-R96 step 3).
-    Returns: {earned, rate, rate_type, daily_rate, hourly_rate, formula}
+    ``overtime`` = [(overtime hours, approved coefficient)] of the lines (``overtime_of``) —
+    Р108: a premium only where the approver put a coefficient.
+    Returns: {earned, rate, rate_type, daily_rate, hourly_rate, formula, overtime_premium}
     """
     pay = (profile.get("pay_type") or "Monthly").strip()
     hr = float(profile.get("hourly_rate") or 0)
@@ -95,25 +154,28 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
 
     if pay == "Hourly":
         earned = round(approved_hours * hr, 2)
-        return {"earned": earned, "rate": hr, "rate_type": "hourly",
-                "daily_rate": round(hr * hd, 2), "hourly_rate": hr,
-                "formula": f"{approved_hours}ч × {hr} EUR/ч"}
+        out = {"earned": earned, "rate": hr, "rate_type": "hourly",
+               "daily_rate": round(hr * hd, 2), "hourly_rate": hr,
+               "formula": f"{approved_hours}ч × {hr} EUR/ч"}
+        prem = overtime_premium(pay, hr, 0, overtime)
 
     elif pay == "Daily":
         earned = round(approved_days * dr, 2)
         effective_hr = round(dr / max(hd, 1), 2)
-        return {"earned": earned, "rate": dr, "rate_type": "daily",
-                "daily_rate": dr, "hourly_rate": effective_hr,
-                "formula": f"{approved_days}д × {dr} EUR/д"}
+        out = {"earned": earned, "rate": dr, "rate_type": "daily",
+               "daily_rate": dr, "hourly_rate": effective_hr,
+               "formula": f"{approved_days}д × {dr} EUR/д"}
+        prem = overtime_premium(pay, hr, dr, overtime)
 
     elif pay == "Monthly":
         # Pro-rated: (monthly / working_days) × approved_days
         daily = round(ms / max(wd, 1), 2)
         earned = round(daily * approved_days, 2)
         effective_hr = round(daily / max(hd, 1), 2)
-        return {"earned": earned, "rate": ms, "rate_type": "monthly",
-                "daily_rate": daily, "hourly_rate": effective_hr,
-                "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
+        out = {"earned": earned, "rate": ms, "rate_type": "monthly",
+               "daily_rate": daily, "hourly_rate": effective_hr,
+               "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
+        prem = overtime_premium(pay, hr, daily, overtime)
 
     elif pay == "Akord":
         # FIX-PAY-03 (FLOW-028): akord = approved quantity × agreed unit labor price
@@ -125,22 +187,27 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
         else:
             earned = 0
             formula = "Няма одобрено количество / ед. цена труд — няма задължение"
-        return {"earned": earned, "rate": hr, "rate_type": "piecework",
-                "daily_rate": 0, "hourly_rate": hr, "formula": formula}
+        out = {"earned": earned, "rate": hr, "rate_type": "piecework",
+               "daily_rate": 0, "hourly_rate": hr, "formula": formula}
+        prem = (0.0, 0.0, "")
 
     else:  # mixed
-        # Sum applicable: daily part + hourly overtime if any
+        # Р108: the day part + the approved-coefficient premium per line (the former
+        # automatic ×1.5 over the period's hours is gone)
         daily = round(ms / max(wd, 1), 2) if ms > 0 else dr
         base_earned = round(daily * approved_days, 2) if daily > 0 else 0
         effective_hr = round(daily / max(hd, 1), 2) if daily > 0 else hr
-        overtime_h = max(0, approved_hours - approved_days * hd)
-        ot_earned = round(overtime_h * effective_hr * 1.5, 2) if overtime_h > 0 else 0
-        earned = round(base_earned + ot_earned, 2)
-        formula = f"{approved_days}д × {daily} EUR/д"
-        if ot_earned > 0:
-            formula += f" + {overtime_h}ч OT × {effective_hr}×1.5"
-        return {"earned": earned, "rate": daily, "rate_type": "mixed",
-                "daily_rate": daily, "hourly_rate": effective_hr, "formula": formula}
+        out = {"earned": base_earned, "rate": daily, "rate_type": "mixed",
+               "daily_rate": daily, "hourly_rate": effective_hr,
+               "formula": f"{approved_days}д × {daily} EUR/д"}
+        prem = overtime_premium(pay, hr, daily, overtime)
+
+    premium, _ot_h, text = prem
+    out["overtime_premium"] = premium
+    if premium:
+        out["earned"] = round(out["earned"] + premium, 2)
+        out["formula"] += text
+    return out
 
 
 def frozen_profile(row: dict, current: dict) -> dict:
@@ -160,22 +227,24 @@ def frozen_profile(row: dict, current: dict) -> dict:
     return p
 
 
-def day_cost(profile: dict, hours: float) -> float:
-    """One worker-day of one payment batch, through the pay run's formula."""
-    return calc_earned(profile, round(hours, 2), 1, 1)["earned"]
+def day_cost(profile: dict, hours: float, overtime=None) -> float:
+    """One worker-day of one payment batch, through the pay run's formula (Р108: with the
+    approved-coefficient overtime of its lines)."""
+    return calc_earned(profile, round(hours, 2), 1, 1, overtime=overtime)["earned"]
 
 
 def pay_type_of(profile: dict) -> str:
     return ((profile or {}).get("pay_type") or "Monthly").strip()
 
 
-def _increment(profile: dict, prior_hours: float, hours: float) -> float:
+def _increment(profile: dict, prior_hours: float, hours: float, overtime=None) -> float:
     """FIX-PAY-03 (A): what ``hours`` more add to a worker-day whose day rate was already
     earned with ``prior_hours`` (in another pay run). Hourly is additive (unchanged: its own
-    hours); Daily / Monthly add nothing; mixed adds only its extra over the day."""
+    hours); Daily / Monthly / mixed add no day rate — only (Р108) the approved-coefficient
+    premium of these lines (``overtime``)."""
     if pay_type_of(profile) == "Hourly":
-        return day_cost(profile, hours)
-    return round(day_cost(profile, prior_hours + hours) - day_cost(profile, prior_hours), 2)
+        return day_cost(profile, hours, overtime)
+    return round(day_cost(profile, prior_hours + hours, overtime) - day_cost(profile, prior_hours), 2)
 
 
 def run_earned(profile: dict, lines: List[dict], period_days: int = 7,
@@ -184,7 +253,7 @@ def run_earned(profile: dict, lines: List[dict], period_days: int = 7,
 
     ``locked_hours`` = {date: hours of that worker's lines already batched / paid by another
     pay run}. Those dates already earned the day rate: Daily / Monthly earn nothing more for
-    them, mixed only its extra over the day; Hourly is unchanged. Akord lines carry their
+    them (Р108: only the approved-coefficient premium of the new lines); Hourly is unchanged. Akord lines carry their
     ``akord_amount`` (approved quantity × unit price; blocked lines are not passed in).
     Returns ``calc_earned``'s dict plus ``approved_days`` (the days this run pays the day rate
     for), ``day_rate_dates``, ``already_paid_dates`` and, for akord, ``akord_line_amounts``."""
@@ -202,26 +271,18 @@ def run_earned(profile: dict, lines: List[dict], period_days: int = 7,
         e.update(approved_days=len(dates), day_rate_dates=dates)
         extra["akord_line_amounts"] = amounts
     elif pay == "Hourly":
-        e = calc_earned(profile, total_hours, len(dates), period_days)
+        e = calc_earned(profile, total_hours, len(dates), period_days, overtime=overtime_of(lines))
         e.update(approved_days=len(dates), day_rate_dates=dates)
-    elif pay in DAY_RATE_TYPES:
-        e = calc_earned(profile, total_hours, len(fresh), period_days)
-        e.update(approved_days=len(fresh), day_rate_dates=fresh)
-    else:  # mixed: fresh days by the formula, already-paid days only their extra
-        fresh_h = round(sum(ln["hours"] for ln in lines if ln["date"] in fresh), 1)
-        e = calc_earned(profile, fresh_h, len(fresh), period_days)
-        add = 0.0
-        for d in topup:
-            add += _increment(profile, locked_hours[d],
-                              sum(ln["hours"] for ln in lines if ln["date"] == d))
-        add = round(add, 2)
-        if add:
-            e["earned"] = round(e["earned"] + add, 2)
-            e["formula"] += f" + {add} EUR в вече платени дни"
+    else:
+        # Daily / Monthly / mixed: the day rate for the fresh days only; Р108: the
+        # approved-coefficient premium of every line of the run (a premium is per line, not
+        # per day rate, so a line of an already-paid day still earns its own premium)
+        e = calc_earned(profile, total_hours, len(fresh), period_days, overtime=overtime_of(lines))
         e.update(approved_days=len(fresh), day_rate_dates=fresh)
     if topup and pay not in ("Hourly", AKORD):
         e["formula"] += f" ({len(topup)}д вече платени — надницата се плаща веднъж)"
     e["already_paid_dates"] = topup
+    e["overtime_rule"] = OT_RULE
     e.update(extra)
     return e
 
@@ -369,6 +430,8 @@ def _view(ln: dict) -> dict:
         "payroll_batch_id": ln.get("payroll_batch_id"), "notes": ln.get("notes") or "",
         "created_at": ln.get("created_at") or "",
         "regular_hours": ln.get("regular_hours"), "overtime_hours": ln.get("overtime_hours"),
+        "overtime_coefficient": ln.get("overtime_coefficient"),
+        "overtime_reason": ln.get("overtime_reason"),
         "state": state_of(ln),
     }
 
@@ -478,13 +541,16 @@ def _cost(lines: List[dict], profiles: Dict[str, dict], runs: Dict[tuple, dict],
             if pay_type_of(prof) == AKORD:
                 _akord_cost(group, row, prof, akord)
             else:
+                # Р108: the approved-coefficient premium — for a paid / batched batch only when
+                # its run paid by that rule (``overtime_rule``): what was paid stays what was paid
+                ot = overtime_of(group) if (row is None or row.get("overtime_rule") == OT_RULE) else None
                 if row is not None and "day_rate_dates" in row:
-                    total = day_cost(prof, hours) if d in (row.get("day_rate_dates") or []) \
-                        else _increment(prof, prior_h, hours)
+                    total = day_cost(prof, hours, ot) if d in (row.get("day_rate_dates") or []) \
+                        else _increment(prof, prior_h, hours, ot)
                 elif row is not None or not claimed:
-                    total = day_cost(prof, hours)
+                    total = day_cost(prof, hours, ot)
                 else:
-                    total = _increment(prof, prior_h, hours)
+                    total = _increment(prof, prior_h, hours, ot)
                 _split(total, group)
                 if pay_type_of(prof) != "Hourly":
                     day_total += total
@@ -514,8 +580,9 @@ def _cost(lines: List[dict], profiles: Dict[str, dict], runs: Dict[tuple, dict],
             else:                               # FIX-PAY-03: over every approved line of the day
                 held = [g for b in days.get((wid, d), []) for g in groups[(wid, d, b)]]
             base = sum(g["hours"] for g in held)
-            base_cost = day_cost(prof, base) if held else 0.0
-            inc = day_cost(prof, base + sum(g["hours"] for g in group)) - base_cost
+            base_cost = day_cost(prof, base, overtime_of(held)) if held else 0.0
+            inc = day_cost(prof, base + sum(g["hours"] for g in group),
+                           overtime_of(held) + overtime_of(group)) - base_cost
             _split(round(inc, 2), group)
         for g in group:
             g["cost_basis"] = "forecast"
