@@ -326,7 +326,49 @@ async def project_allocated_invoice_lines(tenant, org_id: str, project_id: str,
     )
     rows = [row async for row in cursor]
     official = await official_invoice_ids(tenant, org_id, (r.get("invoice_id") for r in rows))
-    return [r for r in rows if r.get("invoice_id") in official]
+    rows = [r for r in rows if r.get("invoice_id") in official]
+    return rows + await project_embedded_invoice_lines(tenant, org_id, project_id)
+
+
+async def project_embedded_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
+    """FIX-MAT-03 (F1-3) — the lines of a supplier invoice made in the finance
+    UI live EMBEDDED in ``invoices.lines[]`` (``POST /finance/invoices``,
+    ``PUT /finance/invoices/{id}/lines``); they are the same invoice lines and
+    are selected by the SAME rule as the ``invoice_lines`` documents above:
+    a supplier (Received) invoice, officially entered (Р99), the line
+    allocated to the project (its ``allocations[]``, else its ``project_id``
+    — ``invoice_allocation.embedded_as_line``; the Р45 header destination is
+    already written on the line by the writers, no header fallback here).
+
+    ONE representation per invoice (FG-200 precedence,
+    ``invoice_allocation.invoices_with_line_docs``): an invoice that has any
+    ``invoice_lines`` document is read from those only, so a line is never
+    counted from both — the same precedence ``received_line_allocations``
+    (dashboards / company reports) uses, so every screen shows one number.
+    Read time only; nothing is stored, no migration."""
+    from app.services.invoice_allocation import embedded_line_doc, invoices_with_line_docs
+    from app.services.official_invoice import official_status_query
+    invoices = [inv async for inv in tenant.invoices.find(
+        {"org_id": org_id, "direction": "Received", "status": official_status_query(),
+         "$or": [{"lines.project_id": project_id},
+                 {"lines.allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
+                 {"lines.allocations": {"$elemMatch": {"type": "project", "refId": project_id}}}]},
+        {"_id": 0, "id": 1, "lines": 1, "vat_percent": 1, "created_at": 1, "issue_date": 1})]
+    if not invoices:
+        return []
+    with_docs = await invoices_with_line_docs(tenant, org_id, (i.get("id") for i in invoices))
+    out: List[dict] = []
+    for inv in invoices:
+        if not inv.get("id") or inv["id"] in with_docs:
+            continue
+        for i, el in enumerate(inv.get("lines") or []):
+            if not isinstance(el, dict):
+                continue
+            doc = embedded_line_doc(inv, el, i)
+            if any(a["type"] == "project" and a["ref_id"] == project_id
+                   for a in effective_allocations(doc)):
+                out.append(doc)
+    return out
 
 
 async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
@@ -971,6 +1013,19 @@ async def path_b_integrity_warnings(tenant, org_id: str) -> List[dict]:
         for a in effective_allocations(line):
             if a["type"] == "project" and a["ref_id"]:
                 project_ids.add(a["ref_id"])
+    # FIX-MAT-03 — projects of embedded finance-UI supplier invoice lines too
+    # (the same Path B selection; a project not allocated to is a no-op).
+    async for inv in tenant.invoices.find(
+            {"org_id": org_id, "direction": "Received",
+             "$or": [{"lines": {"$elemMatch": {"project_id": {"$type": "string", "$ne": ""}}}},
+                     {"lines.allocations.type": "project"}]},
+            {"_id": 0, "lines": 1}):
+        from app.services.invoice_allocation import embedded_as_line
+        for el in inv.get("lines") or []:
+            if isinstance(el, dict):
+                for a in effective_allocations(embedded_as_line(el)):
+                    if a["type"] == "project" and a["ref_id"]:
+                        project_ids.add(a["ref_id"])
     # 5C-C26l — destination projects of linked direct deliveries too.
     for pid in await tenant.warehouse_transactions.distinct(
             "project_id", {"org_id": org_id, "action": "receive_from_supplier_to_project",

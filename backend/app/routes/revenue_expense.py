@@ -513,9 +513,11 @@ async def get_project_profit_summary(
         # part of its LINES allocated to the project (ex VAT) — never by the
         # header project_id / whole subtotal; the unallocated rest is in
         # „фактури за разпределяне", not in this project. FLOW-043 D-04 (one
-        # classification): `invoice_lines` documents allocated to the project
-        # are already in the material cost (Path B, FG-17), so only invoices
-        # whose lines are EMBEDDED (FG-200) are read here.
+        # classification): supplier invoice lines allocated to the project are
+        # already in the material cost (Path B, FG-17) — FIX-MAT-03: the
+        # EMBEDDED lines of a finance-UI invoice (FG-200) too, by the same
+        # selection — so an invoice with a line in that selection is never
+        # read here a second time.
         from app.services.invoice_allocation import RECEIVED_LINE_FIELDS, received_result
         from app.services.official_invoice import official_status_query
         # FIX-MAT-02 (Р99): the one shared rule (officially entered), not a local list
@@ -525,9 +527,11 @@ async def get_project_profit_summary(
                      {"lines.allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}}]},
             {"_id": 0, **RECEIVED_LINE_FIELDS}
         ).to_list(500)
+        from app.services.canonical_material_cost import project_invoice_lines
+        from app.services.invoice_allocation import invoices_with_line_docs
         _ids = [i["id"] for i in received_invoices if i.get("id")]
-        _path_b = {ln.get("invoice_id") async for ln in tenant.invoice_lines.find(
-            {"org_id": org_id, "invoice_id": {"$in": _ids}}, {"_id": 0, "invoice_id": 1})}
+        _path_b = await invoices_with_line_docs(tenant, org_id, _ids) | {
+            ln.get("invoice_id") for ln in await project_invoice_lines(tenant, org_id, project_id)}
         received_invoices = [i for i in received_invoices if i.get("id") not in _path_b]
         subcontract_cost = round(sum((await received_result(
             tenant, org_id, received_invoices, dest_type="project", ref_id=project_id)).values()), 2)
