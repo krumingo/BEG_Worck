@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user, require_admin, can_access_project, get_user_project_ids
 from app.tenancy import project_team
+from app.services import labor_report_service as labor
 
 
 def _team(user: dict):
@@ -178,6 +179,28 @@ async def can_approve_site(user: dict, site_id: str) -> bool:
     })
     return project is not None
 
+async def _log_lines(tenant, log: dict) -> list:
+    return await tenant.employee_daily_reports.find(
+        {"org_id": log["org_id"], "daily_log_id": log["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
+
+
+async def _log_view(tenant, log: dict) -> dict:
+    """LAB-R96: a "Дневници" log written through the labor service stores no hours itself —
+    its ``entries`` are rebuilt from its labor lines (same shape as before)."""
+    if not log.get("labor_lines"):
+        return log
+    lines = await _log_lines(tenant, log)
+    log["entries"] = [{"user_id": ln["worker_id"], "hours": ln.get("hours", 0), "role": ln.get("log_role"),
+                       "line_id": ln["id"], "status": ln.get("status")} for ln in lines]
+    log["total_hours"] = round(sum(float(ln.get("hours") or 0) for ln in lines), 2)
+    return log
+
+
+def _log_entries(data_entries, activity: str, log_id: str) -> list:
+    return [{"worker_id": e.user_id, "activity": activity, "hours": e.hours,
+             "extra": {"daily_log_id": log_id, "log_role": e.role}} for e in data_entries]
+
+
 @router.get("/daily-logs")
 async def list_daily_logs(
     site_id: Optional[str] = None,
@@ -190,7 +213,7 @@ async def list_daily_logs(
     """List daily work logs. Non-admins see only their accessible sites."""
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
-    
+
     # Filter by site
     if site_id:
         if not await check_site_access(user, site_id):
@@ -200,32 +223,33 @@ async def list_daily_logs(
         # Non-admin: filter to accessible projects
         accessible_ids = await get_user_project_ids(user)
         query["site_id"] = {"$in": accessible_ids}
-    
+
     # Date filters
     if date_from:
         query["date"] = {"$gte": date_from}
     if date_to:
         query.setdefault("date", {})["$lte"] = date_to
-    
+
     total = await tenant.daily_work_logs.count_documents(query)
     skip = (page - 1) * page_size
-    
+
     items = await tenant.daily_work_logs.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
-    
+
     # Enrich with site/work_type names
     for item in items:
+        await _log_view(tenant, item)
         project = await tenant.projects.find_one({"id": item["site_id"]}, {"_id": 0, "name": 1, "code": 1})
         item["site_name"] = project["name"] if project else "Unknown"
         item["site_code"] = project["code"] if project else ""
-        
+
         wt = await tenant.work_types.find_one({"id": item["work_type_id"]}, {"_id": 0, "name": 1})
         item["work_type_name"] = wt["name"] if wt else "Unknown"
-        
+
         # Get user names for entries
         for entry in item.get("entries", []):
             u = await tenant.users.find_one({"id": entry["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
             entry["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
-    
+
     return {
         "items": items,
         "total": total,
@@ -236,17 +260,21 @@ async def list_daily_logs(
 
 @router.post("/daily-logs", status_code=201)
 async def create_daily_log(data: DailyLogCreate, user: dict = Depends(get_current_user)):
-    """Create a new daily work log."""
+    """Create a new daily work log.
+    LAB-R96 adapter (Р100 / Р102): each entry is a flat labor line written through the
+    "Отчет на труда" service (activity = the work type's name), with every check (who for
+    whom, backdate, presence, "Вече има отчет") before anything is written; the log row is
+    the header and stores no hours. A duplicate keeps this endpoint's 400 answer."""
     tenant = _tenant(user)
     # Check site access
     if not await check_site_access(user, data.site_id):
         raise HTTPException(status_code=403, detail="Access denied to this site")
-    
+
     # Validate work type
     work_type = await tenant.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
     if not work_type:
         raise HTTPException(status_code=400, detail="Invalid or inactive work type")
-    
+
     # Check for duplicate (same site + date + work_type)
     existing = await tenant.daily_work_logs.find_one({
         "org_id": user["org_id"],
@@ -256,31 +284,37 @@ async def create_daily_log(data: DailyLogCreate, user: dict = Depends(get_curren
     })
     if existing:
         raise HTTPException(status_code=400, detail="A log for this site, date, and work type already exists")
-    
-    # Calculate total hours
-    total_hours = sum(e.hours for e in data.entries)
-    
+
+    log_id = str(uuid.uuid4())
+    try:
+        plans = await labor.plan_lines(user, data.site_id, data.date,
+                                       _log_entries(data.entries, work_type["name"], log_id), reason=data.notes)
+    except labor.LaborLineExists as exc:
+        raise labor.as_legacy_400(exc)
+
     log = {
-        "id": str(uuid.uuid4()),
+        "id": log_id,
         "org_id": user["org_id"],
         "site_id": data.site_id,
         "date": data.date,
         "work_type_id": data.work_type_id,
-        "entries": [e.model_dump() for e in data.entries],
-        "total_hours": total_hours,
+        "entries": [],
+        "labor_lines": True,
         "notes": data.notes,
         "attachments": data.attachments,
         "created_by": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await tenant.daily_work_logs.insert_one(log)
+    await labor.write_lines(user, plans, data.site_id, data.date, entry_mode="daily_log")
+    total_hours = sum(e.hours for e in data.entries)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "daily_work_log", log["id"], {
         "site_id": data.site_id,
         "date": data.date,
         "total_hours": total_hours
     })
-    
-    return {k: v for k, v in log.items() if k != "_id"}
+
+    return await _log_view(tenant, {k: v for k, v in log.items() if k != "_id"})
 
 @router.get("/daily-logs/{log_id}")
 async def get_daily_log(log_id: str, user: dict = Depends(get_current_user)):
@@ -289,58 +323,85 @@ async def get_daily_log(log_id: str, user: dict = Depends(get_current_user)):
     log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]}, {"_id": 0})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
-    
+
     if not await check_site_access(user, log["site_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
-    
-    return log
+
+    return await _log_view(tenant, log)
 
 @router.patch("/daily-logs/{log_id}")
 async def update_daily_log(log_id: str, data: DailyLogUpdate, user: dict = Depends(get_current_user)):
-    """Update a daily log."""
+    """Update a daily log. LAB-R96: a log with labor lines changes them through the service
+    (same person → update, new person → checked new line, left out → voided with a reason)."""
     tenant = _tenant(user)
     log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
-    
+
     if not await check_site_access(user, log["site_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     update = {}
+    work_type = None
     if data.work_type_id:
         work_type = await tenant.work_types.find_one({"id": data.work_type_id, "org_id": user["org_id"], "is_active": True})
         if not work_type:
             raise HTTPException(status_code=400, detail="Invalid work type")
         update["work_type_id"] = data.work_type_id
-    
-    if data.entries is not None:
+
+    if log.get("labor_lines") and (data.entries is not None or work_type):
+        if work_type is None:
+            work_type = await tenant.work_types.find_one({"id": log["work_type_id"], "org_id": user["org_id"]}) or {}
+        activity = work_type.get("name", "")
+        have = {ln["worker_id"]: ln for ln in await _log_lines(tenant, log)}
+        wanted = data.entries if data.entries is not None else [
+            DailyLogEntry(user_id=w, hours=ln.get("hours", 0), role=ln.get("log_role")) for w, ln in have.items()]
+        keep = [e for e in wanted if e.user_id in have]
+        new = [e for e in wanted if e.user_id not in have]
+        removed = [ln for w, ln in have.items() if w not in {e.user_id for e in wanted}]
+        plans = await labor.plan_lines(user, log["site_id"], log["date"], _log_entries(new, activity, log_id),
+                                       ignore_ids=[ln["id"] for ln in removed]) if new else []
+        if removed:
+            await labor.void_lines(user, removed, "Премахнат от дневника")
+        for e in keep:
+            ln = have[e.user_id]
+            if float(ln.get("hours") or 0) != float(e.hours) or labor.norm_activity(ln.get("smr_type")) != labor.norm_activity(activity):
+                await labor.update_line(user, ln, {"hours": e.hours, "smr_type": activity})
+        if plans:
+            await labor.write_lines(user, plans, log["site_id"], log["date"], entry_mode="daily_log")
+    elif data.entries is not None:
         update["entries"] = [e.model_dump() for e in data.entries]
         update["total_hours"] = sum(e.hours for e in data.entries)
-    
+
     if data.notes is not None:
         update["notes"] = data.notes
-    
+
     if data.attachments is not None:
         update["attachments"] = data.attachments
-    
-    if update:
+
+    if update or (log.get("labor_lines") and data.entries is not None):
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
         await tenant.daily_work_logs.update_one({"id": log_id}, {"$set": update})
         await log_audit(user["org_id"], user["id"], user["email"], "updated", "daily_work_log", log_id, update)
-    
-    return await tenant.daily_work_logs.find_one({"id": log_id}, {"_id": 0})
+
+    return await _log_view(tenant, await tenant.daily_work_logs.find_one({"id": log_id}, {"_id": 0}))
 
 @router.delete("/daily-logs/{log_id}")
 async def delete_daily_log(log_id: str, user: dict = Depends(get_current_user)):
-    """Delete a daily log."""
+    """Delete a daily log. LAB-R96: its labor lines are voided with a reason (history kept);
+    an approved line is locked and stops the delete."""
     tenant = _tenant(user)
     log = await tenant.daily_work_logs.find_one({"id": log_id, "org_id": user["org_id"]})
     if not log:
         raise HTTPException(status_code=404, detail="Daily log not found")
-    
+
     if not await check_site_access(user, log["site_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
+    if log.get("labor_lines"):
+        lines = await _log_lines(tenant, log)
+        if lines:
+            await labor.void_lines(user, lines, "Изтрит дневник")
     await tenant.daily_work_logs.delete_one({"id": log_id})
     await log_audit(user["org_id"], user["id"], user["email"], "deleted", "daily_work_log", log_id, {})
     return {"ok": True}

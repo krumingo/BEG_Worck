@@ -147,7 +147,10 @@ async def void_reports(tenant, user: Dict[str, Any], reports: List[Dict[str, Any
         res = await tenant.employee_daily_reports.update_one(
             {"org_id": r["org_id"], "id": r["id"]},
             {"$set": {"status": VOIDED_STATUS, "voided_status": r.get("status"), "voided_by": user["id"],
-                      "voided_at": _now(), "void_reason": reason},
+                      "voided_at": _now(), "void_reason": reason,
+                      # LAB-R96: the voided line frees its (person, day, project, activity) slot
+                      "voided_labor_key": r.get("labor_key")},
+             "$unset": {"labor_key": ""},
              "$inc": {"version": 1}})
         if res.modified_count == 1:
             done.append(r["id"])

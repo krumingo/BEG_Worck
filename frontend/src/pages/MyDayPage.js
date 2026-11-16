@@ -16,14 +16,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
   CheckCircle2,
   XCircle,
   Clock,
@@ -34,8 +26,6 @@ import {
   CalendarDays,
   FileText,
   ArrowRight,
-  Play,
-  Square,
   Timer,
 } from "lucide-react";
 
@@ -67,9 +57,6 @@ export default function MyDayPage() {
   const [selectedProject, setSelectedProject] = useState("");
   // Work sessions
   const [sessions, setSessions] = useState(null);
-  const [sessionLoading, setSessionLoading] = useState(false);
-  const [showStartSession, setShowStartSession] = useState(false);
-  const [sessionSite, setSessionSite] = useState("");
 
   const fetchToday = useCallback(async () => {
     try {
@@ -335,19 +322,11 @@ export default function MyDayPage() {
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Timer className="w-4 h-4 text-cyan-400" /> {t("workSessions.todaySessions")}
             </h3>
-            {!sessions.has_open_session ? (
-              <Button size="sm" onClick={() => { setSessionSite(""); setShowStartSession(true); }} data-testid="start-session-btn">
-                <Play className="w-3.5 h-3.5 mr-1" /> {t("workSessions.start")}
-              </Button>
-            ) : (
-              <Button size="sm" variant="destructive" onClick={async () => {
-                setSessionLoading(true);
-                try { await API.post("/work-sessions/end", {}); await fetchToday(); } catch (e) { alert(e.response?.data?.detail || "Error"); }
-                finally { setSessionLoading(false); }
-              }} disabled={sessionLoading} data-testid="end-session-btn">
-                <Square className="w-3.5 h-3.5 mr-1" /> {t("workSessions.end")}
-              </Button>
-            )}
+            {/* Р101 (LAB-R96): the clock "Започни / Приключи" is removed — labor is entered only in the
+                daily report; the old clock records below stay as history. */}
+            <span className="text-[11px] text-muted-foreground" data-testid="clock-removed-note">
+              Трудът се въвежда в дневния отчет
+            </span>
           </div>
 
           {/* Summary bar */}
@@ -398,38 +377,6 @@ export default function MyDayPage() {
         </div>
       )}
 
-      {/* Start Session Dialog */}
-      <Dialog open={showStartSession} onOpenChange={setShowStartSession}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t("workSessions.startSession")}</DialogTitle>
-            <DialogDescription>{t("workSessions.selectSite")}</DialogDescription>
-          </DialogHeader>
-          <Select value={sessionSite || "none"} onValueChange={v => setSessionSite(v === "none" ? "" : v)}>
-            <SelectTrigger data-testid="session-site-select"><SelectValue placeholder={t("workSessions.selectSite")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("workSessions.selectSite")}</SelectItem>
-              {activeProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStartSession(false)}>{t("common.cancel")}</Button>
-            <Button onClick={async () => {
-              if (!sessionSite) return;
-              setSessionLoading(true);
-              try {
-                await API.post("/work-sessions/start", { site_id: sessionSite });
-                setShowStartSession(false);
-                await fetchToday();
-              } catch (e) { alert(e.response?.data?.detail || "Error"); }
-              finally { setSessionLoading(false); }
-            }} disabled={sessionLoading || !sessionSite} data-testid="confirm-start-session">
-              {sessionLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-              {t("workSessions.start")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

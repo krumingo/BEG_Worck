@@ -261,12 +261,7 @@ def is_conflict(r):
 
 
 # ═══════════════════════════════════════════════════════════════════ rule 1
-def _rule1(path):
-    return pytest.param(path, marks=r100(2, "one line per person × day × project × activity; "
-                                            "a second entry via %s is a visible conflict" % path))
-
-
-@pytest.mark.parametrize("path", [_rule1(p) for p in SECOND_PATHS])
+@pytest.mark.parametrize("path", list(SECOND_PATHS))   # xfail removed: fixed by LAB-R96 step 2
 def test_r1_second_entry_for_same_person_day_project_activity_is_refused(monkeypatch, backend, path):
     """Rule 1 (Р100: "Един ред = човек × ден × обект × дейност. Втори вход за същото показва
     видим конфликт „Вече има отчет“"; Р96; FLOW-013/014).
@@ -344,10 +339,8 @@ def _presence_cases():
         for case in ("absent", "sick", "elsewhere"):
             if case == "elsewhere" and path not in ("technician", "work_report_draft"):
                 continue
-            holds = PRESENCE_TODAY.get((path, case), False)
-            marks = () if holds else r100(2, "a report for a person not Present on that "
-                                             "project/day (%s) is refused on %s" % (case, path))
-            out.append(pytest.param(path, case, marks=marks, id="%s-%s" % (path, case)))
+            # every case holds since LAB-R96 step 2 (one presence check in the service)
+            out.append(pytest.param(path, case, id="%s-%s" % (path, case)))
     return out
 
 
@@ -385,9 +378,7 @@ BACKDATE_PATHS = {   # path → (writer, who) — every writer is a non-Admin/Ow
 }
 
 
-@pytest.mark.parametrize("path", [pytest.param(p, marks=r100(
-    2, "a backdated report by a non-Admin/Owner is refused on %s (FLOW-014)" % p))
-    for p in BACKDATE_PATHS])
+@pytest.mark.parametrize("path", list(BACKDATE_PATHS))   # xfail removed: fixed by LAB-R96 step 2
 def test_r6_backdated_report_by_non_admin_is_refused(monkeypatch, backend, path):
     """Rule 6 (FLOW-014: a report for a past date only by Admin/Owner, with a reason; Р100
     one service).
@@ -435,7 +426,6 @@ def test_r6_holds_today_today_report_by_technician_is_accepted(monkeypatch, back
 
 
 # ═══════════════════════════════════════════════════════════════════ rule 8
-@r100(2, "the creator cannot approve their own report (four-eyes)")
 def test_r8_site_manager_cannot_approve_own_technician_report(monkeypatch, backend):
     """Rule 8 (Р100 "Одобрява друг човек"; taken from #75 four-eyes; FLOW-014 approval).
 
@@ -457,7 +447,6 @@ def test_r8_site_manager_cannot_approve_own_technician_report(monkeypatch, backe
     run(monkeypatch, backend, scenario)
 
 
-@r100(2, "the creator cannot approve their own report (four-eyes)")
 def test_r8_admin_cannot_approve_own_daily_report(monkeypatch, backend):
     """Rule 8 on the office path: Admin creates W0's report on ``/daily-reports`` and approves
     it himself → must be 403. Today on de720f94: 200, approval_status APPROVED, approved_by
@@ -487,7 +476,6 @@ def test_r8_holds_today_another_person_approves(monkeypatch, backend):
 
 
 # ═══════════════════════════════════════════════════════════════════ rule 9
-@r100(2, "Р101 — POST /work-sessions/start is refused (clock removed)")
 def test_r9_clock_start_is_refused(monkeypatch, backend):
     """Rule 9 (Р101: "сървърът спира да приема нови стартове и спирания"; Р96/Р100: labor only
     through the daily report).
@@ -514,7 +502,6 @@ async def _seed_open_clock_session(op, wid=W0, started="T08:00:00+00:00", day=TO
     return sid
 
 
-@r100(2, "Р101 — POST /work-sessions/end is refused (clock removed)")
 def test_r9_clock_end_is_refused(monkeypatch, backend):
     """Rule 9 (Р101): an open clock session of W0 (an old record) — ``POST /work-sessions/end``
     → must be 4xx and the record stays as it was. Today on de720f94: 200, the session is

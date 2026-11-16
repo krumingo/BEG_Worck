@@ -125,120 +125,24 @@ async def detect_overtime(org_id: str, worker_id: str, date_str: str, session_en
 
 # ── Start Session ──────────────────────────────────────────────────
 
+# Р101 (LAB-R96 step 2): the clock "Започни / Приключи" is removed — the server no longer
+# accepts a start or an end; labor is entered only through the daily report (Р96 / Р100).
+# Old clock records stay in history (GET routes below, unchanged; no deletion).
+CLOCK_REMOVED = {"error_code": "CLOCK_REMOVED",
+                 "message": "Часовникът „Започни / Приключи“ е премахнат. Трудът се въвежда в дневния "
+                            "отчет (Моят ден / Дневен отчет). Старите записи остават в историята."}
+
+
 @router.post("/work-sessions/start", status_code=201)
 async def start_session(data: SessionStart, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    worker_id = user["id"]
-    now = datetime.now(timezone.utc)
-    now_iso = now.isoformat()
-
-    # Validate site
-    project = await tenant.projects.find_one({"id": data.site_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "status": 1})
-    if not project:
-        raise HTTPException(status_code=404, detail="Site/project not found")
-
-    from app.services.project_guards import check_project_writable
-    await check_project_writable(data.site_id, org_id, "работни сесии")
-
-    # Auto-close existing open session
-    open_session = await tenant.work_sessions.find_one(
-        {"org_id": org_id, "worker_id": worker_id, "ended_at": None}
-    )
-    if open_session:
-        duration = compute_duration(open_session["started_at"], now_iso)
-        ot_cfg = await get_ot_coefficients(org_id)
-        date_str = open_session["started_at"][:10]
-        ot = await detect_overtime(org_id, worker_id, date_str, now_iso, ot_cfg)
-        rate = open_session.get("hourly_rate_at_date", 0)
-        cost = round(duration * rate * ot["coefficient"], 2)
-
-        await tenant.work_sessions.update_one(
-            {"id": open_session["id"]},
-            {"$set": {
-                "ended_at": now_iso,
-                "duration_hours": round(duration, 2),
-                "is_flagged": True,
-                "flag_reason": "auto_closed",
-                "is_overtime": ot["is_overtime"],
-                "overtime_type": ot["overtime_type"],
-                "overtime_coefficient": ot["coefficient"],
-                "labor_cost": cost,
-                "updated_at": now_iso,
-            }},
-        )
-
-    # Snapshot hourly rate
-    rate = await snapshot_hourly_rate(org_id, worker_id)
-
-    session = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "worker_id": worker_id,
-        "worker_name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
-        "site_id": data.site_id,
-        "site_name": project.get("name", ""),
-        "smr_type_id": data.smr_type_id,
-        "started_at": now_iso,
-        "ended_at": None,
-        "source_method": data.source_method,
-        "is_flagged": False,
-        "flag_reason": None,
-        "duration_hours": None,
-        "is_overtime": False,
-        "overtime_type": None,
-        "overtime_coefficient": 1.0,
-        "hourly_rate_at_date": rate,
-        "labor_cost": None,
-        "notes": data.notes,
-        "created_at": now_iso,
-        "updated_at": now_iso,
-    }
-    await tenant.work_sessions.insert_one(session)
-    result = {k: v for k, v in session.items() if k != "_id"}
-    if open_session:
-        result["auto_closed_session_id"] = open_session["id"]
-    return result
+    raise HTTPException(status_code=410, detail=CLOCK_REMOVED)
 
 
 # ── End Session ────────────────────────────────────────────────────
 
 @router.post("/work-sessions/end")
 async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    worker_id = user["id"]
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    open_session = await tenant.work_sessions.find_one(
-        {"org_id": org_id, "worker_id": worker_id, "ended_at": None}
-    )
-    if not open_session:
-        raise HTTPException(status_code=404, detail="No open session found")
-
-    duration = compute_duration(open_session["started_at"], now_iso)
-    ot_cfg = await get_ot_coefficients(org_id)
-    date_str = open_session["started_at"][:10]
-    ot = await detect_overtime(org_id, worker_id, date_str, now_iso, ot_cfg)
-    rate = open_session.get("hourly_rate_at_date", 0)
-    cost = round(duration * rate * ot["coefficient"], 2)
-
-    notes = data.notes or open_session.get("notes")
-
-    await tenant.work_sessions.update_one(
-        {"id": open_session["id"]},
-        {"$set": {
-            "ended_at": now_iso,
-            "duration_hours": round(duration, 2),
-            "is_overtime": ot["is_overtime"],
-            "overtime_type": ot["overtime_type"],
-            "overtime_coefficient": ot["coefficient"],
-            "labor_cost": cost,
-            "notes": notes,
-            "updated_at": now_iso,
-        }},
-    )
-    return await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})
+    raise HTTPException(status_code=410, detail=CLOCK_REMOVED)
 
 
 # ── List / Query ───────────────────────────────────────────────────

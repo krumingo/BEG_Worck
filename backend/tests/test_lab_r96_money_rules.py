@@ -91,9 +91,7 @@ async def _second_tech_report(c, op):
 SECOND = {"daily_reports": _second_daily_report, "technician_again": _second_tech_report}
 
 
-@pytest.mark.parametrize("second", [pytest.param(k, marks=r100(
-    2, "the pay run pays W0 exactly 8 h × 12 = 96 even if a second path (%s) was used" % k))
-    for k in SECOND])
+@pytest.mark.parametrize("second", list(SECOND))   # xfail removed: fixed by LAB-R96 step 2
 def test_r2_pay_run_pays_the_day_once_even_through_a_second_path(monkeypatch, backend, second):
     """Rule 2 (Р100 "ведомост не се плаща два пъти" — taken from #73/#75; FLOW-028: the pay
     run pays approved daily reports once).
@@ -223,7 +221,8 @@ def test_r7_holds_today_unapproved_report_is_not_in_pay_run_nor_pnl(monkeypatch,
     run(monkeypatch, backend, scenario)
 
 
-@r100(3, "an unapproved report creates no labor cost in „Приходи/разходи“ (Р102)")
+# xfail (step 3) removed by LAB-R96 step 2 as a side effect: "Моят ден" lines are labor lines
+# now, the work_reports header stores none, so the fallback has nothing unapproved to sum.
 def test_r7_unapproved_worker_report_creates_no_revenue_expense_labor(monkeypatch, backend):
     """Rule 7 on „Приходи/разходи“: the worker's own report (``/work-reports/draft`` + line
     A 8 h), never submitted or approved → ``/project-profit/P`` labor must be 0.

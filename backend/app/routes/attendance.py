@@ -15,6 +15,7 @@ from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData, all_tenant_ids
+from app.services import labor_report_service as labor
 
 
 def _tenant(user: dict) -> TenantData:
@@ -647,37 +648,116 @@ async def get_attendance_statuses():
 # WORK REPORT ROUTES
 # ══════════════════════════════════════════════════════════════════
 
+# LAB-R96 step 2 (Р100): "Моят ден" is an ADAPTER over the "Отчет на труда" service. The
+# work_reports row stays the header of the worker's day on one project (status, note); its
+# lines are flat labor lines (``work_report_id`` = the header) written through
+# labor_report_service, so they are the ONE format the pay run reads and the other paths
+# conflict with. A new header is marked ``labor_lines: True`` and stores no hours; GET answers
+# rebuild ``lines`` from the labor lines (same shape as before). Headers written before keep
+# their stored ``lines`` and are read as before (no migration).
+
+async def _wr_lines(tenant, report: dict) -> List[dict]:
+    return await tenant.employee_daily_reports.find(
+        {"org_id": report["org_id"], "work_report_id": report["id"]}, {"_id": 0}).sort("created_at", 1).to_list(200)
+
+
+async def enrich_report_async(tenant, report: dict) -> dict:
+    if not report.get("labor_lines"):
+        return enrich_report(report)
+    r = {k: v for k, v in report.items() if k != "_id"}
+    r["lines"] = [{"id": ln["id"], "line_id": ln["id"], "activity_name": ln.get("smr_type", ""),
+                   "hours": ln.get("hours", 0), "note": ln.get("notes", ""), "status": ln.get("status")}
+                  for ln in await _wr_lines(tenant, report)]
+    r["total_hours"] = sum(line.get("hours", 0) for line in r["lines"])
+    return r
+
+
+async def _person_project_day_line(tenant, org_id: str, worker_id: str, date: str, project_id: str,
+                                   header_id: Optional[str] = None) -> Optional[dict]:
+    """An existing labor line of this person, day and project not belonging to this header."""
+    rows = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "worker_id": worker_id, "date": date, "project_id": project_id}, {"_id": 0}).to_list(50)
+    for d in rows:
+        if not header_id or d.get("work_report_id") != header_id:
+            return await labor.existing_view(tenant, org_id, d)
+    olds = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "employee_id": worker_id, "report_date": date}, {"_id": 0}).to_list(20)
+    for d in olds:
+        for e in d.get("day_entries") or []:
+            if e.get("project_id") == project_id:
+                return await labor.existing_view(tenant, org_id, d, e)
+    return None
+
+
 @router.post("/work-reports/draft", status_code=201)
 async def create_or_get_draft(data: WorkReportDraftCreate, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     date = data.date or today_str()
     org_id = user["org_id"]
-    att = await tenant.attendance_entries.find_one({
-        "org_id": org_id, "date": date, "user_id": user["id"],
-        "status": {"$in": ["Present", "Late"]}
-    })
-    if not att:
-        raise HTTPException(status_code=400, detail="Attendance must be marked as Present or Late before creating a work report")
     project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # LAB-R96: the same checks as every labor path — backdate (FLOW-014) and presence on
+    # THIS object that day (FLOW-013), from the one service
+    await labor.check_backdate(user, date, None)
+    name = ("%s %s" % (user.get("first_name", ""), user.get("last_name", ""))).strip()
+    await labor.check_presence(tenant, org_id, user["id"], name, date, data.project_id)
+    att = await tenant.attendance_entries.find_one({
+        "org_id": org_id, "date": date, "user_id": user["id"], "project_id": data.project_id,
+        "status": {"$in": ["Present", "Late"]}
+    })
     existing = await tenant.work_reports.find_one({
         "org_id": org_id, "date": date, "user_id": user["id"], "project_id": data.project_id
     }, {"_id": 0})
     if existing:
-        return enrich_report(existing)
+        return await enrich_report_async(tenant, existing)
+    # "Вече има отчет": someone already reported this person on this object that day
+    found = await _person_project_day_line(tenant, org_id, user["id"], date, data.project_id)
+    if found:
+        raise labor.LaborLineExists(found)
     now = datetime.now(timezone.utc).isoformat()
     report = {
         "id": str(uuid.uuid4()), "org_id": org_id, "date": date,
         "project_id": data.project_id, "user_id": user["id"],
-        "attendance_entry_id": att["id"], "status": "Draft",
-        "summary_note": "", "lines": [], "submitted_at": None,
+        "attendance_entry_id": (att or {}).get("id"), "status": "Draft",
+        "summary_note": "", "lines": [], "labor_lines": True, "submitted_at": None,
         "approved_at": None, "approved_by_user_id": None,
         "reject_reason": None, "created_at": now, "updated_at": now,
     }
     await tenant.work_reports.insert_one(report)
     await log_audit(org_id, user["id"], user["email"], "report_draft_created", "work_report", report["id"], {"date": date, "project": data.project_id})
-    return enrich_report(report)
+    return await enrich_report_async(tenant, report)
+
+
+async def _replace_wr_lines(tenant, user: dict, report: dict, lines: List[WorkReportLineInput]) -> None:
+    """The header's lines through the service: same activity → update, new → checked new line,
+    left out → voided with a reason."""
+    have = await _wr_lines(tenant, report)
+    by_act = {labor.norm_activity(ln.get("smr_type")): ln for ln in have}
+    keep, new, seen = [], [], set()
+    for ln in lines:
+        k = labor.norm_activity(ln.activity_name)
+        if k in seen:
+            raise HTTPException(status_code=400, detail="Една дейност е въведена два пъти — обединете редовете.")
+        seen.add(k)
+        (keep if k in by_act else new).append(ln)
+    removed = [ln for k, ln in by_act.items() if k not in seen]
+    plans = await labor.plan_lines(
+        user, report["project_id"], report["date"],
+        [{"worker_id": user["id"], "worker_name": ("%s %s" % (user.get("first_name", ""), user.get("last_name", ""))).strip(),
+          "activity": ln.activity_name, "hours": ln.hours, "notes": ln.note,
+          "extra": {"work_report_id": report["id"]}} for ln in new],
+        ignore_ids=[ln["id"] for ln in removed]) if new else []
+    if removed:
+        await labor.void_lines(user, removed, "Премахнат ред от „Моят ден“")
+    for ln in keep:
+        cur = by_act[labor.norm_activity(ln.activity_name)]
+        if (float(cur.get("hours") or 0) != float(ln.hours) or (cur.get("notes") or "") != (ln.note or "")
+                or cur.get("status") in ("REJECTED", "Rejected")):
+            await labor.update_line(user, cur, {"hours": ln.hours, "notes": ln.note})
+    if plans:
+        await labor.write_lines(user, plans, report["project_id"], report["date"], entry_mode="my_day")
+
 
 @router.put("/work-reports/{report_id}")
 async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict = Depends(get_current_user)):
@@ -693,17 +773,20 @@ async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict 
     if data.summary_note is not None:
         update["summary_note"] = data.summary_note
     if data.lines is not None:
-        update["lines"] = [
-            {"id": str(uuid.uuid4()), "activity_name": l.activity_name, "hours": l.hours, "note": l.note}
-            for l in data.lines
-        ]
+        if report.get("labor_lines"):
+            await _replace_wr_lines(tenant, user, report, data.lines)
+        else:
+            update["lines"] = [
+                {"id": str(uuid.uuid4()), "activity_name": l.activity_name, "hours": l.hours, "note": l.note}
+                for l in data.lines
+            ]
     if report["status"] == "Rejected":
         update["status"] = "Draft"
         update["reject_reason"] = None
     await tenant.work_reports.update_one({"id": report_id}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "report_edited", "work_report", report_id)
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
-    return enrich_report(updated)
+    return await enrich_report_async(tenant, updated)
 
 @router.post("/work-reports/{report_id}/submit")
 async def submit_work_report(report_id: str, user: dict = Depends(get_current_user)):
@@ -715,8 +798,11 @@ async def submit_work_report(report_id: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Can only submit your own reports")
     if report["status"] not in ["Draft", "Rejected"]:
         raise HTTPException(status_code=400, detail="Report already submitted")
-    if not report.get("lines") or len(report["lines"]) == 0:
+    lines = await _wr_lines(tenant, report) if report.get("labor_lines") else report.get("lines")
+    if not lines or len(lines) == 0:
         raise HTTPException(status_code=400, detail="Report must have at least one activity line")
+    if report.get("labor_lines"):
+        await labor.submit_lines(user, lines)
     now = datetime.now(timezone.utc).isoformat()
     await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Submitted", "submitted_at": now, "reject_reason": None, "updated_at": now
@@ -724,7 +810,7 @@ async def submit_work_report(report_id: str, user: dict = Depends(get_current_us
     await log_audit(user["org_id"], user["id"], user["email"], "report_submitted", "work_report", report_id, {"date": report["date"]})
     await auto_resolve_reminders(user["org_id"], "MissingWorkReport", report["date"], user["id"], user["id"])
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
-    return enrich_report(updated)
+    return await enrich_report_async(tenant, updated)
 
 @router.post("/work-reports/{report_id}/approve")
 async def approve_work_report(report_id: str, user: dict = Depends(get_current_user)):
@@ -736,13 +822,24 @@ async def approve_work_report(report_id: str, user: dict = Depends(get_current_u
         raise HTTPException(status_code=403, detail="Insufficient permissions to approve")
     if report["status"] != "Submitted":
         raise HTTPException(status_code=400, detail="Only submitted reports can be approved")
+    # LAB-R96 four-eyes (Р100 "Одобрява друг човек"): never the author of the report
+    lines = await _wr_lines(tenant, report) if report.get("labor_lines") else []
+    if user["id"] == report.get("user_id") or any(labor.is_self_approval(ln, user) for ln in lines):
+        raise labor.four_eyes_http()
+    from app.services.labor_report_service import approve_report_one
+    for ln in lines:
+        if (ln.get("status") or "").upper() == "APPROVED":
+            continue
+        res = await approve_report_one(ln, user, block_overtime_without_override=False)
+        if res["status"] != "ok":
+            raise HTTPException(status_code=400, detail=res.get("reason", "approve_failed"))
     now = datetime.now(timezone.utc).isoformat()
     await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Approved", "approved_at": now, "approved_by_user_id": user["id"], "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_approved", "work_report", report_id, {"date": report["date"]})
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
-    return enrich_report(updated)
+    return await enrich_report_async(tenant, updated)
 
 @router.post("/work-reports/{report_id}/reject")
 async def reject_work_report(report_id: str, data: WorkReportReject, user: dict = Depends(get_current_user)):
@@ -754,13 +851,17 @@ async def reject_work_report(report_id: str, data: WorkReportReject, user: dict 
         raise HTTPException(status_code=403, detail="Insufficient permissions to reject")
     if report["status"] != "Submitted":
         raise HTTPException(status_code=400, detail="Only submitted reports can be rejected")
+    if report.get("labor_lines"):
+        from app.services.labor_report_service import reject_report_one
+        for ln in await _wr_lines(tenant, report):
+            await reject_report_one(ln, user, data.reason)
     now = datetime.now(timezone.utc).isoformat()
     await tenant.work_reports.update_one({"id": report_id}, {"$set": {
         "status": "Rejected", "reject_reason": data.reason, "updated_at": now
     }})
     await log_audit(user["org_id"], user["id"], user["email"], "report_rejected", "work_report", report_id, {"reason": data.reason})
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
-    return enrich_report(updated)
+    return await enrich_report_async(tenant, updated)
 
 @router.get("/work-reports/my-today")
 async def get_my_work_reports_today(user: dict = Depends(get_current_user)):
@@ -769,7 +870,7 @@ async def get_my_work_reports_today(user: dict = Depends(get_current_user)):
     reports = await tenant.work_reports.find(
         {"org_id": user["org_id"], "date": date, "user_id": user["id"]}, {"_id": 0}
     ).to_list(50)
-    return [enrich_report(r) for r in reports]
+    return [await enrich_report_async(tenant, r) for r in reports]
 
 @router.get("/work-reports/my-range")
 async def get_my_work_reports_range(user: dict = Depends(get_current_user), from_date: str = "", to_date: str = ""):
@@ -782,7 +883,7 @@ async def get_my_work_reports_range(user: dict = Depends(get_current_user), from
         {"org_id": user["org_id"], "user_id": user["id"], "date": {"$gte": from_date, "$lte": to_date}},
         {"_id": 0}
     ).sort("date", -1).to_list(200)
-    return [enrich_report(r) for r in reports]
+    return [await enrich_report_async(tenant, r) for r in reports]
 
 @router.get("/work-reports/project-day")
 async def get_project_day_reports(user: dict = Depends(get_current_user), project_id: str = "", date: str = ""):
@@ -804,7 +905,7 @@ async def get_project_day_reports(user: dict = Depends(get_current_user), projec
     reports = await tenant.work_reports.find(query, {"_id": 0}).to_list(200)
     enriched = []
     for r in reports:
-        er = enrich_report(r)
+        er = await enrich_report_async(tenant, r)
         u = await tenant.users.find_one({"id": r["user_id"]}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1})
         er["user_name"] = f"{u['first_name']} {u['last_name']}" if u else "Unknown"
         er["user_email"] = u["email"] if u else ""
@@ -822,7 +923,7 @@ async def get_work_report(report_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Report not found")
     if not await can_access_report(user, report):
         raise HTTPException(status_code=403, detail="Access denied")
-    er = enrich_report(report)
+    er = await enrich_report_async(tenant, report)
     p = await tenant.projects.find_one({"id": report["project_id"]}, {"_id": 0, "code": 1, "name": 1})
     er["project_code"] = p["code"] if p else ""
     er["project_name"] = p["name"] if p else ""

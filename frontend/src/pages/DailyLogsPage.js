@@ -10,7 +10,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useActiveProject } from "@/contexts/ProjectContext";
 import API from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,12 +59,14 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastLaborConflict, apiErrorText } from "@/lib/laborConflict";
 
 const QUICK_HOURS = [1, 2, 4, 6, 8, 10, 12];
 
 export default function DailyLogsPage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const isProjectContext = !!searchParams.get("returnTo");
   const [activeTab, setActiveTab] = useState("list");
   
@@ -214,7 +216,7 @@ export default function DailyLogsPage() {
       setActiveTab("list");
     } catch (err) {
       console.error("Failed to save log:", err);
-      toast.error(err.response?.data?.detail || "Грешка при записване");
+      if (!toastLaborConflict(err, navigate)) toast.error(apiErrorText(err, "Грешка при записване"));
     }
   };
   

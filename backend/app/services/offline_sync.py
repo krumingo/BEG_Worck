@@ -114,6 +114,12 @@ UNIQUE_INDEXES = (
     # rows without it are untouched by the partial index).
     ("attendance_entries", [("attendance_day_key", 1)], "pwa02_attendance_day_unique",
      "attendance_day_key"),
+    # LAB-R96 step 2 (Р100): one labor line per person × day × project × activity. Partial —
+    # only lines written by the "Отчет на труда" service carry labor_key (a void releases it);
+    # historic rows (which may hold duplicates) carry none, so this builds over any data. An
+    # index over the historic rows themselves needs the ОП-2 counts first (follow-up).
+    ("employee_daily_reports", [("org_id", 1), ("labor_key", 1)], "lab_r96_labor_line_unique",
+     "labor_key"),
 )
 
 
