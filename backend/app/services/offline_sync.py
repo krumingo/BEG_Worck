@@ -120,6 +120,12 @@ UNIQUE_INDEXES = (
     # index over the historic rows themselves needs the ОП-2 counts first (follow-up).
     ("employee_daily_reports", [("org_id", 1), ("labor_key", 1)], "lab_r96_labor_line_unique",
      "labor_key"),
+    # LAB-AKORD-01 (FLOW-028, Р100): one pending and one approved akord quantity per labor
+    # line — the slot field exists only while the record is pending / approved.
+    ("labor_quantity_approvals", [("org_id", 1), ("pending_slot", 1)], "lab_akord_one_pending_per_line",
+     "pending_slot"),
+    ("labor_quantity_approvals", [("org_id", 1), ("approved_slot", 1)], "lab_akord_one_approved_per_line",
+     "approved_slot"),
 )
 
 

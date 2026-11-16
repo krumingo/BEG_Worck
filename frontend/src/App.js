@@ -39,6 +39,7 @@ import EmployeesPage from "@/pages/EmployeesPage";
 import BrigadesPage from "@/pages/BrigadesPage";
 import AdvancesPage from "@/pages/AdvancesPage";
 import PayRunsPage from "@/pages/PayRunsPage";
+import LaborQuantitiesPage from "@/pages/LaborQuantitiesPage";
 import MyPayslipsPage from "@/pages/MyPayslipsPage";
 import FinanceOverviewPage from "@/pages/FinanceOverviewPage";
 import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
@@ -251,6 +252,7 @@ function AppRoutes() {
       <Route path="/s/:qrId" element={<FieldProtectedRoute><ScanLandingPage /></FieldProtectedRoute>} />
       <Route path="/tech/tools" element={<FieldProtectedRoute><MyToolsPage /></FieldProtectedRoute>} />
       <Route path="/tech/my-money" element={<FieldProtectedRoute><MyMoneyPage /></FieldProtectedRoute>} />
+      <Route path="/tech/labor-quantities" element={<FieldProtectedRoute><LaborQuantitiesPage /></FieldProtectedRoute>} />
       <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
       {/* PWA-02: the field user's unsent records; the page a blocked device lands on */}
       <Route path="/my-unsent" element={<CompanyProtectedRoute><MyUnsentPage /></CompanyProtectedRoute>} />
@@ -283,6 +285,8 @@ function AppRoutes() {
       <Route path="/projects/:projectId/operations" element={<FinanceRoute><ProjectOperationsPage /></FinanceRoute>} />
       <Route path="/advances" element={<FinanceRoute><AdvancesPage /></FinanceRoute>} />
       <Route path="/pay-runs" element={<FinanceRoute><PayRunsPage /></FinanceRoute>} />
+      {/* LAB-AKORD-01: akord quantity enter / approve; Technician via the field route */}
+      <Route path="/labor-quantities" element={<AdminRoute><LaborQuantitiesPage /></AdminRoute>} />
       <Route path="/finance" element={<FinanceRoute><FinanceOverviewPage /></FinanceRoute>} />
       <Route path="/finance/accounts" element={<FinanceRoute><FinancialAccountsPage /></FinanceRoute>} />
       <Route path="/finance/invoices" element={<FinanceRoute><InvoicesPage /></FinanceRoute>} />

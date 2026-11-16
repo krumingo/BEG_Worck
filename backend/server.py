@@ -352,6 +352,10 @@ api_router.include_router(brigades_router)
 from app.routes.pay_runs import router as pay_runs_router
 api_router.include_router(pay_runs_router)
 
+# LAB-AKORD-01 (FLOW-028, Р100): akord quantity enter / approve / reject + unit labor price
+from app.routes.labor_quantities import router as labor_quantities_router
+api_router.include_router(labor_quantities_router)
+
 from app.routes.settings import router as settings_router
 api_router.include_router(settings_router)
 

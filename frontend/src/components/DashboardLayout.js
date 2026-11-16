@@ -53,6 +53,7 @@ const NAV_GROUPS = [
     children: [
       { to: "/site-attendance", icon: ClipboardList, labelKey: "nav.siteAttendance" },
       { to: "/reports", icon: CalendarCheck, labelKey: "nav.reviewReports" },
+      { to: "/labor-quantities", icon: CalendarCheck, labelKey: "nav.laborQuantities" },
       { to: "/all-reports", icon: FileText, labelKey: "nav.allReports" },
       { to: "/missing-smr", icon: AlertTriangle, labelKey: "nav.missingSMR" },
       { to: "/change-orders", icon: FilePlus2, labelKey: "nav.changeOrders" },

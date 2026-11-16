@@ -78,6 +78,8 @@ AKORD = "Akord"
 DAY_RATE_TYPES = ("Daily", "Monthly")
 AKORD_NO_QTY = "Акорд: няма одобрено количество"
 AKORD_NO_PRICE = "Акорд: няма договорена единична цена труд"
+AKORD_PENDING = " — количеството чака одобрение"      # LAB-AKORD-01
+AKORD_REJECTED = " — количеството е отказано: "
 
 
 # ═══════════════════════════════════════════════════════════════════ the formula
@@ -369,10 +371,19 @@ async def akord_terms(tenant: TenantData, org_id: str, lines: List[dict]) -> Dic
         by_key[(ln["report_id"], ln.get("entry_id") or "", int(ln.get("report_version") or 0))] = ln
     report_ids = sorted({k[0] for k in by_key if k[0]})
     chosen: Dict[str, dict] = {}
+    open_by_line: Dict[str, List[dict]] = {}
     if report_ids:
         recs = await tenant.labor_quantity_approvals.find(
-            {"org_id": org_id, "report_id": {"$in": report_ids}, "status": "approved"},
-            {"_id": 0}).to_list(len(by_key) * 4 + 10)
+            {"org_id": org_id, "report_id": {"$in": report_ids},
+             "status": {"$in": ["approved", "pending", "rejected"]}},
+            {"_id": 0}).to_list(len(by_key) * 20 + 10)
+        # LAB-AKORD-01: an open (pending) or rejected record only explains the block
+        for r in sorted((r for r in recs if r.get("status") != "approved"),
+                        key=lambda r: (int(r.get("quantity_version") or 0), str(r.get("entered_at") or ""))):
+            ln = by_key.get((r.get("report_id"), r.get("entry_id") or "", int(r.get("report_version") or 0)))
+            if ln is not None:
+                open_by_line.setdefault(ln["line_id"], []).append(r)
+        recs = [r for r in recs if r.get("status") == "approved"]
         recs.sort(key=lambda r: (str(r.get("approved_at") or ""), str(r.get("id") or "")))
         for r in recs:
             ln = by_key.get((r.get("report_id"), r.get("entry_id") or "", int(r.get("report_version") or 0)))
@@ -399,7 +410,7 @@ async def akord_terms(tenant: TenantData, org_id: str, lines: List[dict]) -> Dic
         t = {"approval_id": (r or {}).get("id"), "approved_quantity": qty,
              "unit": (r or {}).get("unit") or "", "piece_rate": None, "amount": 0.0, "blocked": None}
         if r is None or qty is None or qty <= 0:
-            t["blocked"] = AKORD_NO_QTY
+            t["blocked"] = AKORD_NO_QTY + _open_note(open_by_line.get(ln["line_id"]))
             out[ln["line_id"]] = t
             continue
         rate = _num(r.get("piece_rate"))
@@ -413,6 +424,16 @@ async def akord_terms(tenant: TenantData, org_id: str, lines: List[dict]) -> Dic
         t.update(piece_rate=rate, amount=round(qty * rate, 2))
         out[ln["line_id"]] = t
     return out
+
+
+def _open_note(recs: Optional[List[dict]]) -> str:
+    """LAB-AKORD-01: why there is no approved quantity — waiting, or rejected with its reason."""
+    if not recs:
+        return ""
+    if any(r.get("status") == "pending" for r in recs):
+        return AKORD_PENDING
+    last = recs[-1]
+    return AKORD_REJECTED + (last.get("reject_reason") or "") if last.get("status") == "rejected" else ""
 
 
 def _view(ln: dict) -> dict:
