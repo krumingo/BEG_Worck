@@ -1,0 +1,9 @@
+role,screens,visits,actions,recoveries,requests_fe,actions_by_kind
+Accountant,44,323,342,0,5160,menu=618 visit=323 open=83 fill=83 open-row=65 submit=54 next=18 open-for-double=14 browser-dialog=13 tab=10 double-submit=10 confirm=4 login=2 decide=1
+Admin,45,330,401,0,5021,menu=531 visit=330 open=113 fill=113 submit=68 open-row=51 next=20 open-for-double=13 double-submit=10 tab=7 decide=3 confirm=3 login=2 browser-dialog=1
+Driver,5,377,212,0,4627,menu=393 visit=377 open=100 fill=100 open-for-double=12 login=2
+SiteManager,33,333,357,0,4048,menu=531 visit=333 open=92 fill=92 open-row=61 submit=61 next=18 open-for-double=17 double-submit=10 browser-dialog=10 tab=5 login=1 confirm=1
+Technician,7,389,205,0,5064,menu=402 visit=389 open=94 fill=94 open-for-double=17 login=1
+Viewer,6,435,265,0,5273,visit=435 menu=191 open=121 fill=121 open-for-double=23 login=1
+Warehousekeeper,7,448,246,0,5202,visit=448 menu=220 open=111 fill=111 open-for-double=24 login=1
+Worker,7,374,205,0,5042,menu=401 visit=374 open=97 fill=97 open-for-double=11 login=2

@@ -1,0 +1,853 @@
+diff -ruN orig/analyze.py harness/analyze.py
+--- orig/analyze.py	2026-11-16 18:45:21.780342311 +0000
++++ harness/analyze.py	2026-11-16 19:02:19.016504905 +0000
+@@ -3,7 +3,8 @@
+ import json, re, os, time, html, collections
+ from pymongo import MongoClient
+ 
+-RUN = "/tmp/claude-0/demo_int/run"
++RUN = os.environ.get("BOT_RUN", "/tmp/claude-0/demo_int2/ui/run")
++BASE_URL = "http://localhost:" + os.environ.get("BOT_PORT", "8768")
+ START = float(open(f"{RUN}/run_start.txt").read().strip())
+ SEED = json.load(open(f"{RUN}/seed.json"))
+ UID2ROLE = {v.get("id"): r for r, v in SEED["users"].items() if v.get("id")}
+@@ -30,6 +31,8 @@
+ ACT = load("fe_actions.jsonl")
+ ERR = load("fe_errors.jsonl")
+ PROC = load("process.jsonl")
++if os.environ.get("BOT_PROC"):   # INTEGRATION_V2: the process bot ran on its own backend/DB
++    PROC = [json.loads(l) for l in open(os.environ["BOT_PROC"], encoding="utf8") if l.strip()]
+ _starts = [i for i, p in enumerate(PROC) if p.get("flow") == "run" and p.get("step") == "start"]
+ PROC = PROC[_starts[-1]:] if _starts else PROC   # only the detached run, not the trial runs
+ 
+@@ -44,16 +47,26 @@
+     return d.get("bot") or UID2ROLE.get(d.get("user")) or "?"
+ 
+ # ── 1. frontend → backend correspondence ─────────────────────────────
++# INTEGRATION_V2: joined by x-correlation-id (+ method, path) — each backend record is used
++# once; the ±3 s window of run A is only the fallback for records without an id.
++be_by_corr = collections.defaultdict(list)
+ be_index = collections.defaultdict(list)
+ for d in BE:
++    if d.get("corr"):
++        be_by_corr[(d["corr"], d["method"], d["path"])].append(d)
+     be_index[(d["method"], d["path"], d.get("bot"))].append(d["t"])
+ unmatched = []
++matched_by_corr = 0
+ for d in FE:
+     if d.get("status") == "FAILED":
+         unmatched.append(d)
+         continue
+-    key = (d["method"], d["url"].split("?")[0], d["role"])
+-    ts = be_index.get(key, [])
++    key = (d.get("corr"), d["method"], d["url"].split("?")[0])
++    if d.get("corr") and be_by_corr.get(key):
++        be_by_corr[key].pop()
++        matched_by_corr += 1
++        continue
++    ts = be_index.get((d["method"], d["url"].split("?")[0], d["role"]), [])
+     if not any(abs(t - d["t"]) < 3 for t in ts):
+         unmatched.append(d)
+ 
+@@ -89,10 +102,16 @@
+ 
+ ok_no_write, mut_no_audit = [], []
+ covered = set()
++def window(d):
++    # INTEGRATION_V2: serve.py ran every write alone (BOT_SERIALIZE_WRITES=1) and held the lock
++    # until t_end, so [t, t_end] belongs to this one request; run A used t .. t+ms+1 s.
++    if d.get("serialized") and d.get("t_end"):
++        return d["t"] - 0.02, d["t_end"]
++    return d["t"] - 0.05, d["t"] + d["ms"] / 1000 + 1.0
+ for d in BE:
+     if d["method"] not in MUT or not isinstance(d["status"], int) or not (200 <= d["status"] < 300):
+         continue
+-    ch = changes_in(d["t"] - 0.05, d["t"] + d["ms"] / 1000 + 1.0)
++    ch = changes_in(*window(d))
+     for c in ch:
+         covered.add(id(c))
+     real = [c for c in ch if c["coll"] not in ("audit_logs", "audit_events", "idempotency_keys", "money_write_keys")]
+@@ -102,7 +121,7 @@
+         mut_no_audit.append((d, sorted({c["coll"] for c in real})))
+ 
+ # DB changes with no write request around them (reads that write, or jobs)
+-mut_windows = sorted((d["t"] - 0.05, d["t"] + d["ms"] / 1000 + 1.0) for d in BE if d["method"] in MUT)
++mut_windows = sorted(window(d) for d in BE if d["method"] in MUT)
+ def in_mut(t):
+     k = bisect.bisect_right([w[0] for w in mut_windows], t) - 1
+     for j in range(max(0, k - 30), k + 1):
+@@ -114,8 +133,8 @@
+ deletes = [c for c in DB if c["op"] == "delete"]
+ 
+ # ── 3. business rules on the final demo database ─────────────────────
+-cli = MongoClient("mongodb://127.0.0.1:27161/?directConnection=true", serverSelectionTimeoutMS=5000)
+-db = cli["demoint_begwork"]
++cli = MongoClient(os.environ.get("BOT_MONGO", "mongodb://127.0.0.1:27192/?directConnection=true"), serverSelectionTimeoutMS=5000)
++db = cli[os.environ.get("BOT_DB", "demoint2ui_begwork")]
+ def agg(coll, pipe):
+     try:
+         return list(db[coll].aggregate(pipe, maxTimeMS=20000))
+@@ -159,6 +178,34 @@
+         pages[a["role"]].add(norm(a["label"]))
+     acts[a["role"]][a["kind"]] += 1
+ 
++NONACT = {"visit", "login", "browser-dialog", "recover", "menu"}
++def n_actions(r):
++    return sum(v for k, v in acts[r].items() if k not in NONACT)
++recoveries = collections.Counter(e["role"] for e in ERR if e["kind"] in ("timeout", "bot", "page-replaced"))
++
++# ── INTEGRATION_V2: grouped CSVs (role × endpoint × status), from the server log ──
++import csv
++def write_csv(name, head, rows):
++    with open(f"{RUN}/{name}", "w", newline="", encoding="utf8") as f:
++        w = csv.writer(f); w.writerow(head); w.writerows(rows)
++be_err = collections.Counter((role_of_be(d), d["method"], norm(d["path"]), d["status"]) for d in BE
++                             if isinstance(d.get("status"), int) and d["status"] >= 400)
++write_csv("ui_errors_by_role_endpoint.csv", ["role", "method", "path", "status", "count"],
++          [[*k, v] for k, v in sorted(be_err.items(), key=lambda kv: (-kv[1], kv[0]))])
++write_csv("ui_write_without_audit.csv", ["role", "method", "path", "collections", "count"],
++          [[*k, v] for k, v in collections.Counter((role_of_be(d), d["method"], norm(d["path"]), " ".join(c)) for d, c in mut_no_audit).most_common()])
++write_csv("ui_ok_without_db_write.csv", ["role", "method", "path", "count"],
++          [[*k, v] for k, v in collections.Counter((role_of_be(d), d["method"], norm(d["path"])) for d in ok_no_write).most_common()])
++write_csv("ui_db_change_without_write_request.csv", ["collection", "op", "count"],
++          [[*k, v] for k, v in collections.Counter((c["coll"], c["op"]) for c in writes_without_mut).most_common()])
++write_csv("ui_hard_deletes.csv", ["collection", "count"], [[k, v] for k, v in collections.Counter(c["coll"] for c in deletes).most_common()])
++write_csv("ui_insert_without_org_id.csv", ["collection", "op", "count"], [[*k, v] for k, v in collections.Counter((c["coll"], c["op"]) for c in no_org).most_common()])
++write_csv("ui_js_crashes.csv", ["role", "text", "page", "count"],
++          [[*k, v] for k, v in collections.Counter((e["role"], e["text"][:200], norm(e["url"].replace(BASE_URL, ""))) for e in js_crash).most_common()])
++write_csv("ui_coverage.csv", ["role", "screens", "visits", "actions", "recoveries", "requests_fe", "actions_by_kind"],
++          [[r, len(pages[r]), acts[r]["visit"], n_actions(r), recoveries[r], sum(status_by_role[r].values()),
++            " ".join(f"{k}={v}" for k, v in acts[r].most_common())] for r in sorted(acts)])
++
+ proc_bad = [p for p in PROC if p.get("ok") is False]
+ proc_unknown = [p for p in PROC if p.get("ok") is None]
+ 
+@@ -169,6 +216,10 @@
+   "403": len(forbidden), "401": len(unauth), "ok_without_db_write": len(ok_no_write), "write_without_audit": len(mut_no_audit),
+   "db_change_without_write_request": len(writes_without_mut), "insert_without_org_id": len(no_org), "hard_deletes": len(deletes),
+   "js_crashes": len(js_crash), "console_errors": len(console), "process_violations": len(proc_bad), "process_unverified": len(proc_unknown),
++  "fe_matched_by_correlation_id": matched_by_corr, "be_with_correlation_id": sum(1 for d in BE if d.get("corr")),
++  "be_writes_serialized": sum(1 for d in BE if d.get("serialized")),
++  "coverage": {r: {"screens": len(pages[r]), "visits": acts[r]["visit"], "actions": n_actions(r), "recoveries": recoveries[r]} for r in sorted(acts)},
++  "status_by_role": {r: dict(c) for r, c in sorted(status_by_role.items())},
+ }
+ json.dump({"summary": S, "rules": rules}, open(f"{RUN}/summary.json", "w"), ensure_ascii=False, indent=1, default=str)
+ 
+@@ -203,8 +254,8 @@
+  ("Без одит", "Генериране на QR код не пише одитен запис", "app/routes/assets_qr.py:156-180"),
+  ("Права екран↔сървър", "Екраните „Служители“, „Служител“ и „Календар на работниците“ се отварят за SiteManager, сървърът му отказва (празен екран)", "frontend/src/App.js:151 ADMIN_ROLES срещу app/routes/hr.py:30-32 payroll_permission"),
+ ]
+-parts.append(sec("Проверено лично в кода", "Тези находки от ботовете са сверени с реда в кода (main de720f94). Останалите са кандидати.",
+-  table(["Находка", "Какво", "Къде"], VER), "pay", len(VER)))
++# INTEGRATION_V2: the "checked in the code" list of run A (main de720f94) is not repeated here;
++# README.md of this folder compares main / v1 / v2.
+ parts.append(sec("Сървърът се срива (5xx)", "Екранът е поискал нещо и сървърът е върнал вътрешна грешка.",
+   table(["Заявка", "Брой", "Роли"], [[k, v, ", ".join(sorted({d["role"] for d in crash if f'{d["method"]} {norm(d["url"])}' == k}))] for k, v in group(crash, lambda d: f'{d["method"]} {norm(d["url"])}')]), "pay", len(crash)))
+ parts.append(sec("Екранът вика адрес, който сървърът няма (404/405)", "Несъответствие между frontend и backend: бутонът или страницата сочи към несъществуващ endpoint.",
+@@ -224,24 +275,25 @@
+ parts.append(sec("Записи без фирма (org_id)", "Нов запис без org_id (Tenant Guard).",
+   table(["Таблица", "Брой"], group(no_org, lambda c: c["coll"])), "sec", len(no_org)))
+ parts.append(sec("Сривове в екрана (JavaScript)", "Грешка в браузъра, която спира част от екрана.",
+-  table(["Грешка", "Брой", "Страница"], [[k[:160], v, next(e["url"] for e in js_crash if e["text"] == k).replace("http://localhost:8767", "")] for k, v in group(js_crash, lambda e: e["text"])]), "data", len(js_crash)))
++  table(["Грешка", "Брой", "Страница"], [[k[:160], v, next(e["url"] for e in js_crash if e["text"] == k).replace(BASE_URL, "")] for k, v in group(js_crash, lambda e: e["text"])]), "data", len(js_crash)))
+ parts.append(sec("Правила върху крайната демо база", "Заявките от одобрения план (само бройки и суми), пуснати върху демо базата, плюс проверки за двойни записи.",
+   "".join(f"<h4>{E(k)}</h4>" + table(["Група", "Стойности"], [[json.dumps(r.get("_id", ""), ensure_ascii=False), json.dumps({x: y for x, y in r.items() if x != "_id"}, ensure_ascii=False)] for r in v]) for k, v in rules.items()), "pay"))
+ parts.append(sec("Отговори по роля (от екрана)", "Колко заявки е изпратил всеки бот и с какъв резултат.",
+   table(["Роля"] + ["2xx", "401", "403", "404", "405", "409", "422", "5xx", "FAILED"], [[r] + [c.get(k, 0) for k in ["2xx", "401", "403", "404", "405", "409", "422", "5xx", "FAILED"]] for r, c in sorted(status_by_role.items())]), "low"))
+ parts.append(sec("Покритие по роля", "Колко различни екрана е отворил всеки бот и какво е правил.",
+-  table(["Роля", "Екрани", "Действия"], [[r, len(pages[r]), ", ".join(f"{k} {v}" for k, v in acts[r].most_common())] for r in sorted(acts)]), "low"))
++  table(["Роля", "Екрани", "Посещения", "Действия (без посещения/вход)", "Възстановявания", "Действия по вид"],
++        [[r, len(pages[r]), acts[r]["visit"], n_actions(r), recoveries[r], ", ".join(f"{k} {v}" for k, v in acts[r].most_common())] for r in sorted(acts)]), "low"))
+ parts.append(sec("Заявки от екрана, които не са стигнали до сървъра", "Екранът е изпратил заявка, но сървърът няма запис за нея (прекъсната връзка, CORS, спрян процес).",
+   table(["Заявка", "Брой"], group(unmatched, lambda d: f'{d["method"]} {norm(d["url"])} [{d.get("status")}]')), "low", len(unmatched)))
+ 
+-stalled = [r for r in sorted(acts) if acts[r]["visit"] < 20]
++stalled = [r for r in sorted(acts) if acts[r]["visit"] < 20 or n_actions(r) < 20]
+ if stalled:
+-    parts.insert(0, sec("Граница на проверката: ботове, които спряха", "Тези ботове блокираха в първите секунди и не работиха 3 часа. Резултатите за техните роли не са проверка. Реално през екрана работиха само: " + ", ".join(r for r in sorted(acts) if r not in stalled) + ". Причината е в бота (действие без краен срок), не е доказано, че е в програмата: същият екран се отваря нормално при отделна проба.",
+-      table(["Роля", "Последно действие", "Екран"], [[r, next((a["kind"] + " " + a["label"]) for a in reversed(ACT) if a["role"] == r), next(a["url"].replace("http://localhost:8767", "") for a in reversed(ACT) if a["role"] == r)] for r in stalled]), "data", len(stalled)))
++    parts.insert(0, sec("Граница на проверката: ботове под прага", "Тези ботове имат под 20 посещения или под 20 действия. Резултатите за техните роли не са пълна проверка. Над прага: " + ", ".join(r for r in sorted(acts) if r not in stalled) + ".",
++      table(["Роля", "Последно действие", "Екран"], [[r, next((a["kind"] + " " + a["label"]) for a in reversed(ACT) if a["role"] == r), next(a["url"].replace(BASE_URL, "") for a in reversed(ACT) if a["role"] == r)] for r in stalled]), "data", len(stalled)))
+ tiles = [("минути работа", S["minutes"]), ("заявки от екраните", S["fe_requests"]), ("промени в базата", S["db_changes"]), ("нарушени правила в процесите", S["process_violations"]),
+          ("сривове на сървъра", S["5xx_fe"]), ("адреси, които сървърът няма", S["route_missing"]), ("грешен вид данни (422)", S["422"]), ("отказани права (403)", S["403"]),
+          ("„готово“ без запис", S["ok_without_db_write"]), ("запис без одит", S["write_without_audit"]), ("физически изтривания", S["hard_deletes"]), ("сривове в екрана", S["js_crashes"])]
+-page = open("/tmp/claude-0/demo_int/report_tpl.html", encoding="utf8").read()
++page = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_tpl.html"), encoding="utf8").read()
+ page = page.replace("{{GEN}}", E(S["generated"])).replace("{{TILES}}", "".join(f'<div class="tile"><div class="num">{v}</div><div class="cap">{E(k)}</div></div>' for k, v in tiles)).replace("{{PARTS}}", "\n".join(parts))
+ open(f"{RUN}/report.html", "w", encoding="utf8").write(page)
+ print(json.dumps(S, ensure_ascii=False))
+diff -ruN orig/bot.js harness/bot.js
+--- orig/bot.js	2026-11-16 18:45:21.780374610 +0000
++++ harness/bot.js	2026-11-16 19:30:43.668606234 +0000
+@@ -4,13 +4,29 @@
+ // with synthetic data and submits. Everything the frontend sends and receives
+ // is written to run/fe_*.jsonl for comparison with the backend log and the
+ // database change log.
++//
++// INTEGRATION_V2 (BL-13b) changes against BOT_RUN_2026-11-15/harness/bot.js:
++//  1. every action and navigation runs under a hard timeout (ACTION_MS, Promise.race);
++//     on a timeout the bot logs `timeout` and recovers by going to the role's home
++//     screen; if that also hangs, the page is replaced by a fresh one (and re-login).
++//     In run A 6 of 8 bots stalled in the first 30 s: Playwright calls such as
++//     innerText()/evaluate()/inputValue() on elements that went away each waited the
++//     default timeout, inside loops over up to 120 buttons / 25 inputs.
++//  2. button texts are read in ONE evaluateAll per screen (no per-element waits);
++//     element reads use a short per-call timeout.
++//  3. one PRNG per role, seeded from the role name (run A shared one global seed
++//     between 8 concurrent bots, so the run was not reproducible — Codex review).
++//  4. every action gets an id; every /api request the page makes while that action
++//     runs carries `x-correlation-id: <role>:<n>:<kind>` (added in the route handler);
++//     serve.py logs it, so screen ↔ server is joined by id, not by a time window.
+ const { chromium, devices } = require('playwright');
+ const fs = require('fs');
+ const path = require('path');
+ 
+-const BASE = 'http://localhost:8765';
+-const RUN = '/tmp/claude-0/demo/run';
+-const DURATION_MIN = Number(process.env.DURATION_MIN || 180);
++const BASE = process.env.BOT_BASE || 'http://localhost:8768';
++const RUN = process.env.BOT_RUN || '/tmp/claude-0/demo_int2/ui/run';
++const DURATION_MIN = Number(process.env.DURATION_MIN || 30);
++const ACTION_MS = Number(process.env.ACTION_MS || 15000);
+ const SEED = JSON.parse(fs.readFileSync(path.join(RUN, 'seed.json'), 'utf8'));
+ const END = Date.now() + DURATION_MIN * 60000;
+ 
+@@ -28,10 +44,23 @@
+ const NAV = new Set(['Табло','Обекти','СМР и Оферти','Отчети','Персонал','Финанси','Склад','Активи','Справочници','Настройки','Алармы','Аларми','Заявки','Връщания','Профил']);
+ const SUBMIT = /^(запази|създай|добави|изпрати|потвърди|одобри|приеми|запиши|save|submit|ok|да|продължи|генерирай|приключи|начисли|плати)/i;
+ const RISKY = /изтрий|анулирай|отхвърли|сторно|архивирай|премахни|delete|cancel/i;
++const BTN_SEL = 'button:visible, [role="button"]:visible, a[role="button"]:visible';
+ 
+-let seed = 1;
+-function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+-const pick = (a) => a[Math.floor(rnd() * a.length)];
++// Deterministic per-role PRNG (mulberry32, 32-bit integer math), seed = FNV-1a of the role
++// name. Run A's LCG `(s * 1103515245 + 12345) % 2^31` loses precision once s is large
++// (the product exceeds 2^53), so its sequence was not a proper LCG either.
++function seedOf(role) { let h = 2166136261; for (const ch of role) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
++function mkRng(role) {
++  let s = seedOf(role);
++  const rnd = () => {
++    s = (s + 0x6D2B79F5) >>> 0;
++    let t = s;
++    t = Math.imul(t ^ (t >>> 15), t | 1);
++    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  };
++  return { rnd, pick: (a) => a[Math.floor(rnd() * a.length)] };
++}
+ const now = () => Date.now() / 1000;
+ 
+ function writer(name) {
+@@ -40,98 +69,64 @@
+ }
+ const W = { net: writer('fe_network.jsonl'), act: writer('fe_actions.jsonl'), err: writer('fe_errors.jsonl') };
+ 
+-async function fillVisible(page, role) {
+-  const scope = (await page.$('[role="dialog"]')) ? page.locator('[role="dialog"]').last() : ((await page.$('main')) ? page.locator('main').first() : page.locator('body'));
+-  const inputs = scope.locator('input:visible, textarea:visible, select:visible');
+-  const n = Math.min(await inputs.count(), 25);
+-  let filled = 0;
+-  for (let i = 0; i < n; i++) {
+-    const el = inputs.nth(i);
+-    try {
+-      const tag = await el.evaluate((e) => e.tagName.toLowerCase());
+-      const type = ((await el.getAttribute('type')) || '').toLowerCase();
+-      if (['hidden', 'file', 'submit', 'button', 'password'].includes(type)) continue;
+-      if (await el.isDisabled()) continue;
+-      if (tag === 'select') {
+-        const opts = await el.locator('option').evaluateAll((o) => o.map((x) => x.value).filter((v) => v));
+-        if (opts.length) { await el.selectOption(pick(opts)); filled++; }
+-      } else if (type === 'checkbox' || type === 'radio') {
+-        if (rnd() < 0.5) { await el.check({ timeout: 1000 }).catch(() => {}); filled++; }
+-      } else if (type === 'number') {
+-        await el.fill(String(Math.round(1 + rnd() * 99))); filled++;
+-      } else if (type === 'date') {
+-        await el.fill(new Date().toISOString().slice(0, 10)); filled++;
+-      } else if (type === 'email') {
+-        await el.fill(`bot${Math.floor(rnd() * 1e5)}@example.com`); filled++;
+-      } else if (type === 'tel') {
+-        await el.fill('0888' + String(Math.floor(100000 + rnd() * 899999))); filled++;
+-      } else {
+-        const v = await el.inputValue().catch(() => '');
+-        if (!v) { await el.fill(`Бот ${role} ${Math.floor(rnd() * 1000)}`); filled++; }
+-      }
+-    } catch (e) { /* element went away */ }
+-  }
+-  // Radix/shadcn comboboxes: open and choose an option
+-  const combos = scope.locator('button[role="combobox"]:visible');
+-  const cn = Math.min(await combos.count(), 6);
+-  for (let i = 0; i < cn; i++) {
+-    try {
+-      await combos.nth(i).click({ timeout: 1500 });
+-      const opt = page.locator('[role="option"]:visible');
+-      const k = await opt.count();
+-      if (k) { await opt.nth(Math.floor(rnd() * k)).click({ timeout: 1500 }); filled++; }
+-      else await page.keyboard.press('Escape');
+-    } catch (e) { await page.keyboard.press('Escape').catch(() => {}); }
+-  }
+-  return filled;
+-}
+-
+-async function clickByText(page, re, role, kind, allowRisky) {
+-  const btns = page.locator('button:visible, [role="button"]:visible, a[role="button"]:visible');
+-  const n = Math.min(await btns.count(), 120);
+-  const cand = [];
+-  for (let i = 0; i < n; i++) {
+-    const t = ((await btns.nth(i).innerText().catch(() => '')) || (await btns.nth(i).getAttribute('aria-label').catch(() => '')) || '').trim().replace(/\s+/g, ' ');
+-    if (!t || t.length > 40 || SKIP.test(t) || NAV.has(t)) continue;
+-    if (!allowRisky && RISKY.test(t)) continue;
+-    if (re.test(t)) cand.push([i, t]);
+-  }
+-  if (!cand.length) return null;
+-  const [i, t] = pick(cand);
+-  try {
+-    if (await btns.nth(i).isDisabled()) return null;
+-    await btns.nth(i).click({ timeout: 3000 });
+-    W.act({ t: now(), role, kind, label: t, url: page.url() });
+-    return t;
+-  } catch (e) { return null; }
++class Timeout extends Error {}
++function withTimeout(p, ms, label) {
++  let h;
++  const t = new Promise((_, rej) => { h = setTimeout(() => rej(new Timeout(`timeout ${ms}ms: ${label}`)), ms); });
++  return Promise.race([Promise.resolve(p), t]).finally(() => clearTimeout(h));
+ }
+ 
+ async function runBot(browser, role, ctxOpts) {
+   const u = SEED.users[role];
+-  const ctx = await browser.newContext({ ...ctxOpts, extraHTTPHeaders: { 'x-bot-role': role } });
+-  const page = await ctx.newPage();
+-  page.setDefaultTimeout(8000);
+-  page.on('dialog', (d) => { W.act({ t: now(), role, kind: 'browser-dialog', label: d.message().slice(0, 200), url: page.url() }); d.accept().catch(() => {}); });
+-  page.on('console', (m) => { if (m.type() === 'error') W.err({ t: now(), role, kind: 'console', text: m.text().slice(0, 400), url: page.url() }); });
+-  page.on('pageerror', (e) => W.err({ t: now(), role, kind: 'pageerror', text: String(e).slice(0, 400), url: page.url() }));
++  const { rnd, pick } = mkRng(role);
++  // serviceWorkers 'block': the PWA service worker must not fetch /api past the route
++  // handler below (its requests would carry no correlation id)
++  const ctx = await browser.newContext({ ...ctxOpts, serviceWorkers: 'block', extraHTTPHeaders: { 'x-bot-role': role } });
++  let seq = 0;
++  let corr = `${role}:0:login`;
++  let page = null;
++  let home = BASE + '/';
++  let lastAct = Date.now();
++  const act = (kind, label) => { lastAct = Date.now(); W.act({ t: now(), role, kind, label, url: page ? page.url() : '', corr }); };
++
+   await ctx.route('**/*', (r) => {
+     const url = r.request().url();
+-    if (url.startsWith(BASE) || url.startsWith('data:') || url.startsWith('blob:')) return r.continue();
+-    W.net({ t: now(), role, blocked: true, method: r.request().method(), url: url.slice(0, 200), page: page.url() });
+-    return r.abort();
+-  });
+-  const started = new Map();
+-  page.on('request', (rq) => { if (rq.url().includes('/api/')) started.set(rq, now()); });
+-  page.on('requestfinished', async (rq) => {
+-    if (!rq.url().includes('/api/')) return;
+-    const resp = await rq.response().catch(() => null);
+-    let body = null;
+-    if (resp && resp.status() >= 400) body = (await resp.text().catch(() => '')).slice(0, 300);
+-    W.net({ t: started.get(rq) || now(), end: now(), role, method: rq.method(), url: rq.url().replace(BASE, '').slice(0, 220),
+-      status: resp ? resp.status() : null, req: (rq.postData() || '').slice(0, 400), resp: body, page: page.url().replace(BASE, '') });
+-    started.delete(rq);
++    if (url.startsWith(BASE) && url.includes('/api/')) {
++      return r.continue({ headers: { ...r.request().headers(), 'x-correlation-id': corr } }).catch(() => {});
++    }
++    if (url.startsWith(BASE) || url.startsWith('data:') || url.startsWith('blob:')) return r.continue().catch(() => {});
++    W.net({ t: now(), role, blocked: true, method: r.request().method(), url: url.slice(0, 200), page: page ? page.url() : '' });
++    return r.abort().catch(() => {});
+   });
+-  page.on('requestfailed', (rq) => { if (rq.url().includes('/api/')) W.net({ t: started.get(rq) || now(), role, method: rq.method(), url: rq.url().replace(BASE, ''), status: 'FAILED', failure: (rq.failure() || {}).errorText, page: page.url().replace(BASE, '') }); });
++
++  async function newPage() {
++    if (page) await withTimeout(page.close(), 5000, 'close').catch(() => {});
++    const p = await ctx.newPage();
++    p.setDefaultTimeout(4000);
++    p.setDefaultNavigationTimeout(12000);
++    p.on('dialog', (d) => { W.act({ t: now(), role, kind: 'browser-dialog', label: d.message().slice(0, 200), url: p.url(), corr }); d.accept().catch(() => {}); });
++    p.on('console', (m) => { if (m.type() === 'error') W.err({ t: now(), role, kind: 'console', text: m.text().slice(0, 400), url: p.url(), corr }); });
++    p.on('pageerror', (e) => W.err({ t: now(), role, kind: 'pageerror', text: String(e).slice(0, 400), url: p.url(), corr }));
++    const started = new Map();
++    p.on('request', (rq) => { if (rq.url().includes('/api/')) started.set(rq, [now(), rq.headers()['x-correlation-id'] || corr]); });
++    p.on('requestfinished', async (rq) => {
++      if (!rq.url().includes('/api/')) return;
++      const resp = await rq.response().catch(() => null);
++      let body = null;
++      if (resp && resp.status() >= 400) body = (await resp.text().catch(() => '')).slice(0, 300);
++      const [t0, c] = started.get(rq) || [now(), corr];
++      W.net({ t: t0, end: now(), role, corr: c, method: rq.method(), url: rq.url().replace(BASE, '').slice(0, 220),
++        status: resp ? resp.status() : null, req: (rq.postData() || '').slice(0, 400), resp: body, page: p.url().replace(BASE, '') });
++      started.delete(rq);
++    });
++    p.on('requestfailed', (rq) => {
++      if (!rq.url().includes('/api/')) return;
++      const [t0, c] = started.get(rq) || [now(), corr];
++      W.net({ t: t0, role, corr: c, method: rq.method(), url: rq.url().replace(BASE, ''), status: 'FAILED', failure: (rq.failure() || {}).errorText, page: p.url().replace(BASE, '') });
++      started.delete(rq);
++    });
++    page = p;
++  }
+ 
+   async function login() {
+     await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' });
+@@ -140,82 +135,196 @@
+     await page.fill('input[type=password]', u.password);
+     await page.click('button[type=submit]');
+     await page.waitForTimeout(4000);
+-    W.act({ t: now(), role, kind: 'login', label: u.email, url: page.url() });
++    if (!page.url().includes('/login')) home = page.url();
++    act('login', u.email);
+   }
+-  await login();
+-  const visits = new Map();
+-  let shots = 0;
+-  while (Date.now() < END) {
++
++  async function fillVisible() {
++    const scope = (await page.$('[role="dialog"]')) ? page.locator('[role="dialog"]').last() : ((await page.$('main')) ? page.locator('main').first() : page.locator('body'));
++    const inputs = scope.locator('input:visible, textarea:visible, select:visible');
++    const n = Math.min(await inputs.count(), 25);
++    let filled = 0;
++    for (let i = 0; i < n; i++) {
++      const el = inputs.nth(i);
++      try {
++        const [tag, type, disabled, value] = await el.evaluate((e) => [e.tagName.toLowerCase(), (e.getAttribute('type') || '').toLowerCase(), !!e.disabled, e.value || ''], null, { timeout: 1000 });
++        if (['hidden', 'file', 'submit', 'button', 'password'].includes(type) || disabled) continue;
++        if (tag === 'select') {
++          const opts = await el.locator('option').evaluateAll((o) => o.map((x) => x.value).filter((v) => v));
++          if (opts.length) { await el.selectOption(pick(opts), { timeout: 1500 }); filled++; }
++        } else if (type === 'checkbox' || type === 'radio') {
++          if (rnd() < 0.5) { await el.check({ timeout: 1000 }).catch(() => {}); filled++; }
++        } else if (type === 'number') {
++          await el.fill(String(Math.round(1 + rnd() * 99)), { timeout: 1500 }); filled++;
++        } else if (type === 'date') {
++          await el.fill(new Date().toISOString().slice(0, 10), { timeout: 1500 }); filled++;
++        } else if (type === 'email') {
++          await el.fill(`bot${Math.floor(rnd() * 1e5)}@example.com`, { timeout: 1500 }); filled++;
++        } else if (type === 'tel') {
++          await el.fill('0888' + String(Math.floor(100000 + rnd() * 899999)), { timeout: 1500 }); filled++;
++        } else if (!value) {
++          await el.fill(`Бот ${role} ${Math.floor(rnd() * 1000)}`, { timeout: 1500 }); filled++;
++        }
++      } catch (e) { /* element went away */ }
++    }
++    // Radix/shadcn comboboxes: open and choose an option
++    const combos = scope.locator('button[role="combobox"]:visible');
++    const cn = Math.min(await combos.count(), 6);
++    for (let i = 0; i < cn; i++) {
++      try {
++        await combos.nth(i).click({ timeout: 1500 });
++        const opt = page.locator('[role="option"]:visible');
++        const k = await opt.count();
++        if (k) { await opt.nth(Math.floor(rnd() * k)).click({ timeout: 1500 }); filled++; }
++        else await page.keyboard.press('Escape');
++      } catch (e) { await page.keyboard.press('Escape').catch(() => {}); }
++    }
++    return filled;
++  }
++
++  async function clickByText(re, kind, allowRisky) {
++    const btns = page.locator(BTN_SEL);
++    // one read for all labels (run A read each label with its own wait → minutes per screen)
++    const labels = await btns.evaluateAll((els) => els.slice(0, 120).map((e) => ((e.innerText || e.getAttribute('aria-label') || '') + '').trim().replace(/\s+/g, ' ')));
++    const cand = [];
++    labels.forEach((t, i) => {
++      if (!t || t.length > 40 || SKIP.test(t) || NAV.has(t)) return;
++      if (!allowRisky && RISKY.test(t)) return;
++      if (re.test(t)) cand.push([i, t]);
++    });
++    if (!cand.length) return null;
++    const [i, t] = pick(cand);
+     try {
+-      if (page.url().includes('/login')) await login();
+-      // 1) choose a screen: least visited link first, with some randomness
+-      const hrefs = await page.$$eval('a[href^="/"]', (as) => [...new Set(as.map((a) => a.getAttribute('href')))]).catch(() => []);
+-      const links = hrefs.filter((h) => h && !/logout|login|billing|password/i.test(h));
+-      if (links.length && rnd() < 0.7) {
+-        links.sort((a, b) => (visits.get(a) || 0) - (visits.get(b) || 0));
+-        const h = rnd() < 0.7 ? links[0] : pick(links);
+-        visits.set(h, (visits.get(h) || 0) + 1);
+-        await page.goto(BASE + h, { waitUntil: 'domcontentloaded' }).catch(() => {});
+-        W.act({ t: now(), role, kind: 'visit', label: h, url: page.url() });
+-        await page.waitForTimeout(1800);
++      if (await btns.nth(i).isDisabled({ timeout: 1000 })) return null;
++      await btns.nth(i).click({ timeout: 3000 });
++      act(kind, t);
++      return t;
++    } catch (e) { return null; }
++  }
++
++  // one step of the walk; each call below runs under withTimeout(ACTION_MS)
++  const visits = new Map();
++  const known = new Set();
++  async function visitStep() {
++    // the PC sidebar keeps its screens in collapsed groups (Обекти, Персонал, Финанси, Склад …):
++    // their links are not in the DOM until the group is opened. Run A only saw the 4-6 links of
++    // the open group. Open one or two groups (the toggle itself is not counted as an action).
++    if (rnd() < 0.6) {
++      const navBtns = page.locator('button:visible');
++      const labels = await navBtns.evaluateAll((els) => els.slice(0, 60).map((e) => (e.innerText || '').trim()));
++      const groups = labels.map((t, i) => [i, t]).filter(([, t]) => NAV.has(t));
++      for (let k = 0; k < Math.min(2, groups.length); k++) {
++        const [i, t] = pick(groups);
++        await navBtns.nth(i).click({ timeout: 1500 }).catch(() => {});
++        W.act({ t: now(), role, kind: 'menu', label: t, url: page.url(), corr });
++        await page.waitForTimeout(300);
+       }
+-      // 2) act on the screen
+-      const r = rnd();
+-      if (r < 0.45) {
+-        const opened = await clickByText(page, OPEN, role, 'open', false);
+-        if (opened) {
+-          await page.waitForTimeout(1200);
+-          let f = await fillVisible(page, role);
+-          for (let step = 0; step < 6; step++) {   // multi-step wizards: fill, Напред →, fill …
+-            const nx = await clickByText(page, NEXT, role, 'next', false);
+-            if (!nx) break;
+-            await page.waitForTimeout(700);
+-            f += await fillVisible(page, role);
+-          }
+-          W.act({ t: now(), role, kind: 'fill', label: `${f} полета`, url: page.url() });
+-          await clickByText(page, SUBMIT, role, 'submit', false);
+-          await page.waitForTimeout(1800);
+-          await page.keyboard.press('Escape').catch(() => {});
+-        }
+-      } else if (r < 0.65) {
+-        // open a row / card to reach detail screens
+-        const rows = page.locator('table tbody tr:visible, [data-testid*="card"]:visible, [data-testid*="row"]:visible');
+-        const k = await rows.count();
+-        if (k) { await rows.nth(Math.floor(rnd() * k)).click({ timeout: 3000 }).catch(() => {}); W.act({ t: now(), role, kind: 'open-row', label: String(k), url: page.url() }); await page.waitForTimeout(1500); }
+-      } else if (r < 0.75) {
+-        await clickByText(page, /одобри|потвърди|приеми|изпрати|плати|начисли|генерирай|приключи/i, role, 'decide', false);
+-        await page.waitForTimeout(1500);
+-      } else if (r < 0.80) {
+-        await clickByText(page, RISKY, role, 'risky', true);
++    }
++    const hrefs = await page.$$eval('a[href^="/"]', (as) => [...new Set(as.map((a) => a.getAttribute('href')))]).catch(() => []);
++    let links = hrefs.filter((h) => h && !/logout|login|billing|password/i.test(h));
++    links.forEach((h) => known.add(h));
++    // dead-end screens (no links, e.g. /assets/batch-intake, a scanner overlay): run A's bots
++    // stayed there for the whole run, every step finding nothing to do. Use the links seen before.
++    // least-visited first over every link seen so far (also on dead ends)
++    links = [...known];
++    if (!(links.length && rnd() < 0.7)) return;
++    links.sort((a, b) => (visits.get(a) || 0) - (visits.get(b) || 0));
++    const h = rnd() < 0.7 ? links[0] : pick(links);
++    visits.set(h, (visits.get(h) || 0) + 1);
++    await page.goto(BASE + h, { waitUntil: 'domcontentloaded' }).catch(() => {});
++    act('visit', h);
++    await page.waitForTimeout(1800);
++  }
++  async function actStep() {
++    const r = rnd();
++    if (r < 0.45) {
++      const opened = await clickByText(OPEN, 'open', false);
++      if (opened) {
+         await page.waitForTimeout(1200);
+-        await clickByText(page, SUBMIT, role, 'confirm', true);
+-        await page.waitForTimeout(1500);
+-      } else if (r < 0.92) {
+-        // tabs inside a screen
+-        const tabs = page.locator('[role="tab"]:visible');
+-        const k = await tabs.count();
+-        if (k) { const i = Math.floor(rnd() * k); const t = await tabs.nth(i).innerText().catch(() => ''); await tabs.nth(i).click({ timeout: 2000 }).catch(() => {}); W.act({ t: now(), role, kind: 'tab', label: t.slice(0, 40), url: page.url() }); await page.waitForTimeout(1200); }
+-      } else {
+-        // double click on a submit-like button: duplicate protection
+-        const b = await clickByText(page, OPEN, role, 'open-for-double', false);
+-        if (b) { await page.waitForTimeout(800); await fillVisible(page, role);
+-          const s = page.locator('[role="dialog"] button:visible').filter({ hasText: SUBMIT });
+-          if (await s.count()) { await s.first().dblclick({ timeout: 2000 }).catch(() => {}); W.act({ t: now(), role, kind: 'double-submit', label: 'dblclick', url: page.url() }); }
+-          await page.waitForTimeout(1800); await page.keyboard.press('Escape').catch(() => {}); }
++        let f = await fillVisible();
++        for (let step = 0; step < 6; step++) {   // multi-step wizards: fill, Напред →, fill …
++          const nx = await clickByText(NEXT, 'next', false);
++          if (!nx) break;
++          await page.waitForTimeout(700);
++          f += await fillVisible();
++        }
++        act('fill', `${f} полета`);
++        await clickByText(SUBMIT, 'submit', false);
++        await page.waitForTimeout(1800);
++        await page.keyboard.press('Escape').catch(() => {});
+       }
+-    } catch (e) {
+-      W.err({ t: now(), role, kind: 'bot', text: String(e).slice(0, 300), url: page.url() });
+-      if (shots < 15) { shots++; await page.screenshot({ path: path.join(RUN, `shot_${role}_${shots}.png`) }).catch(() => {}); }
+-      await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' }).catch(() => {});
++    } else if (r < 0.65) {
++      // open a row / card to reach detail screens
++      const rows = page.locator('table tbody tr:visible, [data-testid*="card"]:visible, [data-testid*="row"]:visible');
++      const k = await rows.count();
++      if (k) { await rows.nth(Math.floor(rnd() * k)).click({ timeout: 3000 }).catch(() => {}); act('open-row', String(k)); await page.waitForTimeout(1500); }
++    } else if (r < 0.75) {
++      await clickByText(/одобри|потвърди|приеми|изпрати|плати|начисли|генерирай|приключи/i, 'decide', false);
++      await page.waitForTimeout(1500);
++    } else if (r < 0.80) {
++      await clickByText(RISKY, 'risky', true);
++      await page.waitForTimeout(1200);
++      await clickByText(SUBMIT, 'confirm', true);
++      await page.waitForTimeout(1500);
++    } else if (r < 0.92) {
++      // tabs inside a screen
++      const tabs = page.locator('[role="tab"]:visible');
++      const k = await tabs.count();
++      if (k) { const i = Math.floor(rnd() * k); const t = await tabs.nth(i).innerText({ timeout: 1000 }).catch(() => ''); await tabs.nth(i).click({ timeout: 2000 }).catch(() => {}); act('tab', t.slice(0, 40)); await page.waitForTimeout(1200); }
++    } else {
++      // double click on a submit-like button: duplicate protection
++      const b = await clickByText(OPEN, 'open-for-double', false);
++      if (b) {
++        await page.waitForTimeout(800); await fillVisible();
++        const s = page.locator('[role="dialog"] button:visible').filter({ hasText: SUBMIT });
++        if (await s.count()) { await s.first().dblclick({ timeout: 2000 }).catch(() => {}); act('double-submit', 'dblclick'); }
++        await page.waitForTimeout(1800); await page.keyboard.press('Escape').catch(() => {});
++      }
++    }
++  }
++
++  let shots = 0;
++  async function recover(e) {
++    W.err({ t: now(), role, kind: e instanceof Timeout ? 'timeout' : 'bot', text: String(e).slice(0, 300), url: page ? page.url() : '', corr });
++    if (shots < 15) { shots++; await withTimeout(page.screenshot({ path: path.join(RUN, `shot_${role}_${shots}.png`) }), 5000, 'shot').catch(() => {}); }
++    corr = `${role}:${++seq}:recover`;
++    try {
++      await withTimeout(page.goto(home, { waitUntil: 'domcontentloaded' }), ACTION_MS, 'recover-home');
++      act('recover', home.replace(BASE, ''));
++    } catch (e2) {
++      W.err({ t: now(), role, kind: 'page-replaced', text: String(e2).slice(0, 300), url: '', corr });
++      await withTimeout(newPage(), ACTION_MS, 'new-page').catch(() => {});
++      await withTimeout(login(), 30000, 'relogin').catch(() => {});
++    }
++  }
++
++  await newPage();
++  await withTimeout(login(), 30000, 'login').catch(recover);
++  while (Date.now() < END) {
++    for (const [kind, fn] of [['visit', visitStep], ['act', actStep]]) {
++      if (Date.now() >= END) break;
++      corr = `${role}:${++seq}:${kind}`;
++      try {
++        if (page.url().includes('/login')) await withTimeout(login(), 30000, 'relogin');
++        await withTimeout(fn(), ACTION_MS, kind);
++        // no logged action for 2×ACTION_MS although every step returned: a dead end
++        if (Date.now() - lastAct > 2 * ACTION_MS) throw new Timeout(`idle ${2 * ACTION_MS}ms (no action possible) at ${page.url().replace(BASE, '')}`);
++      } catch (e) { await recover(e); }
+     }
++    await page.waitForTimeout(300).catch(() => {});   // no busy loop on an empty screen
+   }
+-  await ctx.close();
++  corr = `${role}:${++seq}:end`;
++  await withTimeout(ctx.close(), 10000, 'ctx-close').catch(() => {});
+ }
+ 
+ (async () => {
+   const browser = await chromium.launch();
+-  fs.writeFileSync(path.join(RUN, 'bots_started.json'), JSON.stringify({ start: now(), end: END / 1000, bots: BOTS.map((b) => b[0]) }));
+-  await Promise.all(BOTS.map(([role, opt], i) => { seed = 1000 + i; return runBot(browser, role, opt).catch((e) => W.err({ t: now(), role, kind: 'bot-fatal', text: String(e).slice(0, 400) })); }));
+-  await browser.close();
++  // added after the run (see README §3): if the browser dies, stop — otherwise every call fails
++  // at once and recover() loops without a pause (an aborted trial wrote 0.9 GB of errors).
++  browser.on('disconnected', () => { if (Date.now() < END) { W.err({ t: now(), role: '-', kind: 'bot-fatal', text: 'browser disconnected' }); process.exit(2); } });
++  fs.writeFileSync(path.join(RUN, 'bots_started.json'), JSON.stringify({ start: now(), end: END / 1000, action_ms: ACTION_MS, bots: BOTS.map((b) => [b[0], seedOf(b[0])]) }));
++  await Promise.all(BOTS.map(([role, opt]) => runBot(browser, role, opt).catch((e) => W.err({ t: now(), role, kind: 'bot-fatal', text: String(e).slice(0, 400) }))));
++  await withTimeout(browser.close(), 20000, 'browser-close').catch(() => {});
+   fs.writeFileSync(path.join(RUN, 'bots_done.json'), JSON.stringify({ done: now() }));
++  process.exit(0);
+ })();
+diff -ruN orig/group_process.py harness/group_process.py
+--- orig/group_process.py	2026-11-16 18:45:21.780409734 +0000
++++ harness/group_process.py	2026-11-16 18:45:48.714733863 +0000
+@@ -6,8 +6,8 @@
+ import sys
+ from collections import OrderedDict
+ 
+-src = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/demo_int/run/process.jsonl"
+-dst = sys.argv[2] if len(sys.argv) > 2 else "/tmp/claude-0/demo_int/run/int_process_grouped.csv"
++src = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/demo_int2/proc/run/process.jsonl"
++dst = sys.argv[2] if len(sys.argv) > 2 else "/tmp/claude-0/demo_int2/proc/run/int2_process_grouped.csv"
+ rows = [json.loads(l) for l in open(src, encoding="utf8") if l.strip()]
+ starts = [i for i, r in enumerate(rows) if r.get("flow") == "run" and r.get("step") == "start"]
+ rows = rows[starts[-1]:] if starts else rows
+diff -ruN orig/insert_subscription.py harness/insert_subscription.py
+--- orig/insert_subscription.py	2026-11-16 18:45:21.780429564 +0000
++++ harness/insert_subscription.py	2026-11-16 18:45:48.714866421 +0000
+@@ -3,11 +3,13 @@
+ import datetime
+ import uuid
+ 
++import os
++
+ import pymongo
+ 
+-c = pymongo.MongoClient("mongodb://127.0.0.1:27161/?directConnection=true")
++c = pymongo.MongoClient(os.environ["BOT_MONGO"])
+ print(c.list_database_names())
+-db = c.demoint_begwork
++db = c[os.environ["BOT_DB"]]
+ org = db.organizations.find_one({}, {"_id": 0, "id": 1, "name": 1})
+ print(org)
+ now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+diff -ruN orig/process_bot.py harness/process_bot.py
+--- orig/process_bot.py	2026-11-16 18:45:21.780453599 +0000
++++ harness/process_bot.py	2026-11-16 18:45:48.715523274 +0000
+@@ -7,12 +7,12 @@
+ from datetime import date, datetime, timedelta, timezone
+ import requests, pymongo
+ 
+-B = "http://localhost:8767/api"
+-RUN = "/tmp/claude-0/demo_int/run"
++B = "http://localhost:%s/api" % os.environ.get("BOT_PORT", "8769")
++RUN = os.environ.get("BOT_RUN", "/tmp/claude-0/demo_int2/proc/run")
+ OUT = os.path.join(RUN, "process.jsonl")
+ STATE = os.path.join(RUN, "process_state.json")
+ SEED = json.load(open(os.path.join(RUN, "seed.json")))
+-MDB = pymongo.MongoClient("mongodb://127.0.0.1:27161/?directConnection=true").demoint_begwork
++MDB = pymongo.MongoClient(os.environ.get("BOT_MONGO", "mongodb://127.0.0.1:27191/?directConnection=true"))[os.environ.get("BOT_DB", "demoint2p_begwork")]
+ WH = "e8974e43-733b-4c51-9ea9-27f36b6b1c2a"
+ ITEM = "9fdfcec2-1ba3-41df-98ad-09d72d865cf8"
+ W = SEED["workers"]
+diff -ruN orig/run_ui.sh harness/run_ui.sh
+--- orig/run_ui.sh	1970-01-01 00:00:00.000000000 +0000
++++ harness/run_ui.sh	2026-11-16 19:02:47.416506593 +0000
+@@ -0,0 +1,26 @@
++#!/usr/bin/env bash
++# INTEGRATION_V2: UI role-bot run on a fresh company in a disposable Mongo (default 27192),
++# backend+build of the integration worktree on port 8768, writes serialized (serve.py).
++# Usage: run_ui.sh <worktree> <minutes>   (the Mongo container must already be a fresh rs0)
++set -euo pipefail
++TREE=$1; MIN=${2:-30}
++H=$TREE/docs/audit/BOT_RUN_2026-11-15/INTEGRATION_V2_2026-11-16/harness
++PY=/tmp/claude-0/venv/bin/python
++export BOT_MONGO=${BOT_MONGO:-"mongodb://127.0.0.1:27192/?directConnection=true"} BOT_DB=demoint2ui_begwork
++export BOT_RUN=${BOT_RUN:-/tmp/claude-0/demo_int2/ui/run} BOT_PORT=8768 BOT_TREE=$TREE
++mkdir -p "$BOT_RUN"; cd "$TREE/backend"
++MONGO_URL=$BOT_MONGO DB_NAME=$BOT_DB BEG_SYSTEM_DB=demoint2ui_system $PY scripts/create_company.py \
++  --name "Демо Интеграция 2 UI ООД" --admin-email demo@example.com --admin-password 'Demo12345!'
++$PY "$H/insert_subscription.py"
++(MONGO_URL=$BOT_MONGO DB_NAME=$BOT_DB BEG_SYSTEM_DB=demoint2ui_system JWT_SECRET=demo-only-secret BOT_SERIALIZE_WRITES=1 \
++  setsid nohup $PY -m uvicorn serve:app --app-dir "$H" --host 127.0.0.1 --port 8768 > "$BOT_RUN/uvicorn.log" 2>&1 &)
++for i in $(seq 1 40); do curl -sf -o /dev/null http://127.0.0.1:8768/api/health && break; sleep 2; done
++(setsid nohup $PY "$H/watch.py" > "$BOT_RUN/watch.log" 2>&1 &)
++sleep 2
++$PY "$H/seed.py" > "$BOT_RUN/seed.log" 2>&1
++sleep 2
++wc -l < "$BOT_RUN/backend.jsonl" > "$BOT_RUN/backend_offset.txt"
++wc -l < "$BOT_RUN/db.jsonl" > "$BOT_RUN/db_offset.txt"
++date -u +%s > "$BOT_RUN/run_start.txt"
++cd "$BOT_RUN" && BOT_BASE=http://localhost:8768 DURATION_MIN=$MIN timeout $(( MIN * 60 + 600 )) node "$H/bot.js" > bot_stdout.log 2>&1
++echo "bots done rc=$?"
+diff -ruN orig/seed.py harness/seed.py
+--- orig/seed.py	2026-11-16 18:45:21.780485502 +0000
++++ harness/seed.py	2026-11-16 18:45:48.715867758 +0000
+@@ -1,6 +1,6 @@
+ """Starting data for the role bots, created through the real API as the demo admin."""
+-import json, requests, uuid
+-B = "http://localhost:8767/api"
++import json, os, requests, uuid
++B = "http://localhost:%s/api" % os.environ["BOT_PORT"]
+ H = {"x-bot-role": "seed"}
+ def login(email, pw):
+     r = requests.post(B + "/auth/login", json={"email": email, "password": pw}); r.raise_for_status()
+@@ -47,4 +47,4 @@
+ # INTEGRATION: run A added the Worker role by hand in seed.json (= worker0, README §4); done here
+ if workers:
+     users["Worker"] = {"email": "worker0@example.com", "password": "Bot12345!", "id": workers[0]}
+-json.dump({"users": users, "projects": projects, "workers": workers}, open("/tmp/claude-0/demo_int/run/seed.json", "w"), ensure_ascii=False, indent=1)
++json.dump({"users": users, "projects": projects, "workers": workers}, open(os.path.join(os.environ["BOT_RUN"], "seed.json"), "w"), ensure_ascii=False, indent=1)
+diff -ruN orig/serve.py harness/serve.py
+--- orig/serve.py	2026-11-16 18:45:21.780495924 +0000
++++ harness/serve.py	2026-11-16 18:48:21.508455121 +0000
+@@ -1,14 +1,25 @@
+ """Demo wrapper (outside the repo): real backend app + built frontend on one port,
+-plus a request log of every /api call (who, what, status, how long)."""
+-import os, sys, json, time, base64, threading
+-sys.path.insert(0, "/home/user/BEG_Worck/.claude/worktrees/agent-ac11c81cc6abc07ce/backend")
++plus a request log of every /api call (who, what, status, how long).
++
++INTEGRATION_V2: logs the bot's `x-correlation-id` per request (screen action <-> server by
++id, not by a time window). With BOT_SERIALIZE_WRITES=1 every mutating /api request runs
++alone (one asyncio lock) and the lock is held BOT_SETTLE seconds after the response, so a
++database change seen by watch.py belongs to exactly one write request (`t`..`t_end`), not
++to a window shared by 8 concurrent bots. Reads are not serialized."""
++import asyncio, os, sys, json, time, base64, threading
++TREE = os.environ["BOT_TREE"]   # the integration worktree
++sys.path.insert(0, os.path.join(TREE, "backend"))
+ from server import app
+ from fastapi.responses import FileResponse
+ from starlette.requests import Request
+ 
+-BUILD = "/home/user/BEG_Worck/.claude/worktrees/agent-ac11c81cc6abc07ce/frontend/build"
+-LOG = open("/tmp/claude-0/demo_int/run/backend.jsonl", "a", buffering=1, encoding="utf8")
++BUILD = os.path.join(TREE, "frontend", "build")
++LOG = open(os.path.join(os.environ["BOT_RUN"], "backend.jsonl"), "a", buffering=1, encoding="utf8")
+ LOCK = threading.Lock()
++SERIALIZE = os.environ.get("BOT_SERIALIZE_WRITES") == "1"
++SETTLE = float(os.environ.get("BOT_SETTLE", "0.4"))
++WRITE_LOCK = asyncio.Lock()
++MUT = {"POST", "PUT", "PATCH", "DELETE"}
+ 
+ def _who(auth):
+     try:
+@@ -18,13 +29,10 @@
+     except Exception:
+         return None
+ 
+-@app.middleware("http")
+-async def log_api(request: Request, call_next):
+-    if not request.url.path.startswith("/api"):
+-        return await call_next(request)
+-    body = await request.body()
++async def _handle(request, call_next, body):
+     t0 = time.time()
+     err = None
++    status = None
+     try:
+         resp = await call_next(request)
+         status = resp.status_code
+@@ -32,14 +40,28 @@
+         status, err, resp = 599, repr(e)[:300], None
+         raise
+     finally:
+-        rec = {"t": t0, "ms": round((time.time() - t0) * 1000), "method": request.method,
++        t1 = time.time()
++        if SERIALIZE and request.method in MUT:
++            await asyncio.sleep(SETTLE)   # let the change stream deliver this request's changes
++        rec = {"t": t0, "ms": round((t1 - t0) * 1000), "t_end": time.time(), "method": request.method,
+                "path": request.url.path, "query": str(request.url.query)[:200], "status": status,
+                "user": _who(request.headers.get("authorization", "")), "bot": request.headers.get("x-bot-role"),
++               "corr": request.headers.get("x-correlation-id"), "serialized": SERIALIZE and request.method in MUT,
+                "idem": request.headers.get("idempotency-key"), "body": body[:600].decode("utf8", "replace"), "err": err}
+         with LOCK:
+             LOG.write(json.dumps(rec, ensure_ascii=False) + "\n")
+     return resp
+ 
++@app.middleware("http")
++async def log_api(request: Request, call_next):
++    if not request.url.path.startswith("/api"):
++        return await call_next(request)
++    body = await request.body()
++    if SERIALIZE and request.method in MUT:
++        async with WRITE_LOCK:
++            return await _handle(request, call_next, body)
++    return await _handle(request, call_next, body)
++
+ @app.get("/{path:path}", include_in_schema=False)
+ async def spa(path: str):
+     f = os.path.realpath(os.path.join(BUILD, path))
+diff -ruN orig/watch.py harness/watch.py
+--- orig/watch.py	2026-11-16 18:45:21.780513090 +0000
++++ harness/watch.py	2026-11-16 18:48:32.020455746 +0000
+@@ -1,9 +1,10 @@
+-"""Every change in the demo database (insert/update/replace/delete), with time and keys."""
+-import json, time, sys
++"""Every change in the demo database (insert/update/replace/delete), with time and keys.
++INTEGRATION_V2: Mongo URL / DB / run dir from BOT_MONGO / BOT_DB / BOT_RUN."""
++import json, os, time, sys
+ from pymongo import MongoClient
+-c = MongoClient("mongodb://127.0.0.1:27021/?directConnection=true&replicaSet=rs0")
+-out = open("/tmp/claude-0/demo/run/db.jsonl", "a", buffering=1, encoding="utf8")
+-with c["demo_begwork"].watch(full_document="updateLookup") as s:
++c = MongoClient(os.environ.get("BOT_MONGO", "mongodb://127.0.0.1:27192/?directConnection=true"))
++out = open(os.path.join(os.environ.get("BOT_RUN", "/tmp/claude-0/demo_int2/ui/run"), "db.jsonl"), "a", buffering=1, encoding="utf8")
++with c[os.environ.get("BOT_DB", "demoint2ui_begwork")].watch(full_document="updateLookup") as s:
+     for ch in s:
+         doc = ch.get("fullDocument") or {}
+         upd = (ch.get("updateDescription") or {})

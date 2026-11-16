@@ -1,0 +1,146 @@
+{
+ "summary": {
+  "generated": "2026-11-16 19:33:32 UTC",
+  "minutes": 30,
+  "fe_requests": 39437,
+  "be_requests": 39468,
+  "db_changes": 343,
+  "actions": 8565,
+  "fe_not_reaching_backend": 0,
+  "route_missing": 0,
+  "422": 17,
+  "5xx_fe": 0,
+  "5xx_be": 0,
+  "403": 595,
+  "401": 0,
+  "ok_without_db_write": 0,
+  "write_without_audit": 43,
+  "db_change_without_write_request": 18,
+  "insert_without_org_id": 0,
+  "hard_deletes": 0,
+  "js_crashes": 0,
+  "console_errors": 1144,
+  "process_violations": 0,
+  "process_unverified": 14,
+  "fe_matched_by_correlation_id": 39437,
+  "be_with_correlation_id": 39468,
+  "be_writes_serialized": 236,
+  "coverage": {
+   "Accountant": {
+    "screens": 44,
+    "visits": 323,
+    "actions": 342,
+    "recoveries": 0
+   },
+   "Admin": {
+    "screens": 45,
+    "visits": 330,
+    "actions": 401,
+    "recoveries": 0
+   },
+   "Driver": {
+    "screens": 5,
+    "visits": 377,
+    "actions": 212,
+    "recoveries": 0
+   },
+   "SiteManager": {
+    "screens": 33,
+    "visits": 333,
+    "actions": 357,
+    "recoveries": 0
+   },
+   "Technician": {
+    "screens": 7,
+    "visits": 389,
+    "actions": 205,
+    "recoveries": 0
+   },
+   "Viewer": {
+    "screens": 6,
+    "visits": 435,
+    "actions": 265,
+    "recoveries": 0
+   },
+   "Warehousekeeper": {
+    "screens": 7,
+    "visits": 448,
+    "actions": 246,
+    "recoveries": 0
+   },
+   "Worker": {
+    "screens": 7,
+    "visits": 374,
+    "actions": 205,
+    "recoveries": 0
+   }
+  },
+  "status_by_role": {
+   "Accountant": {
+    "2xx": 5006,
+    "403": 143,
+    "422": 5,
+    "404": 2,
+    "4xx": 4
+   },
+   "Admin": {
+    "2xx": 5009,
+    "404": 2,
+    "422": 6,
+    "4xx": 4
+   },
+   "Driver": {
+    "2xx": 4551,
+    "403": 76
+   },
+   "SiteManager": {
+    "2xx": 3908,
+    "403": 128,
+    "422": 6,
+    "4xx": 6
+   },
+   "Technician": {
+    "2xx": 5008,
+    "403": 56
+   },
+   "Viewer": {
+    "2xx": 5199,
+    "403": 74
+   },
+   "Warehousekeeper": {
+    "2xx": 5138,
+    "403": 64
+   },
+   "Worker": {
+    "2xx": 4988,
+    "403": 54
+   }
+  }
+ },
+ "rules": {
+  "Q1 фактурни редове към обект по статус на фактурата (CLAUDE §7)": [],
+  "Q2 траншове по договори с бригади (FLOW-006)": [
+   {
+    "_id": "pending",
+    "n": 9,
+    "sum": 552.0
+   }
+  ],
+  "Q3 одобрени дневни отчети: формат × статус на плащане (FLOW-028)": [],
+  "Q4 ръчни редове за труд (Р96)": [],
+  "Двойни дневни отчети за човек и ден": [],
+  "Повтарящ се номер на фактура": [],
+  "Повтарящ се код на обект": [],
+  "Аванси по човек и ден, повече от един": [],
+  "Плащания в регистъра по вид": [
+   {
+    "_id": {
+     "dir": "Outflow",
+     "status": "?"
+    },
+    "n": 13,
+    "sum": 457.0
+   }
+  ]
+ }
+}

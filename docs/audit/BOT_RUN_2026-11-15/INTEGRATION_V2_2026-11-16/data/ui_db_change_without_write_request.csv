@@ -1,0 +1,5 @@
+collection,op,count
+audit_events,insert,7
+reminder_logs,insert,5
+notifications,insert,5
+invoice_settings,insert,1

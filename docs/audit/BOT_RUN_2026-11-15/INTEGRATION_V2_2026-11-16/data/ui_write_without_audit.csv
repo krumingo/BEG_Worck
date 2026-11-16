@@ -1,0 +1,13 @@
+role,method,path,collections,count
+Admin,POST,/api/activity-catalog,activity_catalog,7
+Admin,POST,/api/contract-payments,contract_payments,6
+SiteManager,POST,/api/activity-catalog,activity_catalog,5
+SiteManager,POST,/api/smr-analyses,smr_analyses,5
+Admin,POST,/api/assets/units,asset_counters asset_qr_codes asset_units,5
+Admin,PUT,/api/settings/payroll-week,organizations,4
+Admin,POST,/api/assets/items,asset_items,3
+Accountant,POST,/api/contract-payments,contract_payments,3
+Admin,POST,/api/smr-analyses,smr_analyses,2
+Admin,PUT,/api/finance/invoice-settings,invoice_settings,1
+Admin,POST,/api/smr-analyses/{id}/approve,smr_analyses,1
+Admin,POST,/api/smr-analyses/{id}/lines,smr_analyses,1
