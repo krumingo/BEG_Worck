@@ -4,7 +4,7 @@ import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
-import { canReadFinance } from "@/lib/financeAccess";
+import { canReadFinance, canReadPeople } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
 import PwaBanners from "@/components/pwa/PwaBanners";
 import { MyUnsentPage, DeviceBlockedPage } from "@/components/offline/OfflineQueueUI";
@@ -170,6 +170,22 @@ function FinanceRoute({ children }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+// FIX-PERM-01 (Р98): the people screens — finance roles with money, SiteManager without
+// (backend/app/permissions/people_read.py; the pages hide the money for him).
+function PeopleRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canReadPeople(user.role)) return <Navigate to="/tech" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
 // Field/phone route: authenticated but WITHOUT the desktop shell (clean full-screen)
 function FieldProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -274,8 +290,8 @@ function AppRoutes() {
       {/* LIVE-OPS-01 / TASK 5C — Canonical warehouse surface */}
       <Route path="/warehouse/canonical" element={<CanonicalWarehouseRoute><CanonicalWarehousePage /></CanonicalWarehouseRoute>} />
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
-      <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
-      <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />
+      <Route path="/employees" element={<PeopleRoute><EmployeesPage /></PeopleRoute>} />
+      <Route path="/employees/:userId" element={<PeopleRoute><EmployeeDetailPage /></PeopleRoute>} />
       <Route path="/brigades" element={<AdminRoute><BrigadesPage /></AdminRoute>} />
       <Route path="/projects/:projectId/novo-smr" element={<AdminRoute><NovoSMRPage /></AdminRoute>} />
       <Route path="/projects/:projectId/financial" element={<FinanceRoute><ProjectFinancialPage /></FinanceRoute>} />
@@ -318,7 +334,7 @@ function AppRoutes() {
       <Route path="/projects/:projectId/smr-analysis/:analysisId" element={<AdminRoute><SMRAnalysisPage /></AdminRoute>} />
       <Route path="/pricing" element={<FinanceRoute><MaterialCatalogPage /></FinanceRoute>} />
       <Route path="/contract-payments" element={<FinanceRoute><ContractPaymentsPage /></FinanceRoute>} />
-      <Route path="/worker-calendar" element={<AdminRoute><WorkerCalendarPage /></AdminRoute>} />
+      <Route path="/worker-calendar" element={<PeopleRoute><WorkerCalendarPage /></PeopleRoute>} />
       <Route path="/alarms" element={<AdminRoute><AlarmsDashboardPage /></AdminRoute>} />
       <Route path="/all-reports" element={<AdminRoute><AllReportsPage /></AdminRoute>} />
       <Route path="/clients/:clientId" element={<AdminRoute><ClientDetailPage /></AdminRoute>} />

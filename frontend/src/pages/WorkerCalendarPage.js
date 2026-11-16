@@ -5,6 +5,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance } from "@/lib/financeAccess";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +38,11 @@ const STATUS_LABELS = {
 
 export default function WorkerCalendarPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  // FIX-PERM-01 (Р98): SiteManager sees the calendar (where, leave, sick) read-only and
+  // without the company overhead money; /overhead/realtime and the calendar writes are
+  // finance-only on the backend, so the page does not call them for him.
+  const seesMoney = canReadFinance(user?.role);
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [employees, setEmployees] = useState([]);
@@ -49,14 +56,14 @@ export default function WorkerCalendarPage() {
       const [empRes, calRes, ohRes] = await Promise.all([
         API.get("/employees"),
         API.get(`/worker-calendar?month=${month}`),
-        API.get(`/overhead/realtime?month=${month}`),
+        seesMoney ? API.get(`/overhead/realtime?month=${month}`) : Promise.resolve({ data: null }),
       ]);
       setEmployees(empRes.data || []);
       setCalendar(calRes.data.items || []);
       setOverhead(ohRes.data);
     } catch { /* */ }
     finally { setLoading(false); }
-  }, [month]);
+  }, [month, seesMoney]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -110,14 +117,14 @@ export default function WorkerCalendarPage() {
         </div>
         <div className="flex items-center gap-2">
           <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="w-40" data-testid="month-picker" />
-          <Button size="sm" variant="outline" onClick={handleSync} data-testid="sync-btn">
+          {seesMoney && <Button size="sm" variant="outline" onClick={handleSync} data-testid="sync-btn">
             <RefreshCcw className="w-4 h-4 mr-1" /> {t("workerCalendar.sync")}
-          </Button>
+          </Button>}
         </div>
       </div>
 
       {/* Overhead summary */}
-      {overhead && (
+      {seesMoney && overhead && (
         <Card>
           <CardContent className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center text-xs">
@@ -177,6 +184,13 @@ export default function WorkerCalendarPage() {
                       const entry = calMap[wid]?.[d.date];
                       const status = entry?.status || (d.isWeekend ? "day_off" : "");
                       const color = STATUS_COLORS[status] || "bg-zinc-900";
+                      if (!seesMoney) {
+                        return (
+                          <td key={d.day} className="p-0.5 text-center">
+                            <span title={STATUS_LABELS[status] || ""} className={`inline-block w-6 h-5 rounded-sm ${color}`} />
+                          </td>
+                        );
+                      }
                       return (
                         <td key={d.day} className="p-0.5 text-center">
                           <Select value={status || "none"} onValueChange={v => { if (v !== "none") handleSetStatus(wid, d.date, v); }}>

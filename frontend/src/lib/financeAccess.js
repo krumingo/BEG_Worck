@@ -13,11 +13,19 @@
  *                        (SiteManager), the latter only on projects he is a member of —
  *                        the backend checks the membership.
  *
- * A backend test (tests/test_sec_02_finance_read.py) fails when these lists drift from
- * the catalog.
+ *   PEOPLE_VIEW_ROLES    FIX-PERM-01 (Р98, Krum 16.11.2026): the people screens
+ *                        ("Служители", "Служител", "Календар на работниците") —
+ *                        the finance roles with money, the Technical Manager
+ *                        (SiteManager) WITHOUT money (no rates, salaries, advances,
+ *                        overhead). Mirror of backend/app/permissions/people_read.py
+ *                        PEOPLE_READ_ROLES; the money part is FINANCE_ROLES above.
+ *
+ * A backend test (tests/test_sec_02_finance_read.py; tests/test_fix_perm_01_people_read.py
+ * for PEOPLE_VIEW_ROLES) fails when these lists drift from the backend.
  */
 export const FINANCE_ROLES = ["Admin", "Owner", "Accountant"];
 export const BUDGET_VIEW_ROLES = ["Admin", "Owner", "Accountant", "SiteManager"];
+export const PEOPLE_VIEW_ROLES = ["Admin", "Owner", "Accountant", "SiteManager"];
 
 export function canReadFinance(role) {
   return FINANCE_ROLES.includes(role);
@@ -25,4 +33,8 @@ export function canReadFinance(role) {
 
 export function canReadBudgetView(role) {
   return BUDGET_VIEW_ROLES.includes(role);
+}
+
+export function canReadPeople(role) {
+  return PEOPLE_VIEW_ROLES.includes(role);
 }

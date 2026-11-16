@@ -500,11 +500,12 @@ export default function EmployeeDetailPage() {
         <div className="flex items-center gap-6 p-3 rounded-lg bg-muted/20 border border-border mb-6 text-sm flex-wrap" data-testid="pay-info-bar">
           {prof?.position && <div><span className="text-muted-foreground">Длъжност:</span> <span className="text-foreground font-medium">{prof.position}</span></div>}
           {emp.phone && <div><span className="text-muted-foreground">Тел:</span> <span className="text-foreground">{emp.phone}</span></div>}
-          {prof && <div><span className="text-muted-foreground">Тип:</span> <span className="font-medium">{PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type}</span></div>}
-          {prof?.pay_type === "Monthly" && prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} €</span></div>}
-          {displayDailyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} €</span></div>}
-          {displayHourlyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} €/ч</span></div>}
-          {prof?.pay_type === "Akord" && <div><span className="text-muted-foreground">Акорд:</span> <span className="text-foreground">{prof.akord_note || "Договорено по задача"}</span></div>}
+          {/* FIX-PERM-01 (Р98): pay type and rates only for the finance roles */}
+          {prof && seesFinance && <div><span className="text-muted-foreground">Тип:</span> <span className="font-medium">{PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type}</span></div>}
+          {seesFinance && prof?.pay_type === "Monthly" && prof?.monthly_salary > 0 && <div><span className="text-muted-foreground">Месечна:</span> <span className="font-mono">{prof.monthly_salary} €</span></div>}
+          {seesFinance && displayDailyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Дневна:</span> <span className="font-mono">{displayDailyRate} €</span></div>}
+          {seesFinance && displayHourlyRate > 0 && prof?.pay_type === "Monthly" && <div><span className="text-muted-foreground">Часова:</span> <span className="font-mono">{displayHourlyRate} €/ч</span></div>}
+          {seesFinance && prof?.pay_type === "Akord" && <div><span className="text-muted-foreground">Акорд:</span> <span className="text-foreground">{prof.akord_note || "Договорено по задача"}</span></div>}
           <Badge variant="outline" className={prof?.active !== false ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}>
             {prof?.active !== false ? "Активен" : "Неактивен"}
           </Badge>
@@ -854,14 +855,15 @@ export default function EmployeeDetailPage() {
 
         {/* ═══ DOSSIER: Payroll Weeks Tab ═══ */}
         {/* ═══ DOSSIER: Payroll Weeks Tab — real pay runs data ═══ */}
-        <TabsContent value="payroll-weeks">
+        {/* FIX-PERM-01 (Р98): the money tabs are not even mounted for the Technical Manager */}
+        {seesFinance && <TabsContent value="payroll-weeks">
           <EmployeePayrollWeeks userId={userId} periodFrom={periodFrom} periodTo={periodTo} onViewSlip={(slipId) => {
             API.get(`/payment-slips/${slipId}`).then(r => setPayslipOpen({ slip: r.data })).catch(() => {});
           }} />
-        </TabsContent>
+        </TabsContent>}
 
         {/* ═══ DOSSIER: Advances Tab ═══ */}
-        <TabsContent value="advances">
+        {seesFinance && <TabsContent value="advances">
           <div className="rounded-xl border border-border bg-card overflow-hidden" data-testid="dossier-advances-tab">
             {(() => {
               const all = dossier?.advances || [];
@@ -906,12 +908,12 @@ export default function EmployeeDetailPage() {
               );
             })()}
           </div>
-        </TabsContent>
+        </TabsContent>}
 
         {/* Фишове Tab — real payment slips */}
-        <TabsContent value="payroll">
+        {seesFinance && <TabsContent value="payroll">
           <EmployeeSlips userId={userId} periodFrom={periodFrom} periodTo={periodTo} />
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="assets">
           <EmployeeAssetsTab userId={userId} />

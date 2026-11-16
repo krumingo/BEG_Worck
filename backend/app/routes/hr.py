@@ -12,6 +12,9 @@ from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
+from app.permissions.people_read import (
+    people_view, VIEW_NO_MONEY, employee_row_no_money, dashboard_no_money, calendar_no_money,
+)
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import advance_master_person
@@ -35,9 +38,12 @@ def payroll_permission(user: dict) -> bool:
 # ── Employee Profiles ──────────────────────────────────────────────
 
 @router.get("/employees")
-async def list_employees(user: dict = Depends(require_m4)):
+async def list_employees(request: Request, user: dict = Depends(require_m4)):
     tenant = _tenant(user)
-    if not payroll_permission(user):
+    # FIX-PERM-01 (Р98): finance roles — as before; SiteManager — people without money
+    # (app/permissions/people_read.py); every other role 403.
+    view = await people_view(request, user)
+    if view is None:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     users = await tenant.users.find(
@@ -60,6 +66,8 @@ async def list_employees(user: dict = Depends(require_m4)):
             "profile": prof,
             "has_profile": prof is not None,
         })
+    if view == VIEW_NO_MONEY:
+        return [employee_row_no_money(r) for r in result]
     return result
 
 
@@ -460,11 +468,13 @@ async def get_payslip(payslip_id: str, user: dict = Depends(require_m4)):
 # ── Employee Dashboard / Detail ────────────────────────────────────
 
 @router.get("/employees/{user_id}/dashboard")
-async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4)):
+async def get_employee_dashboard(user_id: str, request: Request, user: dict = Depends(require_m4)):
     """Comprehensive employee detail with attendance, projects, hours"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    if user["id"] != user_id and not payroll_permission(user):
+    # FIX-PERM-01 (Р98): own record / finance roles — as before; SiteManager — no money.
+    view = await people_view(request, user, subject_id=user_id)
+    if view is None:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     target = await tenant.users.find_one({"id": user_id, "org_id": org_id},
@@ -590,6 +600,15 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
     combined_hours = month_hours + daily_hours
     combined_days = month_att + daily_days
     
+    if view == VIEW_NO_MONEY:                  # Р98: no payslips are even read
+        return dashboard_no_money({
+            "employee": target, "profile": profile, "attendance": attendance,
+            "project_history": project_history,
+            "hours_summary": {"current_month_days": combined_days,
+                              "current_month_hours": round(combined_hours, 1),
+                              "total_projects": len(project_history)},
+        })
+
     # Recent payslips — from v3 (period already included by the adapter)
     payslips_raw = await legacy_payslips(org_id, employee_id=user_id, limit=5)
     
@@ -620,11 +639,14 @@ async def get_employee_dashboard(user_id: str, user: dict = Depends(require_m4))
 
 
 @router.get("/employees/{user_id}/calendar")
-async def get_employee_calendar(user_id: str, month: str = None, user: dict = Depends(require_m4)):
+async def get_employee_calendar(user_id: str, request: Request, month: str = None,
+                                user: dict = Depends(require_m4)):
     """Get calendar data for employee (attendance + work reports by day)"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    if user["id"] != user_id and not payroll_permission(user):
+    # FIX-PERM-01 (Р98): own record / finance roles — as before; SiteManager — no pay status.
+    view = await people_view(request, user, subject_id=user_id)
+    if view is None:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     if not month:
@@ -770,12 +792,13 @@ async def get_employee_calendar(user_id: str, month: str = None, user: dict = De
             elif day_st == "ABSENT_UNEXCUSED":
                 days[d]["attendance"] = {"status": "Absent", "project_code": ""}
 
-    return {
+    result = {
         "month": month,
         "days": sorted(days.values(), key=lambda x: x["date"]),
         "total_present": sum(1 for d in days.values() if d.get("attendance") and d["attendance"].get("status") == "Present"),
         "total_hours": round(sum(d["total_hours"] for d in days.values()), 1),
     }
+    return calendar_no_money(result) if view == VIEW_NO_MONEY else result
 
 
 # ═══════════════════════════════════════════════════════════════════
