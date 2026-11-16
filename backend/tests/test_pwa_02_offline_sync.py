@@ -465,10 +465,13 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 return q(lambda: op_db.sync_receipts.find_one(
                     {"idempotency_key": env["idempotency_key"]}, {"_id": 0}))
 
-            two = {"project_id": P, "entries": [{"smr_type": "Шпакловка", "hours": 1},
-                                                 {"smr_type": "Грунд", "hours": 0.5}]}
+            # LAB-R96 step 2: one line per person × day × object × activity — each record here
+            # reports its own activities (a repeat of R5's "Шпакловка" would be "Вече има отчет")
+            def two(tag):
+                return {"project_id": P, "entries": [{"smr_type": "Шпакловка " + tag, "hours": 1},
+                                                     {"smr_type": "Грунд " + tag, "hours": 0.5}]}
             # M1-a: a crash between the draft inserts and the end of the write → nothing kept
-            m1 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two)
+            m1 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two("M1"))
             crash["work_reports"] = 1
             r1 = batch([m1])
             a2["m1_crash_http"] = r1["status"]
@@ -481,7 +484,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             a2["m1_rows_after_replay"] = len(rep_rows(m1["local_id"]))
             # M1-b: the write committed, the request died before the receipt; a stale takeover
             # (2+ minutes later) must find the drafts, never write a second set
-            m2 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two)
+            m2 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two("M2"))
             crash["synced_event"] = 1
             a2["m2_first"] = batch([m2])["body"]["results"][0]["status"]
             a2["m2_rows_after_first"] = len(rep_rows(m2["local_id"]))

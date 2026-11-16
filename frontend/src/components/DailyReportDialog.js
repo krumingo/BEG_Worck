@@ -16,6 +16,8 @@ import {
   X, ThumbsUp, ThumbsDown, List,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { confirmLaborConflict, apiErrorText } from "@/lib/laborConflict";
 import { formatDate } from "@/lib/i18nUtils";
 
 const STATUS_LABELS = { WORKING: "На работа", LEAVE: "Отпуск", ABSENT_UNEXCUSED: "Самоотлъчка", SICK: "Болен" };
@@ -25,6 +27,7 @@ const APPROVAL_COLORS = { DRAFT: "bg-gray-500/15 text-gray-400", SUBMITTED: "bg-
 
 export default function DailyReportDialog({ open, onOpenChange, employeeId, employeeName, reportDate, existingReportId, lockedProjectId, onSaved }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canApprove = ["Admin", "Owner", "SiteManager"].includes(user?.role);
   const [projects, setProjects] = useState([]);
   const [smrByProject, setSmrByProject] = useState({});
@@ -173,7 +176,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
     if (!reportId) return;
     setSaving(true);
     try {
-      const res = await API.post(`/daily-reports/${reportId}/approve`);
+      const res = await API.post(`/daily-reports/${reportId}/approve`, { scope: "day" });
       setApprovalStatus("APPROVED");
       // Show hours warnings from approval
       const hw = res.data?.hours_warnings;
@@ -183,7 +186,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
         alert(`Забележка: ${hw.total_hours}ч общо за деня.\n${(hw.warnings || []).join("\n")}`);
       }
       onSaved?.();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) { alert(apiErrorText(err)); }
     finally { setSaving(false); }
   };
 
@@ -191,11 +194,11 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
     if (!reportId) return;
     setSaving(true);
     try {
-      await API.post(`/daily-reports/${reportId}/reject`, { reason: rejectReason });
+      await API.post(`/daily-reports/${reportId}/reject`, { reason: rejectReason, scope: "day" });
       setApprovalStatus("REJECTED");
       setRejectOpen(false);
       onSaved?.();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) { alert(apiErrorText(err)); }
     finally { setSaving(false); }
   };
 
@@ -217,6 +220,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
           extra_work_id: e.extra_work_id || null,
           work_description: e.work_description,
           hours_worked: parseFloat(e.hours_worked) || 0, note: e.note || null,
+          ...(e.line_id ? { id: e.line_id } : {}),  // LAB-R96: the same labor line, not a new one
         })) : [],
       };
 
@@ -235,7 +239,7 @@ export default function DailyReportDialog({ open, onOpenChange, employeeId, empl
       onSaved?.();
       onOpenChange(false);
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка");
+      if (!confirmLaborConflict(err, navigate)) alert(apiErrorText(err));
     } finally { setSaving(false); }
   };
 

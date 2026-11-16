@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import API from "@/lib/api";
+import { useNavigate } from "react-router-dom";
+import { confirmLaborConflict, apiErrorText } from "@/lib/laborConflict";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 
 export default function ObjectDailyReportTab({ projectId }) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState("by-person"); // by-person | by-smr
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [employees, setEmployees] = useState([]);
@@ -44,12 +47,13 @@ export default function ObjectDailyReportTab({ projectId }) {
           employee_id: e.employee_id,
           entries: e.entries.map(en => ({
             smr_id: en.smr_id || "", hours: en.hours_worked, desc: en.work_description, note: en.note || "",
+            line_id: en.line_id || null,  // LAB-R96: the same labor line is saved back, not a new one
           })),
         })));
         // Also populate smr view
         setSmrRows((existRes.data.by_smr || []).map(s => ({
           smr_id: s.smr_id || "", smr_name: s.work_description || "",
-          people: s.employees.map(p => ({ employee_id: p.employee_id, hours: p.hours_worked, note: p.note || "" })),
+          people: s.employees.map(p => ({ employee_id: p.employee_id, hours: p.hours_worked, note: p.note || "", line_id: p.line_id || null })),
         })));
       }
     } catch (err) { console.error(err); }
@@ -85,14 +89,14 @@ export default function ObjectDailyReportTab({ projectId }) {
           if (!pr.employee_id) continue;
           for (const e of pr.entries) {
             if (e.hours <= 0 && !e.desc) continue;
-            entries.push({ employee_id: pr.employee_id, smr_id: e.smr_id || null, work_description: e.desc, hours_worked: parseFloat(e.hours) || 0, note: e.note });
+            entries.push({ employee_id: pr.employee_id, smr_id: e.smr_id || null, work_description: e.desc, hours_worked: parseFloat(e.hours) || 0, note: e.note, line_id: e.line_id || null });
           }
         }
       } else {
         for (const sr of smrRows) {
           for (const p of sr.people) {
             if (!p.employee_id || p.hours <= 0) continue;
-            entries.push({ employee_id: p.employee_id, smr_id: sr.smr_id || null, work_description: sr.smr_name || "", hours_worked: parseFloat(p.hours) || 0, note: p.note });
+            entries.push({ employee_id: p.employee_id, smr_id: sr.smr_id || null, work_description: sr.smr_name || "", hours_worked: parseFloat(p.hours) || 0, note: p.note, line_id: p.line_id || null });
           }
         }
       }
@@ -101,7 +105,7 @@ export default function ObjectDailyReportTab({ projectId }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
+    } catch (err) { if (!confirmLaborConflict(err, navigate)) alert(apiErrorText(err)); }
     finally { setSaving(false); }
   };
 

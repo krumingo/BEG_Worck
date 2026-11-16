@@ -211,8 +211,21 @@ async def _daily_report(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str
                                     office={"date": date, "worker_id": wid, "closed": kind},
                                     field={"date": date, "worker_id": wid, "hours": entry.hours,
                                            "smr_type": entry.smr_type}, kind=kind)
+    from app.services.labor_report_service import LaborLineExists
     try:
         result = await submit_daily_report_core(data, user, sync_stamp=_stamp(env, ctx))
+    except LaborLineExists as exc:
+        # LAB-R96 (Р96 / Р100): someone already reported this person, day, object and
+        # activity — a VISIBLE conflict ("Вече има отчет"), nothing written
+        done = await already()
+        if done:
+            return done
+        ex = exc.existing
+        raise sync.SyncConflict(entity_type="daily_report",
+                                entity_id=ex.get("line_id") or "%s:%s" % (ex.get("worker_id"), date),
+                                office=dict(ex, message=exc.detail["message"]),
+                                field={"date": date, "worker_id": ex.get("worker_id"),
+                                       "smr_type": ex.get("activity")}, kind="already_recorded")
     except DuplicateKeyError:
         # backstop: a concurrent attempt committed the same record first (unique
         # org_id + sync_local_id + sync_entry_index) — answer with what it wrote

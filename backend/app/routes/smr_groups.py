@@ -463,14 +463,47 @@ async def smr_by_type(project_id: str, smr_type: str, user: dict = Depends(requi
 
 @router.post("/smr-groups/{group_id}/report")
 async def submit_group_report(group_id: str, data: GroupReport, user: dict = Depends(require_m2)):
+    """LAB-R96 (Р100 / Р102): labor hours are entered only as the daily report line
+    (person × day × project × activity). A ``per_line`` line that names ``worker_id`` and
+    ``date`` with hours is written as that line through the "Отчет на труда" service (every
+    check, "Вече има отчет" included); hours without a person and a day (``group_total``, or a
+    line without them) are refused with a pointer to the daily report. The group report row
+    keeps what was reported and the ids of the labor lines — it stores no hours itself."""
+    from app.services import labor_report_service as labor
     tenant = _tenant(user)
     group = await tenant.smr_groups.find_one({"id": group_id, "org_id": user["org_id"]})
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
+    needs_day = HTTPException(status_code=400, detail={
+        "error_code": "LABOR_NEEDS_PERSON_DAY",
+        "message": "Часовете се отчитат в дневния отчет — за човек, ден, обект и дейност. "
+                   "Отворете „Дневен отчет“ на обекта."})
+    lines = list(data.line_reports or []) if data.mode == "per_line" else []
+    if data.mode == "group_total" and (data.total_hours or 0) > 0:
+        raise needs_day
+    by_day: dict = {}
+    for lr in lines:
+        if float(lr.get("hours") or 0) > 0:
+            if not lr.get("worker_id") or not lr.get("date"):
+                raise needs_day
+            by_day.setdefault(lr["date"], []).append(lr)
+
+    report_id = str(uuid.uuid4())
+    planned = []
+    for day, lrs in by_day.items():
+        planned.append((day, await labor.plan_lines(user, group["project_id"], day, [
+            {"worker_id": lr["worker_id"], "worker_name": lr.get("worker_name"),
+             "activity": lr.get("smr_type") or group.get("name", ""), "hours": float(lr["hours"]),
+             "notes": lr.get("notes") or "", "extra": {"smr_group_id": group_id, "smr_group_report_id": report_id}}
+            for lr in lrs], reason=data.notes)))
+
     now = datetime.now(timezone.utc).isoformat()
+    written = []
+    for day, plans in planned:
+        written += await labor.write_lines(user, plans, group["project_id"], day, entry_mode="smr_group_report")
     report = {
-        "id": str(uuid.uuid4()),
+        "id": report_id,
         "org_id": user["org_id"],
         "group_id": group_id,
         "project_id": group["project_id"],
@@ -478,16 +511,9 @@ async def submit_group_report(group_id: str, data: GroupReport, user: dict = Dep
         "reported_by": user["id"],
         "reported_at": now,
         "notes": data.notes,
+        "line_reports": [{k: v for k, v in lr.items() if k != "hours"} for lr in lines],
+        "labor_line_ids": [d["id"] for d in written],
+        "labor_lines": True,
     }
-
-    if data.mode == "per_line" and data.line_reports:
-        report["line_reports"] = data.line_reports
-        report["total_hours"] = sum(lr.get("hours", 0) for lr in data.line_reports)
-        report["total_cost"] = sum(lr.get("cost", 0) for lr in data.line_reports)
-    elif data.mode == "group_total":
-        report["total_hours"] = data.total_hours or 0
-        report["total_cost"] = data.total_cost or 0
-        report["line_reports"] = []
-
     await tenant.smr_group_reports.insert_one(report)
     return {k: v for k, v in report.items() if k != "_id"}

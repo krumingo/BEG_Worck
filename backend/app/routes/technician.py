@@ -2,7 +2,7 @@
 Routes - Technician Mobile View.
 Aggregates data from existing modules for mobile-first daily reporting.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.db import db
 from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData
+from app.services import labor_report_service as labor
 
 
 def _tenant(user: dict) -> TenantData:
@@ -907,11 +908,8 @@ async def add_workers_to_roster(project_id: str, data: dict, user: dict = Depend
 REPORT_AUTO_PRESENCE = "report_auto_presence"
 
 
-async def report_auto_presence_enabled(tenant, org_id) -> bool:
-    """FG-641: the tenant setting (default OFF) — Krum's answer to D21 only flips it."""
-    flag = await tenant.feature_flags.find_one({"org_id": org_id, "module_code": REPORT_AUTO_PRESENCE},
-                                               {"_id": 0, "enabled": 1})
-    return bool(flag and flag.get("enabled") is True)
+# FG-641: the setting is read by the ONE presence check (LAB-R96: labor_report_service).
+report_auto_presence_enabled = labor.report_auto_presence_enabled
 
 
 async def set_report_auto_presence(user, enabled: bool) -> None:
@@ -959,16 +957,20 @@ async def _insert_auto_attendance(tenant, kw, entry):
 
 
 @router.post("/technician/daily-report")
-async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_current_user)):
+async def submit_daily_report(data: DailyReportSubmit, request: Request, user: dict = Depends(get_current_user)):
     """
     DRAFT ONLY: Saves to employee_daily_reports with status=Draft.
     work_sessions are created on APPROVE, not here.
     See /app/memory/SOURCE_OF_TRUTH.md for full policy.
+    LAB-R96: every check and the write go through labor_report_service ("Отчет на труда");
+    an ``Idempotency-Key`` header makes a repeated submit return the first answer.
     """
-    return await submit_daily_report_core(data, user)
+    return await submit_daily_report_core(data, user,
+                                          idempotency_key=request.headers.get("Idempotency-Key"))
 
 
-async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_stamp: Optional[dict] = None):
+async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_stamp: Optional[dict] = None,
+                                   idempotency_key: Optional[str] = None):
     """The daily-report write (the route above and the PWA-02 offline sync).
 
     ``sync_stamp`` (PWA-02 only, additive): the offline record's fields — every draft is
@@ -985,51 +987,31 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # LAB-R96: a repeated submit with the same Idempotency-Key answers with what it wrote
+    if idempotency_key and not sync_stamp:
+        prev = await labor.lines_by_idempotency(tenant, org_id, user["id"], idempotency_key)
+        if prev:
+            return {"report_id": None, "draft_report_ids": [d["id"] for d in prev], "roster_id": None,
+                    "missing_smr_created": [], "total_hours": round(sum(d.get("hours", 0) for d in prev), 2),
+                    "hours_warnings": [], "attendance_warnings": [], "idempotent_replay": True}
+
     # Get roster for validation
     roster = await tenant.site_daily_rosters.find_one(
         {"org_id": org_id, "project_id": data.project_id, "date": today}, {"_id": 0}
     )
 
-    # Check project status — block if Completed/Cancelled/Archived
-    from app.services.project_guards import check_project_writable
-    await check_project_writable(data.project_id, org_id, "отчети")
-
-    # Validate attendance: each worker must be Present/Late — HARD BLOCK
+    # LAB-R96 (Р100): ONE service runs every check for every entry before anything is written —
+    # who may report for whom, project writable (PRJ-01), backdate (FLOW-014), presence on THIS
+    # object (FG-641 / FLOW-013, HARD BLOCK; auto presence only with report_auto_presence ON)
+    # and "Вече има отчет" (one line per person × day × project × activity).
     attendance_warnings = []
-    auto_presence = []          # FG-641: only with report_auto_presence ON
-    for entry in data.entries:
-        wid = entry.worker_id or user["id"]
-        # FG-641 (FLOW-013 L89-90, literal reading until Krum decides — HANDOFF D21): a report
-        # for ANYONE on this object, the technician included, needs a presence on THIS object.
-        # Only with the tenant setting ``report_auto_presence`` (default OFF) does a presence
-        # on another object the same day let the report create this object's presence.
-        day_flt = {"org_id": org_id, "date": today, "user_id": wid}
-        att = await tenant.attendance_entries.find_one(
-            {**day_flt, "project_id": data.project_id}, {"_id": 0, "status": 1})
-        if att is None:
-            elsewhere = await tenant.attendance_entries.find_one(
-                {**day_flt, "status": {"$in": ["Present", "Late"]}}, {"_id": 0, "project_id": 1})
-            if elsewhere and await report_auto_presence_enabled(tenant, org_id):
-                auto_presence.append({"worker_id": wid, "from_project_id": elsewhere.get("project_id")})
-                att = {"status": "Present"}
-            else:
-                raise HTTPException(status_code=400, detail={
-                    "error_code": "PRESENCE_REQUIRED_ON_OBJECT",
-                    "message": f"Работникът {entry.worker_name or wid} не е отбелязан като присъстващ "
-                               f"на този обект за датата. Първо потвърдете присъствието в Хора."})
-        cal = await tenant.worker_calendar.find_one(
-            {"org_id": org_id, "date": today, "worker_id": wid, "status": {"$in": ["leave", "sick", "vacation"]}},
-            {"_id": 0, "status": 1},
-        )
-        if cal:
-            raise HTTPException(status_code=400, detail=f"Работникът {entry.worker_name or wid} е в {cal['status']}. Не може да бъде отчетен.")
-        if att and att.get("status") in ("SickLeave", "Leave", "Vacation", "Excused"):
-            raise HTTPException(status_code=400, detail=f"Работникът {entry.worker_name or wid} е {att['status']}. Не може да бъде отчетен.")
-        if not att or att.get("status") not in ("Present", "Late"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Работникът {entry.worker_name or wid} не е отбелязан като присъстващ за този обект и дата. Първо потвърдете присъствието в Хора."
-            )
+    plans = await labor.plan_lines(
+        user, data.project_id, today,
+        [{"worker_id": entry.worker_id or user["id"], "worker_name": entry.worker_name,
+          "activity": entry.smr_type, "hours": entry.hours} for entry in data.entries],
+        reason=data.general_notes or " ".join(e.notes or "" for e in data.entries).strip() or None,
+        sync=bool(sync_stamp), allow_auto_presence=True)
+    auto_presence = [p["auto_presence"] for p in plans if p.get("auto_presence")]
 
     roster_ids = set()
     if roster:
@@ -1060,6 +1042,7 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
 
     missing_smr_created = []
     draft_ids = []
+    drafts_written = []
     report = {}
 
     async def _write(session):
@@ -1067,6 +1050,7 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
         kw = {} if session is None else {"session": session}
         missing_smr_created.clear()
         draft_ids.clear()
+        drafts_written.clear()
         report.clear()
 
         for entry_index, entry in enumerate(data.entries):
@@ -1106,16 +1090,21 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
                 "smr_source": smr_source,
                 "status": "Draft",
                 "submitted_by": user["id"],
+                "created_by": user["id"],
                 "entered_by_admin": is_admin_entry,
                 "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
+                "labor_key": plans[entry_index]["key"],
                 "created_at": now,
                 "updated_at": now,
             }
+            if idempotency_key:
+                draft["idempotency_key"] = idempotency_key
             if sync_stamp:
                 draft.update(sync_stamp)
                 draft["sync_entry_index"] = entry_index
-            await tenant.employee_daily_reports.insert_one(draft, **kw)
+            await labor.insert_line(tenant, draft, session=session)
             draft_ids.append(draft["id"])
+            drafts_written.append(draft)
 
             # Auto-create attendance_entry if not exists (report = present).
             # FG-640 (FLOW-013): per worker, OBJECT and day — a report on a second object
@@ -1210,6 +1199,10 @@ async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_sta
     total_hours = round(sum(e.hours for e in data.entries), 2)
     for ap in auto_presence:
         await _audit_auto_presence(user, data.project_id, today, ap)
+    for d in drafts_written:
+        await labor.audit(user, "labor_line.created", d, {"after": labor.line_summary(d)},
+                          idempotency_key=idempotency_key or (sync_stamp or {}).get("sync_local_id"),
+                          source_channel="offline_sync" if sync_stamp else "technician")
 
     # Hours warnings per unique worker
     hours_warnings = []
@@ -1577,18 +1570,9 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
         raise HTTPException(status_code=404, detail="Draft not found")
     if doc.get("status") not in ["Draft", "Submitted"]:
         raise HTTPException(status_code=400, detail="Cannot edit approved/rejected reports")
-
-    now = datetime.now(timezone.utc).isoformat()
-    update = {"updated_at": now}
-    if data.smr_type is not None:
-        update["smr_type"] = data.smr_type
-    if data.hours is not None:
-        update["hours"] = round(data.hours, 2)
-    if data.notes is not None:
-        update["notes"] = data.notes
-
-    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$inc": {"version": 1}, "$set": update})
-    return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
+    # LAB-R96: through the service (a new activity is a new key → "Вече има отчет"; editor kept)
+    return await labor.update_line(user, doc, {"smr_type": data.smr_type, "hours": data.hours,
+                                               "notes": data.notes})
 
 
 @router.delete("/technician/draft/{draft_id}")

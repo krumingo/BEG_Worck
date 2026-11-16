@@ -24,6 +24,7 @@ import {
   QrCode, Truck, Bell, Calendar, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { toastLaborConflict, apiErrorText } from "@/lib/laborConflict";
 
 // FG-665: the reason for removing a presence someone else marked (the server voids it)
 export function askRemovalReason(prompt = (typeof window !== "undefined" ? window.prompt : null)) {
@@ -339,7 +340,10 @@ export default function TechnicianDashboard() {
       setScreen("myDay");
       setSelectedSite(null);
       loadSites();
-    } catch (err) { toast.error(err.response?.data?.detail?.message || err.response?.data?.detail || "Error"); }
+    } catch (err) {
+      if (!toastLaborConflict(err, navigate, ["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role)))
+        toast.error(apiErrorText(err, "Error"));
+    }
     finally { setSubmitting(false); }
   };
 

@@ -2,7 +2,7 @@
 Routes - Structured Employee Daily Report.
 New model alongside existing attendance/work_reports (which remain untouched).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.tenancy.data_access import TenantData
+from app.services import labor_report_service as labor
 
 
 def _tenant(user: dict) -> TenantData:
@@ -24,13 +25,7 @@ router = APIRouter(tags=["Employee Daily Reports"])
 
 # ── Helpers ────────────────────────────────────────────────────────
 
-async def _get_hourly_rate_for_approval(org_id: str, worker_id: str) -> float:
-    """Get hourly rate from employee profile for work_session creation."""
-    from app.services.resolve_hourly_rate import resolve_worker_hourly_rate
-    result = await resolve_worker_hourly_rate(worker_id, org_id)
-    if isinstance(result, dict):
-        return float(result.get("rate", 0))
-    return float(result or 0)
+_get_hourly_rate_for_approval = labor._get_hourly_rate_for_approval
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -184,33 +179,98 @@ async def get_hours_check(
 
 
 # ── CRUD ───────────────────────────────────────────────────────────
+# LAB-R96 step 2 (Р100): this endpoint family is an ADAPTER over the "Отчет на труда" service.
+# The request bodies are the old ones (employee_id / report_date / day_entries); a WORKING day
+# is written as flat labor lines (one per entry) through labor_report_service, and the answers
+# keep the old shape (labor.old_shape_day: the employee's day = all his live lines that date;
+# any of its line ids is the day's handle). Old-format rows already stored are read and, if
+# still DRAFT/REJECTED, edited in place as before — never migrated here (step 5).
+# A non-WORKING day (leave / sick / absent) carries no hours and is kept as before.
+
+def _is_old_format(doc: dict) -> bool:
+    return bool(doc.get("employee_id")) and not doc.get("worker_id")
+
+
+async def _activity_name(tenant, org_id: str, e: dict) -> str:
+    """The activity of an old-format entry: the chosen SMR's name, else its description."""
+    for coll, fid, field in (("execution_packages", e.get("smr_id"), "activity_name"),
+                             ("extra_work_drafts", e.get("smr_id"), "title"),
+                             ("extra_work_drafts", e.get("extra_work_id"), "title")):
+        if fid:
+            row = await tenant.collection(coll).find_one({"id": fid, "org_id": org_id}, {"_id": 0, field: 1})
+            if row and row.get(field):
+                return row[field]
+    return (e.get("work_description") or "").strip()
+
+
+async def _service_entries(tenant, org_id: str, worker_id: str, entries: List[dict], day_notes=None,
+                           source: str = "daily_report_form") -> List[dict]:
+    out = []
+    for e in entries:
+        out.append({"worker_id": worker_id, "project_id": e.get("project_id"),
+                    "activity": await _activity_name(tenant, org_id, e),
+                    "hours": max(0.0, float(e.get("hours_worked") or 0)), "notes": e.get("note") or "",
+                    "line_id": e.get("line_id") or e.get("id"),
+                    "extra": {"smr_id": e.get("smr_id"), "extra_work_id": e.get("extra_work_id"),
+                              "work_description": e.get("work_description") or "",
+                              "day_notes": day_notes, "report_source": source}})
+    return out
+
+
+async def _plan_by_project(user, date, entries, *, reason=None, ignore_ids=()):
+    """plan_lines per project (one call per object), all before any write."""
+    plans = []
+    for pid in dict.fromkeys(e["project_id"] for e in entries):
+        if not pid:
+            raise HTTPException(status_code=400, detail="Всеки ред трябва да има обект.")
+        plans.append((pid, await labor.plan_lines(user, pid, date, [e for e in entries if e["project_id"] == pid],
+                                                  reason=reason, ignore_ids=ignore_ids)))
+    return plans
+
+
+async def _day_view(tenant, org_id, head_id, worker_id, date):
+    return labor.old_shape_day(head_id, worker_id, date, await labor.day_lines(tenant, org_id, worker_id, date))
+
 
 @router.post("/daily-reports", status_code=201)
-async def create_daily_report(data: DailyReportCreate, user: dict = Depends(require_m4)):
+async def create_daily_report(data: DailyReportCreate, request: Request, user: dict = Depends(require_m4)):
     tenant = _tenant(user)
     org_id = user["org_id"]
     validate_report(data)
 
-    # Check no duplicate for same employee+date
+    # Check no duplicate for same employee+date (old-format day report)
     existing = await tenant.employee_daily_reports.find_one({
         "org_id": org_id, "employee_id": data.employee_id, "report_date": data.report_date
     })
     if existing:
         raise HTTPException(status_code=400, detail="Report already exists for this employee and date. Use update instead.")
 
-    now = datetime.now(timezone.utc).isoformat()
-    entries = []
-    for e in data.day_entries:
-        entries.append({
-            "id": str(uuid.uuid4()),
-            "project_id": e.project_id,
-            "smr_id": e.smr_id,
-            "extra_work_id": e.extra_work_id,
-            "work_description": e.work_description,
-            "hours_worked": e.hours_worked,
-            "note": e.note,
-        })
+    if data.day_status == "WORKING":
+        idem = request.headers.get("Idempotency-Key")
+        prev = await labor.lines_by_idempotency(tenant, org_id, user["id"], idem)
+        if prev:
+            return {**labor.old_shape_day(prev[0]["id"], data.employee_id, data.report_date, prev),
+                    "idempotent_replay": True}
+        if not data.day_entries:
+            raise HTTPException(status_code=400, detail="Добавете поне един ред (обект, дейност, часове).")
+        entries = await _service_entries(tenant, org_id, data.employee_id,
+                                         [e.model_dump() for e in data.day_entries], data.notes)
+        try:
+            plans = await _plan_by_project(user, data.report_date, entries, reason=data.notes)
+        except labor.LaborLineExists as exc:
+            raise labor.as_legacy_400(exc)        # this endpoint answered duplicates with 400
+        written = []
+        for pid, pl in plans:
+            written += await labor.write_lines(user, pl, pid, data.report_date,
+                                               entry_mode="daily_report_form", idempotency_key=idem)
+        clean = labor.old_shape_day(written[0]["id"], data.employee_id, data.report_date, written)
+        clean["hours_warnings"] = await check_employee_hours(org_id, data.employee_id, data.report_date)
+        return clean
 
+    # non-WORKING day: no hours, no labor line — the old day-status record, as before
+    if any(e.hours_worked for e in data.day_entries):
+        raise HTTPException(status_code=400, detail="Ден без работа (отпуск / болничен / отсъствие) не може да има часове.")
+    now = datetime.now(timezone.utc).isoformat()
     report = {
         "id": str(uuid.uuid4()),
         "org_id": org_id,
@@ -220,8 +280,8 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
         "leave_from": data.leave_from,
         "leave_to": data.leave_to,
         "notes": data.notes,
-        "day_entries": entries,
-        "total_hours": round(sum(e["hours_worked"] for e in entries), 2),
+        "day_entries": [],
+        "total_hours": 0,
         "approval_status": "DRAFT",
         "created_by": user["id"],
         "submitted_by": None,
@@ -239,19 +299,12 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
     return clean
 
 
-@router.put("/daily-reports/{report_id}")
-async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+async def _update_old_format(tenant, report: dict, data: dict, user: dict):
+    """A stored OLD-format row (not migrated): edited in place as before, the editor kept."""
     if report["approval_status"] not in ["DRAFT", "REJECTED"]:
         raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED reports can be edited")
-
     allowed = ["day_status", "leave_from", "leave_to", "notes", "day_entries"]
     update = {k: v for k, v in data.items() if k in allowed}
-
     if "day_entries" in update:
         for e in update["day_entries"]:
             if not e.get("id"):
@@ -259,10 +312,65 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
             if float(e.get("hours_worked", 0)) < 0:
                 raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
+    now = datetime.now(timezone.utc).isoformat()
+    changed = [k for k in update if k in allowed]
+    update.update({"updated_at": now, "last_edited_by": user["id"], "last_edited_at": now})
+    await tenant.employee_daily_reports.update_one(
+        {"id": report["id"]}, {"$inc": {"version": 1}, "$set": update, "$addToSet": {"correctors": user["id"]}})
+    await labor.audit(user, "labor_line.updated", report, {"before": {k: report.get(k) for k in changed},
+                                                            "after": {k: update[k] for k in changed},
+                                                            "format": "old"})
+    return await tenant.employee_daily_reports.find_one({"id": report["id"]}, {"_id": 0})
 
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$inc": {"version": 1}, "$set": update})
-    return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+
+@router.put("/daily-reports/{report_id}")
+async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if _is_old_format(report):
+        return await _update_old_format(tenant, report, data, user)
+
+    # the employee's day of flat lines: same ids → update, new rows → new lines (checked),
+    # rows left out → voided with a reason (history kept). Approved lines are locked.
+    worker_id, date = report["worker_id"], report["date"]
+    if (data.get("day_status") or "WORKING") != "WORKING":
+        raise HTTPException(status_code=400, detail="Ден с отчетени часове не може да стане отпуск / отсъствие — "
+                                                    "първо премахнете редовете.")
+    day = await labor.day_lines(tenant, org_id, worker_id, date)
+    by_id = {ln["id"]: ln for ln in day}
+    incoming = await _service_entries(tenant, org_id, worker_id, data.get("day_entries") or [], data.get("notes"))
+    keep = [e for e in incoming if e.get("line_id") in by_id]
+    new = [e for e in incoming if e.get("line_id") not in by_id]
+    kept_ids = {e["line_id"] for e in keep}
+    removed = [ln for ln in day if ln["id"] not in kept_ids]
+    locked = [ln for ln in removed if ln.get("status") not in labor.EDITABLE]
+    for e in keep:
+        ln = by_id[e["line_id"]]
+        if ln.get("project_id") != e["project_id"]:
+            raise HTTPException(status_code=400, detail="Редът не може да смени обекта — премахнете го и добавете нов.")
+        e["changed"] = (float(ln.get("hours") or 0) != e["hours"]
+                        or labor.norm_activity(ln.get("smr_type")) != labor.norm_activity(e["activity"])
+                        or (ln.get("notes") or "") != (e["notes"] or ""))
+        if e["changed"] and ln.get("status") not in labor.EDITABLE:
+            locked.append(ln)
+    if locked:
+        raise HTTPException(status_code=400, detail="Одобрен ред е заключен — поправката е с история.")
+    for ln in removed:
+        await labor.check_may_report(tenant, user, worker_id, ln.get("project_id"))
+    plans = await _plan_by_project(user, date, new, reason=data.get("notes"),
+                                   ignore_ids=[ln["id"] for ln in removed]) if new else []
+    if removed:
+        await labor.void_lines(user, removed, "Премахнат от дневния отчет")
+    for e in keep:
+        if e["changed"]:
+            await labor.update_line(user, by_id[e["line_id"]], {"hours": e["hours"], "smr_type": e["activity"],
+                                                               "notes": e["notes"]}, reason=data.get("notes"))
+    for pid, pl in plans:
+        await labor.write_lines(user, pl, pid, date, entry_mode="daily_report_form")
+    return await _day_view(tenant, org_id, report_id, worker_id, date)
 
 
 @router.post("/daily-reports/{report_id}/submit")
@@ -271,6 +379,14 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if not _is_old_format(report):
+        day = await labor.day_lines(tenant, user["org_id"], report["worker_id"], report["date"])
+        if not any(ln.get("status") in ("Draft", "REJECTED", "Rejected") for ln in day):
+            raise HTTPException(status_code=400, detail="Only DRAFT/REJECTED can be submitted")
+        for ln in day:
+            await labor.check_may_report(tenant, user, ln["worker_id"], ln.get("project_id"))
+        await labor.submit_lines(user, day)
+        return await _day_view(tenant, user["org_id"], report_id, report["worker_id"], report["date"])
     if report["approval_status"] not in ["DRAFT", "REJECTED"]:
         raise HTTPException(status_code=400, detail="Only DRAFT/REJECTED can be submitted")
 
@@ -278,212 +394,16 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
     await tenant.employee_daily_reports.update_one({"id": report_id}, {"$inc": {"version": 1}, "$set": {
         "approval_status": "SUBMITTED", "submitted_by": user["id"], "updated_at": now,
     }})
+    await labor.audit(user, "labor_line.submitted", report, {"before": {"status": report["approval_status"]},
+                                                             "after": {"status": "SUBMITTED"}, "format": "old"})
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
 # ── Single-source-of-truth actions (P1-0.5) ────────────────────────
-# approve_report_one / reject_report_one are the ONLY place approve/reject
-# business logic lives. Single endpoints call them once; bulk endpoints call
-# them in a loop — so single and bulk produce IDENTICAL data.
-
-async def approve_report_one(report: dict, actor: dict, override: dict | None = None,
-                             block_overtime_without_override: bool = False) -> dict:
-    """
-    Canonical approval for ONE report. Does NOT raise — returns:
-      {"status": "ok"|"blocked"|"failed", "report_id": ..., ...}
-    Canonical decisions (P1-0.5):
-      - slip counter key: counter_type="slip_number"
-      - work_session SMR field: smr_type_id (canonical) + smr_type (compat)
-      - labor_cost = regular*rate + overtime*rate*coefficient
-      - default overtime_coefficient = 1.0 (no auto-overpay), split always stored
-    """
-    tenant = _tenant(actor)
-    org_id = actor["org_id"]
-    rid = report["id"]
-    now = datetime.now(timezone.utc).isoformat()
-
-    status = report.get("approval_status") or report.get("status", "")
-    if status == "APPROVED":
-        return {"status": "failed", "report_id": rid, "reason": "already_approved"}
-
-    worker_id = report.get("worker_id", "")
-    hours = float(report.get("hours") or report.get("hours_worked") or 0)
-    report_date = report.get("date") or report.get("report_date") or now[:10]
-    project_id = report.get("project_id", "")
-    smr_type = report.get("smr_type") or report.get("activity_type", "")
-
-    line_is_overtime = hours > 8
-
-    # Overtime gate. Bulk path blocks >8h until admin supplies an override
-    # (drives the override modal). Single path (B2) does NOT block — falls
-    # through to the default split below.
-    if line_is_overtime and override is None and block_overtime_without_override:
-        from app.services.hours_validator import get_worker_hours_for_day
-        day_total = await get_worker_hours_for_day(org_id, worker_id, report_date)
-        proj_name = ""
-        if project_id:
-            proj_doc = await tenant.projects.find_one({"id": project_id}, {"_id": 0, "name": 1})
-            if proj_doc:
-                proj_name = proj_doc.get("name", "")
-        return {
-            "status": "blocked", "report_id": rid,
-            "worker_name": report.get("worker_name", ""), "worker_id": worker_id,
-            "current_hours": day_total, "report_hours": hours, "date": report_date,
-            "project_id": project_id, "project_name": proj_name,
-        }
-
-    # Split + coefficient (default coef 1.0 = no overpay)
-    coefficient = 1.0
-    reason_text = ""
-    if line_is_overtime and override:
-        o_reg = float(override.get("regular_hours", 0))
-        o_ot = float(override.get("overtime_hours", 0))
-        o_coef = float(override.get("overtime_coefficient", 0))
-        o_reason = (override.get("reason") or "").strip()
-        if abs(o_reg + o_ot - hours) > 0.01:
-            return {"status": "failed", "report_id": rid, "reason": "split_mismatch"}
-        if o_reg < 0 or o_ot < 0:
-            return {"status": "failed", "report_id": rid, "reason": "negative_split_value"}
-        if o_coef < 1:
-            return {"status": "failed", "report_id": rid, "reason": "coefficient_must_be_at_least_1"}
-        if not o_reason:
-            return {"status": "failed", "report_id": rid, "reason": "reason_required"}
-        regular_hours, overtime_hours, coefficient, reason_text = o_reg, o_ot, o_coef, o_reason
-    elif line_is_overtime:
-        regular_hours = min(hours, 8)
-        overtime_hours = max(0, hours - 8)
-    else:
-        regular_hours = hours
-        overtime_hours = 0
-
-    # A) Slip number — canonical counter_type sequence (shared by single + bulk)
-    slip_number = report.get("slip_number")
-    if not slip_number:
-        counter = await tenant.org_counters.find_one_and_update(
-            {"org_id": org_id, "counter_type": "slip_number"},
-            {"$inc": {"value": 1}}, upsert=True, return_document=True,
-        )
-        slip_number = (counter or {}).get("value", 1)
-
-    rate = await _get_hourly_rate_for_approval(org_id, worker_id)
-    labor_cost = round(regular_hours * rate + overtime_hours * rate * coefficient, 2)
-
-    # B) work_session (source of truth for labor cost) — dedup like single path
-    sessions_created = 0
-    if worker_id and hours and hours > 0 and project_id:
-        existing_ws = await tenant.work_sessions.find_one({
-            "org_id": org_id, "worker_id": worker_id, "site_id": project_id,
-            "smr_type_id": smr_type,
-            "started_at": {"$gte": f"{report_date}T00:00:00", "$lte": f"{report_date}T23:59:59"},
-            "source_method": "APPROVED_REPORT",
-        })
-        if not existing_ws:
-            project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "name": 1})
-            session = {
-                "id": str(uuid.uuid4()), "org_id": org_id,
-                "worker_id": worker_id, "worker_name": report.get("worker_name", ""),
-                "site_id": project_id, "site_name": (project or {}).get("name", ""),
-                "smr_type_id": smr_type,   # canonical
-                "smr_type": smr_type,      # compat (P1-0.5)
-                "started_at": f"{report_date}T08:00:00",
-                "ended_at": f"{report_date}T{8 + int(hours):02d}:{int((hours % 1) * 60):02d}:00",
-                "source_method": "APPROVED_REPORT",
-                "is_flagged": False, "flag_reason": None,
-                "duration_hours": round(hours, 2),
-                "is_overtime": line_is_overtime,
-                "overtime_type": "over_8h" if line_is_overtime else None,
-                "regular_hours": regular_hours, "overtime_hours": overtime_hours,
-                "overtime_coefficient": coefficient,
-                "overtime_reason": reason_text if line_is_overtime else None,
-                "override_by_user_id": actor["id"] if (line_is_overtime and override) else None,
-                "override_at": now if (line_is_overtime and override) else None,
-                "hourly_rate_at_date": rate, "labor_cost": labor_cost,
-                "notes": report.get("notes", ""),
-                "approved_report_id": rid, "approved_by": actor["id"],
-                "entered_by_admin": report.get("entered_by_admin", False),
-                "entry_mode": report.get("entry_mode", "technician_portal"),
-                "submitted_by": report.get("submitted_by"),
-                "created_at": now, "updated_at": now,
-            }
-            await tenant.work_sessions.insert_one(session)
-            sessions_created = 1
-
-        # C2) activity_budget consumed
-        if smr_type and project_id:
-            budget = await tenant.activity_budgets.find_one({
-                "org_id": org_id, "project_id": project_id, "smr_type_id": smr_type,
-            })
-            if budget:
-                new_consumed = round((budget.get("consumed_hours", 0) or 0) + hours, 2)
-                planned = budget.get("planned_hours", 0) or 1
-                burn_pct = round((new_consumed / planned) * 100, 1)
-                await tenant.activity_budgets.update_one(
-                    {"id": budget["id"]},
-                    {"$set": {"consumed_hours": new_consumed, "burn_percent": burn_pct, "last_updated": now}},
-                )
-
-        # C3) worker_calendar
-        cal_existing = await tenant.worker_calendar.find_one(
-            {"org_id": org_id, "worker_id": worker_id, "date": report_date}
-        )
-        cal_doc = {
-            "org_id": org_id, "worker_id": worker_id, "date": report_date,
-            "status": "working", "site_id": project_id,
-            "hours": round(hours, 2), "source": "approved_report", "updated_at": now,
-        }
-        if cal_existing:
-            await tenant.worker_calendar.update_one({"id": cal_existing["id"]}, {"$set": cal_doc})
-        else:
-            cal_doc["id"] = str(uuid.uuid4())
-            cal_doc["created_at"] = now
-            cal_doc["created_by"] = "system"
-            await tenant.worker_calendar.insert_one(cal_doc)
-
-    # D) Update report status + frozen split
-    update = {
-        "approval_status": "APPROVED", "status": "APPROVED",
-        "approved_by": actor["id"], "approved_at": now, "updated_at": now,
-        "slip_number": slip_number, "payroll_ready": True,
-        "sessions_created": sessions_created,
-        "regular_hours": regular_hours, "overtime_hours": overtime_hours,
-        "overtime_coefficient": coefficient if line_is_overtime else None,
-        "overtime_reason": reason_text if line_is_overtime else None,
-        "labor_cost": labor_cost,
-    }
-    await tenant.employee_daily_reports.update_one({"id": rid}, {"$inc": {"version": 1}, "$set": update})
-    result = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
-
-    # E) Hours warnings (informational)
-    emp_id = report.get("employee_id") or worker_id
-    r_date = report.get("report_date") or report.get("date", now[:10])
-    warnings = []
-    if emp_id and r_date:
-        warnings = await check_employee_hours(org_id, emp_id, r_date)
-
-    return {"status": "ok", "report_id": rid, "slip_number": slip_number,
-            "overtime_applied": line_is_overtime, "report": result, "hours_warnings": warnings}
-
-
-async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict:
-    """
-    Canonical rejection for ONE report. Does NOT raise — returns:
-      {"status": "ok"|"skipped"|"failed", "report_id": ...}
-    Decision A: APPROVED cannot be rejected directly (failed); already REJECTED is an
-    idempotent skip; always writes rejected_by + reject_reason + updated_at.
-    """
-    tenant = _tenant(actor)
-    rid = report["id"]
-    now = datetime.now(timezone.utc).isoformat()
-    status = report.get("approval_status") or report.get("status", "")
-    if status == "APPROVED":
-        return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
-    if status == "REJECTED":
-        return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
-    await tenant.employee_daily_reports.update_one({"id": rid}, {"$inc": {"version": 1}, "$set": {
-        "approval_status": "REJECTED", "status": "REJECTED",
-        "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
-    }})
-    return {"status": "ok", "report_id": rid}
+# approve_report_one / reject_report_one are the ONLY place approve/reject business logic
+# lives — since LAB-R96 step 2 inside the "Отчет на труда" service (four-eyes + AuditEvent
+# added there). Single endpoints call them once; bulk endpoints in a loop.
+from app.services.labor_report_service import approve_report_one, reject_report_one  # noqa: E402
 
 
 _APPROVE_FAIL_MSG = {
@@ -492,6 +412,7 @@ _APPROVE_FAIL_MSG = {
     "negative_split_value": "Отрицателни часове в разделението.",
     "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
     "reason_required": "Изисква се причина за override на извънреден труд.",
+    "self_approval": labor.SELF_APPROVAL_MSG,
 }
 
 
@@ -502,6 +423,8 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     P1-0.5: delegates to approve_report_one so single and bulk approve are identical.
     Single path does NOT block >8h (B2): default split with coefficient 1.0.
     Optional body: {"override": {regular_hours, overtime_hours, overtime_coefficient, reason}}.
+    LAB-R96: four-eyes (Р100 "Одобрява друг човек") → 403 FOUR_EYES. ``{"scope": "day"}``
+    (the day dialog) approves every not-yet-approved line of the employee's day.
     """
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
@@ -510,9 +433,26 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    if (data or {}).get("scope") == "day" and not _is_old_format(report):
+        day = [ln for ln in await labor.day_lines(tenant, user["org_id"], report["worker_id"], report["date"])
+               if (ln.get("status") or "").upper() != "APPROVED"]
+        if any(labor.is_self_approval(ln, user) for ln in day):
+            raise labor.four_eyes_http()
+        warnings = []
+        for ln in day:
+            res = await approve_report_one(ln, user, block_overtime_without_override=False)
+            if res["status"] == "failed":
+                raise HTTPException(status_code=400, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
+            warnings = res.get("hours_warnings", warnings)
+        result = await _day_view(tenant, user["org_id"], report_id, report["worker_id"], report["date"])
+        result["hours_warnings"] = warnings
+        return result
+
     res = await approve_report_one(report, user, override=(data or {}).get("override"),
                                    block_overtime_without_override=False)
     if res["status"] == "failed":
+        if res["reason"] == "self_approval":
+            raise labor.four_eyes_http()
         raise HTTPException(status_code=400, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
     if res["status"] == "blocked":  # not expected on single path
         raise HTTPException(status_code=409, detail="overtime_requires_override")
@@ -524,13 +464,21 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
 
 @router.post("/daily-reports/{report_id}/reject")
 async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depends(require_m4)):
-    """P1-0.5: delegates to reject_report_one (same logic as bulk)."""
+    """P1-0.5: delegates to reject_report_one (same logic as bulk). ``{"scope": "day"}``: the
+    employee's whole day of flat lines (LAB-R96 day dialog)."""
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Only SiteManager/Admin can reject")
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if (data or {}).get("scope") == "day" and not _is_old_format(report):
+        day = await labor.day_lines(tenant, user["org_id"], report["worker_id"], report["date"])
+        if any((ln.get("status") or "").upper() == "APPROVED" for ln in day):
+            raise HTTPException(status_code=400, detail="Отчет със статус APPROVED не може да бъде отхвърлен.")
+        for ln in day:
+            await reject_report_one(ln, user, (data or {}).get("reason", ""))
+        return await _day_view(tenant, user["org_id"], report_id, report["worker_id"], report["date"])
     res = await reject_report_one(report, user, (data or {}).get("reason", ""))
     if res["status"] == "failed":
         raise HTTPException(status_code=400, detail="Отчет със статус APPROVED не може да бъде отхвърлен.")
@@ -792,7 +740,19 @@ async def get_daily_report(report_id: str, user: dict = Depends(require_m4)):
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]}, {"_id": 0})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    if _is_old_format(report):
+        return report
+    # LAB-R96: a flat line answers with its fields AND the employee's day in the old shape
+    day = await _day_view(tenant, user["org_id"], report_id, report["worker_id"], report["date"])
+    return {**report, **day}
+
+
+def _flat_days(lines: List[dict]) -> List[dict]:
+    """Flat lines grouped as old-shape day reports (one per employee and date)."""
+    days: dict = {}
+    for ln in lines:
+        days.setdefault((ln.get("worker_id"), ln.get("date")), []).append(ln)
+    return [labor.old_shape_day(v[0]["id"], k[0], k[1], v) for k, v in days.items()]
 
 
 @router.get("/daily-reports")
@@ -816,6 +776,19 @@ async def list_daily_reports(
         q["day_entries.project_id"] = project_id
 
     reports = await tenant.employee_daily_reports.find(q, {"_id": 0}).sort("report_date", -1).to_list(500)
+    # LAB-R96: the flat lines (the one format) as old-shape day reports, so the screen keeps working
+    qf = {"org_id": user["org_id"], "worker_id": {"$exists": True}}
+    if employee_id: qf["worker_id"] = employee_id
+    if report_date: qf["date"] = report_date
+    if date_from or date_to:
+        qf["date"] = {}
+        if date_from: qf["date"]["$gte"] = date_from
+        if date_to: qf["date"]["$lte"] = date_to
+    if project_id:
+        qf["project_id"] = project_id
+    flat = await tenant.employee_daily_reports.find(qf, {"_id": 0}).sort("created_at", 1).to_list(2000)
+    reports += _flat_days(flat)
+    reports.sort(key=lambda r: r.get("report_date") or "", reverse=True)
     return reports
 
 
@@ -838,6 +811,11 @@ async def get_project_day_status(project_id: str, date: Optional[str] = None, us
         {"_id": 0}
     ).to_list(200)
     report_emp_ids = [r["employee_id"] for r in reports_today]
+    # LAB-R96: and the flat lines (the one format) on this project today
+    flat_today = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "date": target_date, "project_id": project_id, "worker_id": {"$exists": True}},
+        {"_id": 0, "worker_id": 1}).to_list(500)
+    report_emp_ids += [r["worker_id"] for r in flat_today if r.get("worker_id")]
 
     all_ids = list(set(team_ids + report_emp_ids))
     if not all_ids:
@@ -856,6 +834,11 @@ async def get_project_day_status(project_id: str, date: Optional[str] = None, us
         {"_id": 0}
     ).to_list(200)
     report_map = {r["employee_id"]: r for r in all_reports}
+    flat_all = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "worker_id": {"$in": all_ids}, "date": target_date}, {"_id": 0}
+    ).sort("created_at", 1).to_list(1000)
+    for d in _flat_days(flat_all):
+        report_map.setdefault(d["employee_id"], d)
 
     result = []
     for uid in all_ids:
@@ -924,8 +907,13 @@ async def get_available_smr(project_id: str, user: dict = Depends(require_m4)):
 @router.post("/daily-reports/batch-save")
 async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4)):
     """Save multiple employee entries for a project+date in one call.
-    Input: { project_id, report_date, entries: [{ employee_id, smr_id, work_description, hours_worked, note }] }
-    Groups by employee, creates/updates one report per employee.
+    Input: { project_id, report_date, entries: [{ employee_id, smr_id, work_description, hours_worked, note, line_id? }] }
+    LAB-R96 adapter (Р100): every entry is a flat labor line written through the "Отчет на труда"
+    service. An entry carrying ``line_id`` (the screen loaded it) updates that line; an entry
+    without one is a NEW line — if the person already has a line for that day / project /
+    activity from any path, the whole save is refused with 409 "Вече има отчет". Lines this
+    screen wrote earlier and the save leaves out are voided with a reason (the old "replace
+    for THIS project"). All checks run for all employees before anything is written.
     """
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -942,56 +930,42 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
         eid = e.get("employee_id")
         if not eid:
             continue
-        if eid not in by_emp:
-            by_emp[eid] = []
-        by_emp[eid].append({
-            "id": str(uuid.uuid4()),
-            "project_id": project_id,
-            "smr_id": e.get("smr_id"),
-            "extra_work_id": e.get("extra_work_id"),
-            "work_description": e.get("work_description", ""),
-            "hours_worked": max(0, float(e.get("hours_worked", 0))),
-            "note": e.get("note", ""),
-        })
+        by_emp.setdefault(eid, []).append({**e, "project_id": project_id})
 
-    now = datetime.now(timezone.utc).isoformat()
-    saved = 0
-
+    steps = []
     for emp_id, emp_entries in by_emp.items():
-        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
+        mine = [ln for ln in await labor.day_lines(tenant, org_id, emp_id, report_date)
+                if ln.get("project_id") == project_id]
+        by_id = {ln["id"]: ln for ln in mine}
+        svc = await _service_entries(tenant, org_id, emp_id, emp_entries, source="object_daily_report")
+        keep = [e for e in svc if e.get("line_id") in by_id]
+        new = [e for e in svc if e.get("line_id") not in by_id]
+        kept = {e["line_id"] for e in keep}
+        removed = [ln for ln in mine if ln["id"] not in kept and ln.get("entry_mode") == "object_daily_report"
+                   and ln.get("status") in labor.EDITABLE]
+        for e in keep:
+            ln = by_id[e["line_id"]]
+            e["changed"] = (float(ln.get("hours") or 0) != e["hours"]
+                            or labor.norm_activity(ln.get("smr_type")) != labor.norm_activity(e["activity"])
+                            or (ln.get("notes") or "") != (e["notes"] or ""))
+            if e["changed"] and ln.get("status") not in labor.EDITABLE:
+                raise HTTPException(status_code=400, detail="Одобрен ред е заключен — поправката е с история.")
+        for ln in removed:
+            await labor.check_may_report(tenant, user, emp_id, project_id)
+        plans = await labor.plan_lines(user, project_id, report_date, new,
+                                       ignore_ids=[ln["id"] for ln in removed]) if new else []
+        steps.append((emp_id, by_id, keep, removed, plans))
 
-        # Check for existing report
-        existing = await tenant.employee_daily_reports.find_one({
-            "org_id": org_id, "employee_id": emp_id, "report_date": report_date
-        })
-
-        if existing:
-            # Merge: add new entries to existing, avoid exact duplicates
-            old_entries = existing.get("day_entries", [])
-            # Keep old entries for OTHER projects, replace for THIS project
-            kept = [e for e in old_entries if e.get("project_id") != project_id]
-            merged = kept + emp_entries
-            merged_total = round(sum(e["hours_worked"] for e in merged), 2)
-            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$inc": {"version": 1}, "$set": {
-                "day_entries": merged, "total_hours": merged_total, "updated_at": now,
-            }})
-        else:
-            report = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "employee_id": emp_id,
-                "report_date": report_date,
-                "day_status": "WORKING",
-                "leave_from": None, "leave_to": None,
-                "notes": None,
-                "day_entries": emp_entries,
-                "total_hours": total_hours,
-                "approval_status": "DRAFT",
-                "created_by": user["id"],
-                "submitted_by": None, "approved_by": None, "approved_at": None,
-                "created_at": now, "updated_at": now,
-            }
-            await tenant.employee_daily_reports.insert_one(report)
+    saved = 0
+    for emp_id, by_id, keep, removed, plans in steps:
+        if removed:
+            await labor.void_lines(user, removed, "Премахнат от дневния отчет на обекта")
+        for e in keep:
+            if e["changed"]:
+                await labor.update_line(user, by_id[e["line_id"]], {"hours": e["hours"], "smr_type": e["activity"],
+                                                                   "notes": e["notes"]})
+        if plans:
+            await labor.write_lines(user, plans, project_id, report_date, entry_mode="object_daily_report")
         saved += 1
 
     return {"ok": True, "employees_saved": saved, "total_entries": len(entries)}
@@ -999,7 +973,9 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
 
 @router.get("/daily-reports/project-entries/{project_id}")
 async def get_project_daily_entries(project_id: str, date: Optional[str] = None, user: dict = Depends(require_m4)):
-    """Get all daily entries for a project on a date, grouped by employee and by SMR"""
+    """Get all daily entries for a project on a date, grouped by employee and by SMR.
+    LAB-R96: reads BOTH stored formats — old-format day reports and flat labor lines (each
+    flat entry carries ``line_id`` so the screen can save it back as the same line)."""
     tenant = _tenant(user)
     org_id = user["org_id"]
     target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -1008,6 +984,10 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
         {"org_id": org_id, "report_date": target_date, "day_entries.project_id": project_id},
         {"_id": 0}
     ).to_list(200)
+    flat = await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "date": target_date, "project_id": project_id, "worker_id": {"$exists": True}},
+        {"_id": 0}).sort("created_at", 1).to_list(1000)
+    reports += [d for d in _flat_days(flat)]
 
     # Load names
     emp_ids = list(set(r["employee_id"] for r in reports))
@@ -1034,7 +1014,8 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
         for e in r.get("day_entries", []):
             if e.get("project_id") != project_id:
                 continue
-            smr_key = e.get("smr_id") or "unassigned"
+            smr_key = e.get("smr_id") or ("act:" + labor.norm_activity(e.get("work_description"))
+                                          if e.get("line_id") else "unassigned")
             if smr_key not in by_smr:
                 by_smr[smr_key] = {"smr_id": e.get("smr_id"), "work_description": e.get("work_description", ""), "employees": [], "total_hours": 0}
             by_smr[smr_key]["employees"].append({
@@ -1042,6 +1023,7 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
                 "employee_name": name_map.get(r["employee_id"], ""),
                 "hours_worked": e["hours_worked"],
                 "note": e.get("note", ""),
+                "line_id": e.get("line_id"),
             })
             by_smr[smr_key]["total_hours"] += e["hours_worked"]
 
@@ -1054,9 +1036,6 @@ async def get_project_daily_entries(project_id: str, date: Optional[str] = None,
         "by_employee": by_employee,
         "by_smr": list(by_smr.values()),
     }
-
-
-
 
 
 # ── Bulk Approve/Reject ─────────────────────────────

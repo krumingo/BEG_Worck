@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { confirmLaborConflict, apiErrorText } from "@/lib/laborConflict";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -101,7 +102,7 @@ export default function WorkReportFormPage() {
       setLines(res.data.lines || []);
       navigate(`/work-reports/${res.data.id}`, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      if (!confirmLaborConflict(err, navigate)) alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -141,7 +142,7 @@ export default function WorkReportFormPage() {
       setReport(res.data);
       setLines(res.data.lines || []);
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      if (!confirmLaborConflict(err, navigate)) alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -159,7 +160,7 @@ export default function WorkReportFormPage() {
       const res = await API.post(`/work-reports/${report.id}/submit`);
       setReport(res.data);
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.submitFailed"));
+      alert(apiErrorText(err, t("toast.submitFailed")));
     } finally {
       setSubmitting(false);
     }
