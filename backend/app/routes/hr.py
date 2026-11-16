@@ -1,7 +1,7 @@
 """
 Routes - HR / Payroll (M4) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -12,6 +12,7 @@ from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
+from app.permissions.money_input import MoneyWrite  # FIX-ADV-01
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import advance_master_person
@@ -234,8 +235,25 @@ async def list_advances(
     return advances
 
 
+ADVANCE_CREATE_ACTION = "hr.advance.create"   # FIX-ADV-01: the Idempotency-Key namespace
+
+
 @router.post("/advances", status_code=201)
-async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict = Depends(require_m4)):
+async def create_advance(
+    data: AdvanceLoanCreate,
+    request: Request,
+    user: dict = Depends(require_m4),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """FIX-ADV-01 (CLAUDE.md §14, §2.5 / FLOW-006): the advance/loan and its ONE Outflow row
+    in ``finance_payments`` are written through ``MoneyWrite`` (the SUB-ADV-01 pattern).
+
+    Same ``Idempotency-Key`` + same body -> the same advance and the same single payment,
+    the same 201 body (replay); same key + different body -> 409 ``IDEMPOTENCY_CONFLICT``;
+    different keys -> separate advances. Without a key the behaviour is unchanged (a new
+    advance per request): the advance screen sends no key yet, and R29's 428 for a missing
+    key is a decision for Krum, not part of this fix.
+    """
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
@@ -271,52 +289,72 @@ async def create_advance(data: AdvanceLoanCreate, request: Request, user: dict =
     issued = data.issued_date or now[:10]
     type_label = "Заем" if is_loan else "Аванс"
 
-    # Cash movement — money leaves Каса/Банка (the missing register entry)
-    payment_id = None
+    account = None
     if data.account_id:
         account = await tenant.financial_accounts.get(data.account_id)
         if not account:
             raise HTTPException(status_code=404, detail="Сметката не е намерена")
-        acc_type = (account.get("type") or "").lower()
-        method = "Cash" if acc_type in ("cash", "каса") else "BankTransfer"
-        payment_id = str(uuid.uuid4())
-        await tenant.finance_payments.insert_one({
-            "id": payment_id, "org_id": org, "direction": "Outflow", "amount": data.amount,
-            "currency": data.currency, "date": issued, "method": method,
-            "account_id": data.account_id, "counterparty_name": recipient_name,
-            "reference": "", "note": f"{type_label} · {recipient_name}",
-            "category": type_label,
+
+    # FIX-ADV-01: after validation and the reads, right before the writes. A keyed request
+    # goes through the canonical idempotency registry; without a key, MoneyWrite(None) gives
+    # fresh ids and plain steps — exactly the previous behaviour.
+    if (idempotency_key or "").strip():
+        mw = await MoneyWrite.begin(user, ADVANCE_CREATE_ACTION, idempotency_key,
+                                    data.model_dump())
+        if mw.replay_id:
+            return await tenant.advances.find_one({"id": mw.replay_id}, {"_id": 0})
+    else:
+        mw = MoneyWrite(user, ADVANCE_CREATE_ACTION, None)
+
+    advance_id = mw.new_id("advance")
+    payment_id = mw.new_id("finance_payment") if account else None
+    async with mw:
+        # Cash movement — money leaves Каса/Банка (the missing register entry)
+        if account:
+            acc_type = (account.get("type") or "").lower()
+            method = "Cash" if acc_type in ("cash", "каса") else "BankTransfer"
+            async with mw.insert_once():
+                await tenant.finance_payments.insert_one(mw.unique({
+                    "id": payment_id, "org_id": org, "direction": "Outflow", "amount": data.amount,
+                    "currency": data.currency, "date": issued, "method": method,
+                    "account_id": data.account_id, "counterparty_name": recipient_name,
+                    "reference": "", "note": f"{type_label} · {recipient_name}",
+                    "category": type_label,
+                    "user_id": data.user_id,
+                    "created_at": now, "updated_at": now,
+                }))
+
+        advance = {
+            "id": advance_id,
+            "org_id": org,
             "user_id": data.user_id,
-            "created_at": now, "updated_at": now,
-        })
+            "guest_name": data.guest_name if not data.user_id else None,
+            "recipient_name": recipient_name,
+            "type": data.type,
+            "amount": data.amount,
+            "remaining_amount": data.amount,
+            "currency": data.currency,
+            "account_id": data.account_id,
+            "project_id": data.project_id,
+            "installment_amount": data.installment_amount,
+            "installment_period": data.installment_period,
+            "payment_id": payment_id,
+            "issued_date": issued,
+            "note": data.note,
+            "status": "Open",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if master_person:
+            advance["master_person_id"] = master_person["master_person_id"]
+        async with mw.insert_once():
+            await tenant.advances.insert_one(mw.unique(advance))
 
-    advance = {
-        "id": str(uuid.uuid4()),
-        "org_id": org,
-        "user_id": data.user_id,
-        "guest_name": data.guest_name if not data.user_id else None,
-        "recipient_name": recipient_name,
-        "type": data.type,
-        "amount": data.amount,
-        "remaining_amount": data.amount,
-        "currency": data.currency,
-        "account_id": data.account_id,
-        "project_id": data.project_id,
-        "installment_amount": data.installment_amount,
-        "installment_period": data.installment_period,
-        "payment_id": payment_id,
-        "issued_date": issued,
-        "note": data.note,
-        "status": "Open",
-        "created_at": now,
-        "updated_at": now,
-    }
-    if master_person:
-        advance["master_person_id"] = master_person["master_person_id"]
-    await tenant.advances.insert_one(advance)
-
-    await log_audit(org, user["id"], user["email"], "advance_created", "advance", advance["id"],
-                    {"recipient": recipient_name, "type": data.type, "amount": data.amount})
+        await mw.step("audit", lambda: log_audit(
+            org, user["id"], user["email"], "advance_created", "advance", advance["id"],
+            {"recipient": recipient_name, "type": data.type, "amount": data.amount},
+            entry_id=mw.new_id("audit_advance_created")))       # exactly one row per key
+        mw.result_id = advance["id"]
 
     return {k: v for k, v in advance.items() if k != "_id"}
 

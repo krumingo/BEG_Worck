@@ -340,10 +340,11 @@
 | app/routes/projects.py:delete_company | DELETE /companies/{company_id} | companies | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | users | get(id = adv['user_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | advances | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/hr.py:create_advance | POST /advances | advances | insert_one(advance) | TenantData org_id (session) | new read | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | users | get(id = data.user_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | financial_accounts | get(id = data.account_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/hr.py:create_advance | POST /advances | finance_payments | insert_one(id, direction, amount, currency, date, method, account_id, c) | TenantData org_id (session) | new read | SAFE |
+| app/routes/hr.py:create_advance | POST /advances | advances | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/hr.py:create_advance | POST /advances | advances | insert_one(mw.unique(advance)) | TenantData org_id (session) | new read | SAFE |
+| app/routes/hr.py:create_advance | POST /advances | finance_payments | insert_one(mw.unique({'id': payment_id, 'org_id': o) | TenantData org_id (session) | new read | SAFE |
 | app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | get(id = client_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | find_one(phone_normalized, id) | TenantData org_id (session) | BARE@base | FIXED |
@@ -393,4 +394,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 392 accesses — FIXED 131, SAFE 261
+Totals: 393 accesses — FIXED 131, SAFE 262
