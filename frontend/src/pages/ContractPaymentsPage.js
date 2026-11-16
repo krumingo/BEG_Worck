@@ -1,9 +1,11 @@
 /**
  * ContractPaymentsPage — Външни работници / договорни плащания.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Briefcase, Plus, Loader2, Search, Check, DollarSign, Trash2,
+  Briefcase, Plus, Loader2, Search, Check, DollarSign, Trash2, Undo2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,8 +32,13 @@ const STATUS_CFG = {
   cancelled: { label: "Отменен", color: "bg-zinc-100 text-zinc-500" },
 };
 
+// FIX-PAY-02 (Р104): the roles that may request and decide a tranche reversal (as "Плати")
+const REVERSAL_ROLES = ["Accountant", "Admin", "Owner"];
+
 export default function ContractPaymentsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canReverse = REVERSAL_ROLES.includes(user?.role);
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +54,19 @@ export default function ContractPaymentsPage() {
   const [selected, setSelected] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [payingTranche, setPayingTranche] = useState(false);
+
+  // FIX-PAY-01 (Р97): "Плати" asks for the account (Каса/Банка) and the date; the payment is
+  // recorded in the single payment ledger. One Idempotency-Key per opened dialog (R29).
+  const [accounts, setAccounts] = useState([]);
+  const [payDialog, setPayDialog] = useState(null); // { idx, amount, account_id, date }
+  const payKey = useRef(createKeyHolder()).current;
+
+  // FIX-PAY-02 (Р104): "Сторно" = a request with a reason; ANOTHER eligible person approves
+  // or rejects it. One Idempotency-Key per opened dialog / per decision click (R29).
+  const [reversalDialog, setReversalDialog] = useState(null); // { idx, amount, reason }
+  const [reversalBusy, setReversalBusy] = useState(false);
+  const reversalKey = useRef(createKeyHolder()).current;
+  const decisionKey = useRef(createKeyHolder()).current;
 
   useEffect(() => {
     API.get("/projects").then(r => setProjects(r.data.items || r.data || [])).catch(() => {});
@@ -82,16 +102,88 @@ export default function ContractPaymentsPage() {
     finally { setSaving(false); }
   };
 
-  const handlePayTranche = async (idx) => {
+  const openPayDialog = async (idx) => {
     if (!selected) return;
+    payKey.settle(null); // a new dialog = a new submission = a new key
+    let list = accounts;
+    try {
+      const res = await API.get("/finance/accounts");
+      list = (res.data || []).filter(a => a.active !== false);
+      setAccounts(list);
+    } catch (err) { toast.error(apiErrorText(err, t("contractPayments.accountsLoadError"))); }
+    setPayDialog({
+      idx,
+      amount: selected.tranches?.[idx]?.amount || 0,
+      account_id: list[0]?.id || "",
+      date: new Date().toISOString().split("T")[0],
+    });
+  };
+
+  const handlePayTranche = async () => {
+    if (!selected || !payDialog) return;
+    if (!payDialog.account_id) { toast.error(t("contractPayments.accountRequired")); return; }
+    if (!payDialog.date) { toast.error(t("contractPayments.dateRequired")); return; }
     setPayingTranche(true);
     try {
-      const res = await API.post(`/contract-payments/${selected.id}/pay-tranche`, { tranche_index: idx });
+      const res = await API.post(`/contract-payments/${selected.id}/pay-tranche`, {
+        tranche_index: payDialog.idx, account_id: payDialog.account_id, date: payDialog.date,
+      }, idempotencyHeaders(payKey.get()));
+      payKey.settle(null);
       setSelected(res.data);
+      setPayDialog(null);
       toast.success(t("contractPayments.tranchePaid"));
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    } catch (err) {
+      payKey.settle(err); // keep the key only for a retry after a network error
+      toast.error(apiErrorText(err, t("common.error")));
+    }
     finally { setPayingTranche(false); }
+  };
+
+  const openReversalDialog = (idx) => {
+    if (!selected) return;
+    reversalKey.settle(null); // a new dialog = a new key
+    setReversalDialog({ idx, amount: selected.tranches?.[idx]?.amount || 0, reason: "" });
+  };
+
+  const handleRequestReversal = async () => {
+    if (!selected || !reversalDialog) return;
+    if (!reversalDialog.reason.trim()) { toast.error(t("contractPayments.reversalReasonRequired")); return; }
+    setReversalBusy(true);
+    try {
+      const res = await API.post(
+        `/contract-payments/${selected.id}/tranches/${reversalDialog.idx}/reversal-request`,
+        { reason: reversalDialog.reason.trim() }, idempotencyHeaders(reversalKey.get()));
+      reversalKey.settle(null);
+      setSelected(res.data);
+      setReversalDialog(null);
+      toast.success(t("contractPayments.reversalRequested"));
+      load();
+    } catch (err) {
+      reversalKey.settle(err);
+      toast.error(apiErrorText(err, t("common.error")));
+    }
+    finally { setReversalBusy(false); }
+  };
+
+  const handleDecideReversal = async (idx, decision) => {
+    const req = selected?.tranches?.[idx]?.reversal_request;
+    if (!selected || !req) return;
+    if (decision === "approve" && !window.confirm(t("contractPayments.reversalApproveConfirm"))) return;
+    setReversalBusy(true);
+    try {
+      const res = await API.post(
+        `/contract-payments/${selected.id}/tranches/${idx}/reversal-${decision}`,
+        { request_id: req.id }, idempotencyHeaders(decisionKey.get()));
+      decisionKey.settle(null);
+      setSelected(res.data);
+      toast.success(t(decision === "approve" ? "contractPayments.reversalApproved" : "contractPayments.reversalRejected"));
+      load();
+    } catch (err) {
+      decisionKey.settle(err);
+      toast.error(apiErrorText(err, t("common.error")));
+    }
+    finally { setReversalBusy(false); }
   };
 
   const handleDelete = async (id) => {
@@ -247,11 +339,39 @@ export default function ContractPaymentsPage() {
                     <div>
                       <span className="font-mono">{tr.amount?.toFixed(2)} €</span>
                       {tr.due_date && <span className="text-xs text-muted-foreground ml-2">до {tr.due_date}</span>}
+                      {tr.payment_history?.length > 0 && (
+                        <div className="text-xs text-muted-foreground" data-testid={`reversal-history-${i}`}>
+                          {t("contractPayments.reversalHistory", { count: tr.payment_history.length })}
+                        </div>
+                      )}
                     </div>
                     {tr.status === "paid" ? (
-                      <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 text-xs"><Check className="w-3 h-3 mr-1" />{t("contractPayments.paid")}</Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 text-xs"><Check className="w-3 h-3 mr-1" />{t("contractPayments.paid")}</Badge>
+                        {tr.reversal_request ? (
+                          <div className="text-right" data-testid={`reversal-pending-${i}`}>
+                            <div className="text-xs text-amber-500">{t("contractPayments.reversalPending")}: {tr.reversal_request.reason}</div>
+                            {canReverse && tr.reversal_request.requested_by !== user?.id ? (
+                              <div className="flex gap-1 justify-end mt-1">
+                                <Button size="sm" variant="destructive" onClick={() => handleDecideReversal(i, "approve")} disabled={reversalBusy} data-testid={`reversal-approve-${i}`}>
+                                  <Check className="w-3 h-3 mr-1" /> {t("contractPayments.reversalApprove")}
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleDecideReversal(i, "reject")} disabled={reversalBusy} data-testid={`reversal-reject-${i}`}>
+                                  <X className="w-3 h-3 mr-1" /> {t("contractPayments.reversalReject")}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground">{t("contractPayments.reversalWaitsOther")}</div>
+                            )}
+                          </div>
+                        ) : (canReverse && tr.payment_id && (
+                          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => openReversalDialog(i)} disabled={reversalBusy} data-testid={`reversal-request-${i}`}>
+                            <Undo2 className="w-3 h-3 mr-1" /> {t("contractPayments.reversal")}
+                          </Button>
+                        ))}
+                      </div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => handlePayTranche(i)} disabled={payingTranche} data-testid={`pay-tranche-${i}`}>
+                      <Button size="sm" variant="outline" onClick={() => openPayDialog(i)} disabled={payingTranche} data-testid={`pay-tranche-${i}`}>
                         <DollarSign className="w-3 h-3 mr-1" /> {t("contractPayments.payTranche")}
                       </Button>
                     )}
@@ -265,6 +385,71 @@ export default function ContractPaymentsPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reversal request Dialog — FIX-PAY-02 (Р104) */}
+      <Dialog open={!!reversalDialog} onOpenChange={o => { if (!o && !reversalBusy) setReversalDialog(null); }}>
+        <DialogContent className="max-w-sm" data-testid="reversal-request-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("contractPayments.reversalDialogTitle")}</DialogTitle>
+            <DialogDescription>{selected?.worker_name} · {t("contractPayments.reversalDialogDesc")}</DialogDescription>
+          </DialogHeader>
+          {reversalDialog && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>{t("contractPayments.total")}</Label>
+                <Input value={`${Number(reversalDialog.amount).toFixed(2)} €`} readOnly disabled />
+              </div>
+              <div className="space-y-1">
+                <Label>{t("contractPayments.reversalReason")} *</Label>
+                <Input value={reversalDialog.reason} onChange={e => setReversalDialog(d => ({ ...d, reason: e.target.value }))} maxLength={500} data-testid="reversal-reason" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReversalDialog(null)} disabled={reversalBusy}>{t("common.cancel")}</Button>
+            <Button variant="destructive" onClick={handleRequestReversal} disabled={reversalBusy || !reversalDialog?.reason?.trim()} data-testid="reversal-request-confirm">
+              {reversalBusy && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}{t("contractPayments.reversalSubmit")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay tranche Dialog — FIX-PAY-01 (Р97) */}
+      <Dialog open={!!payDialog} onOpenChange={o => { if (!o && !payingTranche) setPayDialog(null); }}>
+        <DialogContent className="max-w-sm" data-testid="pay-tranche-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("contractPayments.payDialogTitle")}</DialogTitle>
+            <DialogDescription>{selected?.worker_name} · {t("contractPayments.payDialogDesc")}</DialogDescription>
+          </DialogHeader>
+          {payDialog && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>{t("contractPayments.total")}</Label>
+                <Input value={`${Number(payDialog.amount).toFixed(2)} €`} readOnly disabled data-testid="pay-tranche-amount" />
+              </div>
+              <div className="space-y-1">
+                <Label>{t("contractPayments.account")} *</Label>
+                <Select value={payDialog.account_id || undefined} onValueChange={v => setPayDialog(d => ({ ...d, account_id: v }))}>
+                  <SelectTrigger data-testid="pay-tranche-account"><SelectValue placeholder={t("contractPayments.accountPlaceholder")} /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>{t("contractPayments.payDate")} *</Label>
+                <Input type="date" value={payDialog.date} onChange={e => setPayDialog(d => ({ ...d, date: e.target.value }))} data-testid="pay-tranche-date" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialog(null)} disabled={payingTranche}>{t("common.cancel")}</Button>
+            <Button onClick={handlePayTranche} disabled={payingTranche || !payDialog?.account_id || !payDialog?.date} data-testid="pay-tranche-confirm">
+              {payingTranche && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}{t("contractPayments.confirmPay")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -70,6 +70,8 @@ def opposite_direction(direction: str) -> str:
 #   * pay_runs.py _write_salary_outflows → ``category == "Заплата"`` (reference = run id) → "pay_run"
 #   * hr.py create advance / loan        → ``category in ("Аванс", "Заем")``      → "hr_advance"
 #   * hr.py loan repayment               → ``category == "Връщане заем"``         → "hr_advance"
+#   * hr.py contract tranche payment     → ``contract_payment_id``               → "contract_payment"
+#     (FIX-PAY-01, Р97: the tranche must not stay "paid" over a reversed payment)
 # ``pay_run_id`` / ``advance_id`` are honoured as well, should a module start linking by id.
 SOURCE_MODULE_REVERSAL_REQUIRED = "SOURCE_MODULE_REVERSAL_REQUIRED"
 _CATEGORY_SOURCE = {
@@ -90,4 +92,6 @@ def source_module(payment: Optional[Mapping]) -> Optional[str]:
         return "pay_run"
     if payment.get("advance_id"):
         return "hr_advance"
+    if payment.get("contract_payment_id"):
+        return "contract_payment"
     return _CATEGORY_SOURCE.get(payment.get("category") or "")
