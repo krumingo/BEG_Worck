@@ -133,12 +133,16 @@ def _app(monkeypatch, op, sysdb, mode):
     from app.master_data.deps import ENV_MODE
     from app.routes import finance as r_finance
     from app.services import project_pnl
+    # LAB-R96 step 3: project_pnl reads labor through labor_cost_reader ->
+    # report_normalizer, which binds app.db.db at import (TEST-ONLY integration fix)
+    from app.services import report_normalizer
     from app.tenancy import guard, registry, resolver
     from app.utils import audit as u_audit
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit):
+    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit,
+                   report_normalizer):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
