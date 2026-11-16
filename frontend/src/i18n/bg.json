@@ -1674,7 +1674,22 @@
     "confirmPay": "Потвърди плащането",
     "accountRequired": "Изберете сметка",
     "dateRequired": "Въведете дата",
-    "accountsLoadError": "Сметките не могат да се заредят"
+    "accountsLoadError": "Сметките не могат да се заредят",
+    "reversal": "Сторно",
+    "reversalDialogTitle": "Сторно на платен транш",
+    "reversalDialogDesc": "влиза в сила само след одобрение от друг човек",
+    "reversalReason": "Причина",
+    "reversalReasonRequired": "Въведете причина",
+    "reversalSubmit": "Заяви сторно",
+    "reversalRequested": "Сторното е заявено — чака одобрение",
+    "reversalPending": "Сторно чака одобрение",
+    "reversalWaitsOther": "Одобрява се от друг Счетоводител/Админ/Собственик",
+    "reversalApprove": "Одобри сторно",
+    "reversalReject": "Откажи",
+    "reversalApproveConfirm": "Одобрявате ли сторното? Парите се връщат в сметката, траншът става неплатен.",
+    "reversalApproved": "Сторното е одобрено — траншът отново е неплатен",
+    "reversalRejected": "Сторното е отказано",
+    "reversalHistory": "Сторнирани плащания: {{count}}"
   },
   "projectDetails": {
     "saved": "Данните са запазени",

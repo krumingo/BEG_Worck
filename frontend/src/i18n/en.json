@@ -1492,7 +1492,22 @@
     "confirmPay": "Confirm payment",
     "accountRequired": "Select an account",
     "dateRequired": "Enter a date",
-    "accountsLoadError": "Accounts could not be loaded"
+    "accountsLoadError": "Accounts could not be loaded",
+    "reversal": "Reverse",
+    "reversalDialogTitle": "Reverse paid tranche",
+    "reversalDialogDesc": "takes effect only after another person approves it",
+    "reversalReason": "Reason",
+    "reversalReasonRequired": "Enter a reason",
+    "reversalSubmit": "Request reversal",
+    "reversalRequested": "Reversal requested — waiting for approval",
+    "reversalPending": "Reversal awaiting approval",
+    "reversalWaitsOther": "Approved by another Accountant/Admin/Owner",
+    "reversalApprove": "Approve reversal",
+    "reversalReject": "Reject",
+    "reversalApproveConfirm": "Approve the reversal? The money returns to the account and the tranche becomes unpaid.",
+    "reversalApproved": "Reversal approved — tranche is unpaid again",
+    "reversalRejected": "Reversal rejected",
+    "reversalHistory": "Reversed payments: {{count}}"
   },
   "projectDetails": {
     "saved": "Data saved",

@@ -1528,7 +1528,9 @@ async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, n
         "created_at": now,
         "updated_at": now,
     }
-    for k in ("project_id", "category", "transfer_id", "user_id"):
+    # FIX-PAY-02: a contract tranche's reversal row names its tranche too (traceability)
+    for k in ("project_id", "category", "transfer_id", "user_id",
+              "contract_payment_id", "tranche_index"):
         if original.get(k) is not None:
             entry[k] = original[k]
     await tenant.finance_payments.update_one(
@@ -1598,10 +1600,23 @@ async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: 
     C01A-1: a payment owned by another module is NEVER reversed here, whoever the caller is
     (409 SOURCE_MODULE_REVERSAL_REQUIRED). The origin fields are written once, at creation,
     so this read cannot race with the write below."""
-    from pymongo import ReturnDocument
     refusal = _source_module_refusal(await tenant.finance_payments.get(payment_id, {"_id": 0}))
     if refusal is not None:
         raise refusal
+    return await reverse_ledger_row(tenant, user, payment_id, reason, idem_key)
+
+
+async def reverse_ledger_row(tenant: TenantData, user: dict, payment_id: str, reason: str,
+                             idem_key: Optional[str]) -> Optional[dict]:
+    """THE PAY-01 reversal of one active ledger row, with no source-module check: the
+    original is marked ``reversed`` (kept), ONE reversal row (deterministic id, opposite
+    direction) is written, the canonical AuditEvent once. ``None`` when the row is no
+    longer active (already reversed) — the caller repairs with ``repair_reversal_pair``.
+
+    Called by ``_reverse_one`` (finance, after the FG-45 refusal) and by a source module
+    reversing its OWN row (FIX-PAY-02, Р104: contract tranche reversal in hr.py), so a
+    module never builds a second reversal mechanism."""
+    from pymongo import ReturnDocument
     now = datetime.now(timezone.utc).isoformat()
     rev_id = _reversal_id(payment_id)
     original = await tenant.finance_payments.find_one_and_update(
@@ -1671,6 +1686,11 @@ async def _repair_pair(tenant: TenantData, user: dict, payment: dict,
     if payment.get("status") == PAYMENT_REVERSED:
         await _ensure_reversal_row(tenant, user, payment, datetime.now(timezone.utc).isoformat())
         await _reversal_audit(user, payment, idem_key)
+
+
+# FIX-PAY-02 (Р104): the public names a source module uses for its own row's reversal.
+repair_reversal_pair = _repair_pair
+payment_lock = _payment_lock
 
 
 @router.delete("/finance/invoices/{invoice_id}/payments/{allocation_id}")
