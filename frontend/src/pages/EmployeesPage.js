@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { canReadFinance } from "@/lib/financeAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +50,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const isAdmin = ["Admin", "Owner"].includes(user?.role);
+  // FIX-PERM-01 (Р98): SiteManager sees the people without pay type and rate.
+  const seesMoney = canReadFinance(user?.role);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -194,14 +197,14 @@ export default function EmployeesPage() {
               <TableHead className="text-xs uppercase text-muted-foreground">Име</TableHead>
               <TableHead className="text-xs uppercase text-muted-foreground">Роля</TableHead>
               <TableHead className="text-xs uppercase text-muted-foreground">Телефон</TableHead>
-              <TableHead className="text-xs uppercase text-muted-foreground">Тип</TableHead>
-              <TableHead className="text-xs uppercase text-muted-foreground text-right">Ставка €</TableHead>
+              {seesMoney && <TableHead className="text-xs uppercase text-muted-foreground">Тип</TableHead>}
+              {seesMoney && <TableHead className="text-xs uppercase text-muted-foreground text-right">Ставка €</TableHead>}
               <TableHead className="text-xs uppercase text-muted-foreground">Статус</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Users className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Няма служители</p></TableCell></TableRow>
+              <TableRow><TableCell colSpan={seesMoney ? 7 : 5} className="text-center py-12 text-muted-foreground"><Users className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>Няма служители</p></TableCell></TableRow>
             ) : filtered.map(emp => {
               const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim() || emp.name || emp.email;
               const prof = emp.profile;
@@ -216,8 +219,8 @@ export default function EmployeesPage() {
                   </TableCell>
                   <TableCell><Badge variant="outline" className="text-[10px]">{emp.role}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{emp.phone || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{prof ? PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type : "—"}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{rate ? `${rate} €${rateLabel}` : "—"}</TableCell>
+                  {seesMoney && <TableCell className="text-sm text-muted-foreground">{prof ? PAY_TYPES.find(p => p.value === prof.pay_type)?.label || prof.pay_type : "—"}</TableCell>}
+                  {seesMoney && <TableCell className="text-right font-mono text-sm">{rate ? `${rate} €${rateLabel}` : "—"}</TableCell>}
                   <TableCell>
                     <Badge variant="outline" className={`text-[10px] ${prof?.active !== false ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
                       {prof?.active !== false ? "Активен" : "Неактивен"}
