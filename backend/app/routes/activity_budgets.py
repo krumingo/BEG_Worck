@@ -205,52 +205,37 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
             "materials_budget": b.get("materials_budget", 0),
         }
     
-    # 2. Calculate spent from approved offer lines
-    # Get all offers for this project
+    # 2. Spent. Materials: from the offer lines (unchanged). Labor — LAB-R96 step 3 (Р100
+    # "бюджет по дейност чете едните одобрени редове"): the APPROVED labor lines of the
+    # project (labor_cost_reader, pay run formula), by activity. The former mix — offer
+    # line_labor_cost (a plan, not spent) + daily_work_logs × work type default 25 €/h — is gone.
     offers = await tenant.offers.find(
         {"org_id": org_id, "project_id": project_id, "status": {"$in": ["Accepted", "Sent"]}},
         {"_id": 0, "lines": 1}
     ).to_list(100)
-    
-    # Group by type/subtype
+
     spent_map = {}
     for offer in offers:
         for line in offer.get("lines", []):
             act_type = line.get("activity_type", "Общо")
             act_subtype = line.get("activity_subtype", "")
             key = (act_type, act_subtype)
-            
             if key not in spent_map:
                 spent_map[key] = {"labor": 0, "materials": 0}
-            
-            spent_map[key]["labor"] += line.get("line_labor_cost", 0)
             spent_map[key]["materials"] += line.get("line_material_cost", 0)
-    
-    # 3. Also get labor spent from daily work logs if they have activity type
-    daily_logs = await tenant.daily_work_logs.find(
-        {"org_id": org_id, "site_id": project_id},
-        {"_id": 0, "entries": 1, "work_type_id": 1}
-    ).to_list(500)
-    
-    # Get work type -> activity type mapping if available
-    work_types = await tenant.work_types.find({"org_id": org_id}, {"_id": 0}).to_list(100)
-    work_type_map = {wt["id"]: wt for wt in work_types}
-    
-    for log in daily_logs:
-        # Map work_type to activity_type (use work type name as activity type)
-        wt = work_type_map.get(log.get("work_type_id"), {})
-        act_type = wt.get("activity_type", wt.get("name", "Общо"))
-        act_subtype = wt.get("activity_subtype", "")
-        key = (act_type, act_subtype)
-        
-        if key not in spent_map:
-            spent_map[key] = {"labor": 0, "materials": 0}
-        
-        # Calculate labor cost from hours * hourly rate
-        hourly_rate = wt.get("default_hourly_rate", 25)
-        total_hours = sum(e.get("hours", 0) for e in log.get("entries", []))
-        spent_map[key]["labor"] += total_hours * hourly_rate
-    
+
+    # 3. Labor spent per activity → the budget row whose (subtype or type) names it
+    from app.services.labor_cost_reader import labor_lines
+    key_of = {}
+    for (t_, st_) in list(budget_map.keys()) + list(spent_map.keys()):
+        key_of.setdefault(norm_activity(st_ or t_), (t_, st_))
+    for ln in await labor_lines(org_id, project_id=project_id, include_reported=False):
+        key = key_of.get(ln["activity_key"]) or key_of.get(ln["activity_key"].split(" / ")[0])
+        if key is None:
+            key = (ln["activity"] or "Общо", "")
+            key_of[ln["activity_key"]] = key
+        spent_map.setdefault(key, {"labor": 0, "materials": 0})["labor"] += ln["cost"]
+
     # 4. Combine budgets and spent
     all_keys = set(budget_map.keys()) | set(spent_map.keys())
     
@@ -312,6 +297,7 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
 
 import math
 from app.tenancy.data_access import TenantData
+from app.services.labor_report_service import norm_activity
 
 
 def _tenant(user: dict) -> TenantData:
@@ -359,15 +345,21 @@ async def compute_avg_daily_wage(org_id: str, project_id: str) -> float:
 
 
 async def get_work_session_burn(org_id: str, project_id: str, activity_type: str = None) -> dict:
-    """Get actual labor cost/hours from work_sessions for a project (and optional activity filter)."""
-    tenant = TenantData.for_resolved_org(db, org_id)
-    query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
-    if activity_type:
-        query["smr_type_id"] = activity_type
-    sessions = await tenant.work_sessions.find(query, {"_id": 0, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
-    total_hours = sum(s.get("duration_hours", 0) for s in sessions)
-    total_cost = sum(s.get("labor_cost", 0) for s in sessions)
-    return {"actual_hours": round(total_hours, 2), "actual_cost": round(total_cost, 2)}
+    """Actual labor cost/hours of a project (and optional activity).
+
+    LAB-R96 step 3 (Р100): the APPROVED labor lines of both stored formats, costed with the
+    pay run's formula (labor_cost_reader) — approval work_sessions are not added on top. Old
+    clock sessions (Р101) still count as before, visibly, in ``clock_legacy``."""
+    from app.services.labor_cost_reader import clock_sessions, labor_lines, summarize
+    lines = await labor_lines(org_id, project_id=project_id, activity=activity_type)
+    clock = await clock_sessions(org_id, project_id=project_id, activity=activity_type)
+    t = summarize(lines, clock)
+    return {"actual_hours": round(t["hours"] + t["clock"]["hours"], 2),
+            "actual_cost": round(t["cost"] + t["clock"]["cost"], 2),
+            "approved_lines": {"hours": t["hours"], "cost": t["cost"],
+                               "unpaid_cost": t["unpaid_cost"], "paid_cost": t["paid_cost"]},
+            "forecast_cost": t["forecast_cost"],
+            "clock_legacy": t["clock"]}
 
 
 # ── Forecast Endpoint ──────────────────────────────────────────────
@@ -684,21 +676,27 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
-    # 2. Actual hours/cost from work_sessions grouped by smr_type
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1},
-    ).to_list(5000)
-
+    # 2. Actual hours/cost per activity — LAB-R96 step 3: the approved labor lines
+    # (labor_cost_reader, pay run formula) + the old clock sessions as before (Р101, counted as before, not split out here: SEC-02 evidence pins
+    # in the money keys of this screen — the clock component is visible on /burn and in P&L); approval sessions are not added on top.
+    from app.services.labor_cost_reader import clock_sessions, labor_lines
     actuals_by_type = {}
-    for s in sessions:
-        key = (s.get("smr_type_id") or "").lower().strip()
+    for ln in await labor_lines(org_id, project_id=project_id, include_reported=False):
+        key = ln["activity_key"]
         if not key:
             continue
-        if key not in actuals_by_type:
-            actuals_by_type[key] = {"hours": 0, "cost": 0}
-        actuals_by_type[key]["hours"] += s.get("duration_hours", 0)
-        actuals_by_type[key]["cost"] += s.get("labor_cost", 0)
+        a = actuals_by_type.setdefault(key, {"hours": 0, "cost": 0, "clock_hours": 0, "clock_cost": 0})
+        a["hours"] += ln["hours"]
+        a["cost"] += ln["cost"]
+    for cs in await clock_sessions(org_id, project_id=project_id):
+        key = cs["activity_key"]
+        if not key:
+            continue
+        a = actuals_by_type.setdefault(key, {"hours": 0, "cost": 0, "clock_hours": 0, "clock_cost": 0})
+        a["hours"] += cs["hours"]
+        a["cost"] += cs["cost"]
+        a["clock_hours"] += cs["hours"]
+        a["clock_cost"] += cs["cost"]
 
     # 3. Extra work (missing_smr + extra_work_drafts)
     missing = await tenant.missing_smr.find(
@@ -715,7 +713,7 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
         btype = b.get("type", "")
         bsub = b.get("subtype", "")
         name = bsub if bsub else btype
-        key = name.lower().strip()
+        key = norm_activity(name)
         seen_types.add(key)
 
         lb = b.get("labor_budget", 0)
@@ -730,7 +728,7 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
         actual = actuals_by_type.get(key, {"hours": 0, "cost": 0})
         # Also check by type key
         if actual["hours"] == 0:
-            actual = actuals_by_type.get(btype.lower().strip(), {"hours": 0, "cost": 0})
+            actual = actuals_by_type.get(norm_activity(btype), {"hours": 0, "cost": 0})
 
         ah = round(actual["hours"], 1)
         ac = round(actual["cost"], 2)
@@ -760,7 +758,7 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
     # B) From extra works (missing_smr not already in budget)
     for m in missing:
         name = m.get("smr_type") or m.get("activity_type", "")
-        key = name.lower().strip()
+        key = norm_activity(name)
         if key in seen_types:
             continue
         seen_types.add(key)

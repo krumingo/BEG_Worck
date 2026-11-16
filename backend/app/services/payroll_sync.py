@@ -17,7 +17,128 @@ Finance Dashboard / Reports read paid labor from v3 (paid_labor_v3), not payroll
 Project P&L reads paid labor from v3 (paid_labor_allocations_v3), not payroll_payment_allocations.
 """
 from app.db import db
+from app.services.report_normalizer import old_line_id
 from app.tenancy.data_access import TenantData
+
+LOCKED = ("paid", "batched")
+
+
+# ═══════════════════════════════ LAB-R96 step 4: payment state on BOTH stored formats
+# Р100 "плащането заключва реда": the pay run marks the exact LINES it holds — flat lines by
+# ``id`` (``worker_id`` rows), old-format reports (``employee_id / report_date / day_entries``)
+# per day entry, by the line id ``<report>_<entry>`` that report_normalizer gives them
+# (``day_entries.<i>.payroll_status / payroll_source``). The report-level ``payroll_status`` of
+# an old report follows its entries (all paid → paid, all batched/paid → batched).
+def row_line_ids(er: dict) -> list:
+    """The line ids a frozen employee row holds: its explicit selection, else every line of
+    its day cells (the preview only offers approved, unpaid lines)."""
+    ids = list(er.get("selected_report_ids") or [])
+    if ids:
+        return ids
+    for dc in er.get("day_cells") or []:
+        for r in dc.get("reports") or []:
+            if r.get("report_id") and r["report_id"] not in ids:
+                ids.append(r["report_id"])
+        for rid in dc.get("report_ids") or []:
+            if rid and rid not in ids:
+                ids.append(rid)
+    return ids
+
+
+def _row_dates(er: dict) -> list:
+    return [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
+
+
+def _doc_level(doc: dict, entries: list) -> str:
+    states = [e.get("payroll_status") or doc.get("payroll_status") or "none" for e in entries]
+    if states and all(st == "paid" for st in states):
+        return "paid"
+    if states and all(st in LOCKED for st in states):
+        return "batched"
+    return "none"
+
+
+async def _mark_old(tenant, org_id: str, docs: list, pick, new_status: str, source) -> int:
+    """Set ``new_status`` (and ``source``; None unsets) on the entries ``pick(doc, entry)``
+    selects, then the report-level status. Returns how many entries changed."""
+    changed = 0
+    for doc in docs:
+        entries = [dict(e) for e in doc.get("day_entries") or []]
+        sets = {}
+        for i, e in enumerate(entries):
+            if not pick(doc, e):
+                continue
+            e["payroll_status"], e["payroll_source"] = new_status, source
+            sets["day_entries.%d.payroll_status" % i] = new_status
+            sets["day_entries.%d.payroll_source" % i] = source
+            changed += 1
+        if not sets:
+            continue
+        level = _doc_level(dict(doc, payroll_status=None), entries)
+        sets["payroll_status"] = level
+        srcs = {e.get("payroll_source") for e in entries}
+        sets["payroll_source"] = srcs.pop() if len(srcs) == 1 else None
+        await tenant.employee_daily_reports.update_one(
+            {"org_id": org_id, "id": doc["id"]}, {"$inc": {"version": 1}, "$set": sets})
+    return changed
+
+
+async def _old_docs(tenant, org_id: str, eid: str, flt: dict) -> list:
+    return await tenant.employee_daily_reports.find(
+        {"org_id": org_id, "employee_id": eid, **flt}, {"_id": 0}).to_list(1000)
+
+
+async def batch_row_lines(tenant, org_id: str, er: dict, run_id: str) -> None:
+    """CONFIRM: the row's approved, not yet batched/paid lines → batched by this run."""
+    eid, src = er["employee_id"], "pay_run:%s" % run_id
+    ids, dates = row_line_ids(er), _row_dates(er)
+    upd = {"$inc": {"version": 1}, "$set": {"payroll_status": "batched", "payroll_source": src}}
+    if ids:
+        await tenant.employee_daily_reports.update_many(
+            {"org_id": org_id, "worker_id": eid, "id": {"$in": ids}, "status": "APPROVED",
+             "payroll_status": {"$nin": list(LOCKED)}}, upd)
+    elif dates:
+        # Legacy mode (a row without line ids): all approved unpaid flat lines of its days.
+        await tenant.employee_daily_reports.update_many(
+            {"org_id": org_id, "worker_id": eid, "date": {"$in": dates}, "status": "APPROVED",
+             "payroll_status": {"$nin": list(LOCKED)}}, upd)
+    if not (ids or dates):
+        return
+    wanted = set(ids)
+    docs = await _old_docs(tenant, org_id, eid, {"report_date": {"$in": dates}} if dates else {})
+
+    def pick(doc, e):
+        if (doc.get("approval_status") or "").upper() != "APPROVED":
+            return False
+        if (e.get("payroll_status") or doc.get("payroll_status") or "none") in LOCKED:
+            return False
+        return old_line_id(doc, e) in wanted if wanted else doc.get("report_date") in dates
+    await _mark_old(tenant, org_id, docs, pick, "batched", src)
+
+
+async def pay_row_lines(tenant, org_id: str, er: dict, run_id: str) -> None:
+    """MARK-PAID: the lines this run batched → paid."""
+    eid, src = er["employee_id"], "pay_run:%s" % run_id
+    await tenant.employee_daily_reports.update_many(
+        {"org_id": org_id, "worker_id": eid, "payroll_source": src},
+        {"$inc": {"version": 1}, "$set": {"payroll_status": "paid"}})
+    docs = await _old_docs(tenant, org_id, eid, {"day_entries.payroll_source": src})
+    await _mark_old(tenant, org_id, docs, lambda d, e: e.get("payroll_source") == src, "paid", src)
+
+
+async def release_row_lines(tenant, org_id: str, er: dict, run_id: str) -> None:
+    """REOPEN: the lines this run batched (not paid) → back to unpaid."""
+    eid, src = er["employee_id"], "pay_run:%s" % run_id
+    dates = _row_dates(er)
+    if dates:
+        await tenant.employee_daily_reports.update_many(
+            {"org_id": org_id, "worker_id": eid, "date": {"$in": dates}, "payroll_source": src,
+             "payroll_status": "batched"},
+            {"$inc": {"version": 1}, "$set": {"payroll_status": "none", "payroll_source": None}})
+    docs = await _old_docs(tenant, org_id, eid, {"day_entries.payroll_source": src})
+    await _mark_old(tenant, org_id, docs,
+                    lambda d, e: e.get("payroll_source") == src and e.get("payroll_status") == "batched",
+                    "none", None)
 
 
 async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
@@ -92,32 +213,12 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
             await tenant.payroll_payment_allocations.insert_many(v2_allocs)
 
     # ── B. Reports → BATCHED (not paid!) ──────────────────────────
-    # P0-2A.2: prefer explicit selected_report_ids if provided by frontend (per-report precision).
-    # Fall back to date-based bulk update for backwards compatibility (P0-2A and earlier).
-    # P0-1 guard remains: $nin ["paid", "batched"] — already-locked reports never get re-marked.
+    # P0-2A.2 / P0-1: only the row's lines, never already-locked ones. LAB-R96 step 4: both
+    # stored formats, by line id (batch_row_lines).
     for er in pay_run.get("employee_rows", []):
         if er.get("paid_now_amount", 0) == 0:
             continue
-        eid = er["employee_id"]
-        selected_ids = er.get("selected_report_ids", []) or []
-        if selected_ids:
-            # P0-2A.2 precise mode: mark only the explicitly selected reports.
-            await tenant.employee_daily_reports.update_many(
-                {"org_id": org_id, "worker_id": eid, "id": {"$in": selected_ids},
-                 "status": "APPROVED",
-                 "payroll_status": {"$nin": ["paid", "batched"]}},
-                {"$inc": {"version": 1}, "$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
-            )
-        else:
-            # Legacy mode: mark all approved unpaid reports for the selected days.
-            dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
-            if dates:
-                await tenant.employee_daily_reports.update_many(
-                    {"org_id": org_id, "worker_id": eid, "date": {"$in": dates},
-                     "status": "APPROVED",
-                     "payroll_status": {"$nin": ["paid", "batched"]}},
-                    {"$inc": {"version": 1}, "$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
-                )
+        await batch_row_lines(tenant, org_id, er, run_id)
 
     # ── C. v1 payslips mirror — RETIRED. Admin HR + cashflow now read v3
     # payment_slips via the legacy_payslips adapter; no mirror is written.
@@ -138,17 +239,11 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
         {"$set": {"status": "active", "paid_at": paid_at}},
     )
 
-    # B. Reports: batched → paid
+    # B. Reports: batched → paid (LAB-R96 step 4: both stored formats)
     for er in pay_run.get("employee_rows", []):
         if er.get("paid_now_amount", 0) == 0:
             continue
-        dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
-        if dates:
-            await tenant.employee_daily_reports.update_many(
-                {"org_id": org_id, "worker_id": er["employee_id"],
-                 "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
-                {"$inc": {"version": 1}, "$set": {"payroll_status": "paid"}},
-            )
+        await pay_row_lines(tenant, org_id, er, run_id)
 
     # C. v1 payslips mirror — RETIRED (no status update needed).
 
@@ -174,14 +269,7 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
         # C. v1 payslips mirror — RETIRED (no status update needed).
         # D. payroll_payments mirror — RETIRED (nothing to delete).
         for er in pay_run.get("employee_rows", []):
-            dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
-            if dates:
-                await tenant.employee_daily_reports.update_many(
-                    {"org_id": org_id, "worker_id": er["employee_id"],
-                     "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
-                     "payroll_status": "batched"},
-                    {"$inc": {"version": 1}, "$set": {"payroll_status": "none", "payroll_source": None}},
-                )
+            await release_row_lines(tenant, org_id, er, run_id)
     else:
         for eid in employee_ids:
             await tenant.payroll_payment_allocations.update_many(
@@ -192,11 +280,4 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
             # D. payroll_payments mirror — RETIRED (nothing to delete).
             er = next((r for r in pay_run.get("employee_rows", []) if r["employee_id"] == eid), None)
             if er:
-                dates = [dc["date"] for dc in er.get("day_cells", []) if dc.get("date")]
-                if dates:
-                    await tenant.employee_daily_reports.update_many(
-                        {"org_id": org_id, "worker_id": eid,
-                         "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}",
-                         "payroll_status": "batched"},
-                        {"$inc": {"version": 1}, "$set": {"payroll_status": "none", "payroll_source": None}},
-                    )
+                await release_row_lines(tenant, org_id, er, run_id)

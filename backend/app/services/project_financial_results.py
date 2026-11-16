@@ -47,12 +47,15 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     ), 2)
 
     # Cash out: actual payments made (payroll paid + supplier paid + contract paid)
-    # Payroll: sum labor_cost from approved work_sessions (reported/operational)
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}, "is_flagged": {"$ne": True}},
-        {"_id": 0, "labor_cost": 1, "duration_hours": 1, "hourly_rate_at_date": 1, "worker_id": 1},
-    ).to_list(5000)
-    reported_labor = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
+    # Labor — LAB-R96 step 3 (Р100, Р105): the APPROVED labor lines of both stored formats,
+    # costed with the pay run's formula (labor_cost_reader); approval work_sessions are not
+    # added on top. Old clock sessions (Р101, unflagged as before) still count, as their own
+    # component "часовник (стар)".
+    from app.services.labor_cost_reader import clock_sessions, labor_lines, summarize
+    _lines = await labor_lines(org_id, project_id=project_id)
+    sessions = [c for c in await clock_sessions(org_id, project_id=project_id) if not c["is_flagged"]]
+    _lt = summarize(_lines, sessions)
+    reported_labor = round(_lt["cost"] + _lt["clock"]["cost"], 2)
 
     # ── PAID LABOR LAYER (from v3 paid pay_runs) ──
     # Per-project paid labor, reproduced from paid pay_runs (status == "paid").
@@ -103,8 +106,8 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     cash_out = round(effective_cash_labor + paid_materials + paid_subcontractors + paid_contracts, 2)
 
-    # Unpaid approved labor
-    unpaid_approved = round(max(0, reported_labor - paid_labor_expense), 2) if reported_labor > paid_labor_expense else 0
+    # Unpaid approved labor — the lines' own state (approved, not paid; Р105 "предстои")
+    unpaid_approved = _lt["unpaid_cost"]
 
     cash_result = {
         "cash_in": cash_in,
@@ -133,11 +136,16 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "unpaid_approved_labor": unpaid_approved,
         "labor_expense_basis": labor_expense_basis,
         "allocation_count": len(paid_allocs),
+        "approved_lines_cost": _lt["cost"],                 # LAB-R96 step 3
+        "paid_lines_cost": _lt["paid_cost"],
+        "forecast_cost": _lt["forecast_cost"],             # Р102: reported, not approved
+        "by_state": _lt["by_state"],
+        "clock_legacy": _lt["clock"],
     }
     if unpaid_approved > 0:
         warnings.append(f"Одобрен, но неплатен труд: {unpaid_approved} EUR")
     if paid_labor_expense > 0 and reported_labor == 0:
-        warnings.append("Има платен труд, но няма отчетен труд от work_sessions")
+        warnings.append("Има платен труд, но няма отчетен (одобрен) труд")
     if reported_labor > 0 and paid_labor_expense == 0:
         warnings.append(f"Има отчетен труд ({reported_labor} EUR), който още не е платен — не е включен в cash out")
 
@@ -167,9 +175,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     direct_labor_insurance = 0
     missing_rate_workers = []
 
+    # approved lines: their cost IS the clean labor (pay run formula)
+    direct_labor += _lt["cost"]
+    direct_labor_insurance += round(_lt["cost"] * insurance_rate, 2)
+    # old clock sessions: hours × rate as before
     for s in sessions:
         wid = s.get("worker_id", "")
-        hours = s.get("duration_hours", 0)
+        hours = s.get("hours", 0)
         rate = s.get("hourly_rate_at_date", 0)
 
         if rate == 0 and wid:

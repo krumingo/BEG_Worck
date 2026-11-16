@@ -383,11 +383,45 @@ def line_summary(doc: dict) -> dict:
                                     "entry_mode")}
 
 
+# ═══════════════════════════════════════════════════════════════════ payment lock (step 4)
+#: LAB-R96 step 4 (Р100 "плащането заключва реда"): a line in a pay run (batched) or paid is
+#: locked against edit / void / reset — the correction goes through the pay run's reopen /
+#: the correction-reversal path, never through the line.
+PAYMENT_LOCKED = ("batched", "paid")
+ERR_PAID = "LABOR_LINE_PAID"
+
+
+def payment_lock(doc: dict) -> Optional[str]:
+    """"paid" / "batched" when the line (flat) or any line of an old-format report is in a
+    pay run, else None."""
+    states = [doc.get("payroll_status")] + [e.get("payroll_status") for e in doc.get("day_entries") or []]
+    if "paid" in states:
+        return "paid"
+    if "batched" in states:
+        return "batched"
+    return None
+
+
+def refuse_payment_locked(doc: dict, why: str) -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "error_code": ERR_PAID, "payroll_status": why, "line_id": doc.get("id"),
+        "message": ("Редът е платен — поправката е само с корекция/сторно през заплатите."
+                    if why == "paid" else
+                    "Редът е във ведомост — първо се отваря ведомостта, после се поправя.")})
+
+
+def check_not_paid(doc: dict) -> None:
+    why = payment_lock(doc)
+    if why:
+        raise refuse_payment_locked(doc, why)
+
+
 # ═══════════════════════════════════════════════════════════════════ update / submit / void
 async def update_line(actor: dict, line: dict, changes: Dict[str, Any], reason: Optional[str] = None) -> dict:
     """Edit a Draft / Submitted / Rejected line. A new activity is a new key → conflict check.
     The editor is recorded (``last_edited_by``, ``correctors``) for four-eyes."""
     tenant, org_id = _tenant(actor), actor["org_id"]
+    check_not_paid(line)                                         # LAB-R96 step 4
     if line.get("status") not in EDITABLE:
         raise HTTPException(status_code=400, detail="Cannot edit approved/rejected reports")
     await check_may_report(tenant, actor, line.get("worker_id"), line.get("project_id"))
@@ -434,6 +468,7 @@ async def void_lines(actor: dict, lines: List[dict], reason: str) -> List[str]:
     from app.services import attendance_void
     tenant = _tenant(actor)
     for ln in lines:
+        check_not_paid(ln)                                       # LAB-R96 step 4
         if ln.get("status") not in ("Draft", "Submitted", "REJECTED", "Rejected"):
             raise HTTPException(status_code=400, detail="Одобрен ред е заключен — поправката е с история.")
     return await attendance_void.void_reports(tenant, actor, lines, reason)
