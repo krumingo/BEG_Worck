@@ -463,8 +463,8 @@ assets_qr,POST,/api/assets/qr/generate,accountant,Accountant,off,403,no,
 assets_qr,POST,/api/assets/qr/generate,warehousekeeper,Warehousekeeper,off,403,no,
 assets_qr,POST,/api/assets/qr/generate,driver,Driver,off,403,no,
 assets_qr,POST,/api/assets/qr/generate,viewer,Viewer,off,403,no,
-assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,off,200,yes,op.asset_counters;op.asset_qr_codes
-assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,off,200,yes,op.asset_counters;op.asset_qr_codes
+assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,off,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
+assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,off,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
 assets_qr,POST,/api/assets/qr/generate-bulk,requester,SiteManager,off,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,technician,Technician,off,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,accountant,Accountant,off,403,no,
@@ -6783,8 +6783,8 @@ assets_qr,POST,/api/assets/qr/generate,accountant,Accountant,shadow,403,no,
 assets_qr,POST,/api/assets/qr/generate,warehousekeeper,Warehousekeeper,shadow,403,no,
 assets_qr,POST,/api/assets/qr/generate,driver,Driver,shadow,403,no,
 assets_qr,POST,/api/assets/qr/generate,viewer,Viewer,shadow,403,no,
-assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,shadow,200,yes,op.asset_counters;op.asset_qr_codes
-assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,shadow,200,yes,op.asset_counters;op.asset_qr_codes
+assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,shadow,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
+assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,shadow,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
 assets_qr,POST,/api/assets/qr/generate-bulk,requester,SiteManager,shadow,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,technician,Technician,shadow,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,accountant,Accountant,shadow,403,no,
@@ -13103,8 +13103,8 @@ assets_qr,POST,/api/assets/qr/generate,accountant,Accountant,enforce,403,no,
 assets_qr,POST,/api/assets/qr/generate,warehousekeeper,Warehousekeeper,enforce,403,no,
 assets_qr,POST,/api/assets/qr/generate,driver,Driver,enforce,403,no,
 assets_qr,POST,/api/assets/qr/generate,viewer,Viewer,enforce,403,no,
-assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,enforce,200,yes,op.asset_counters;op.asset_qr_codes
-assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,enforce,200,yes,op.asset_counters;op.asset_qr_codes
+assets_qr,POST,/api/assets/qr/generate-bulk,owner,Owner,enforce,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
+assets_qr,POST,/api/assets/qr/generate-bulk,admin,Admin,enforce,200,yes,op.asset_counters;op.asset_qr_codes;op.audit_events
 assets_qr,POST,/api/assets/qr/generate-bulk,requester,SiteManager,enforce,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,technician,Technician,enforce,403,no,
 assets_qr,POST,/api/assets/qr/generate-bulk,accountant,Accountant,enforce,403,no,

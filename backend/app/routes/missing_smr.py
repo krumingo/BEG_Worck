@@ -96,6 +96,29 @@ class AttachmentAdd(BaseModel):
     filename: Optional[str] = None
 
 
+# ── AuditEvent (FIX-AUD-01) ────────────────────────────────────────
+# CLAUDE.md §2.8 / §14 and FLOW-040: every consequential write here records one canonical
+# W0-04 AuditEvent (hash-chained ``audit_events``) through ``record_event`` — the same writer
+# the hardened routes use (offers, projects, attendance). Written only AFTER the business
+# write succeeded, so a refused or invalid request leaves no event. Operational history is
+# R2; a client decision and an offer created from the item are R1 (FLOW-040 §6).
+SOURCE_FLOW = "FLOW-007"
+
+
+async def _audit(user: dict, action: str, item: dict, diff: dict, *, critical: bool = False) -> None:
+    from app.audit.envelope import (ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS,
+                                    RETENTION_R2_PROJECT_OPERATIONAL, build_event)
+    from app.audit.store import record_event
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action=action, source_flow=SOURCE_FLOW,
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS if critical else RETENTION_R2_PROJECT_OPERATIONAL,
+        entity_type="missing_smr", entity_id=item["id"],
+        scope_type="project", scope_id=item.get("project_id"),
+        structured_diff=diff, effective_role_assignments=[user.get("role") or ""],
+        source_channel="api"))
+
+
 # ── CRUD ───────────────────────────────────────────────────────────
 
 @router.post("/missing-smr", status_code=201)
@@ -148,6 +171,9 @@ async def create_missing_smr(data: MissingSMRCreate, user: dict = Depends(requir
         "linked_change_order_id": None,
     }
     await tenant.missing_smr.insert_one(item)
+    await _audit(user, "missing_smr.created", item, {"after": {
+        k: item[k] for k in ("project_id", "status", "source", "urgency_type", "smr_type",
+                             "activity_type", "activity_subtype", "qty", "unit")}})
     return {k: v for k, v in item.items() if k != "_id"}
 
 
@@ -219,6 +245,9 @@ async def update_missing_smr(
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await tenant.missing_smr.update_one({"id": item_id}, {"$set": update})
+    changed = [k for k in update if k != "updated_at"]
+    await _audit(user, "missing_smr.updated", item, {
+        "before": {k: item.get(k) for k in changed}, "after": {k: update[k] for k in changed}})
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -231,6 +260,8 @@ async def delete_missing_smr(item_id: str, user: dict = Depends(require_m2)):
     if item["status"] not in ["draft"]:
         raise HTTPException(status_code=400, detail="Can only delete draft items")
     await tenant.missing_smr.delete_one({"id": item_id})
+    await _audit(user, "missing_smr.deleted", item, {"before": {
+        k: item.get(k) for k in ("project_id", "status", "smr_type", "qty", "unit")}})
     return {"ok": True}
 
 
@@ -264,6 +295,8 @@ async def update_status(
         {"id": item_id},
         {"$set": {"status": target, "updated_at": now}},
     )
+    await _audit(user, "missing_smr.status_changed", item,
+                 {"before": {"status": current}, "after": {"status": target}})
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -292,6 +325,7 @@ async def add_attachment(
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
         },
     )
+    await _audit(user, "missing_smr.attachment_added", item, {"after": {"media_id": data.media_id}})
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -311,6 +345,8 @@ async def remove_attachment(
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
         },
     )
+    if any(a.get("media_id") == media_id for a in item.get("attachments") or []):
+        await _audit(user, "missing_smr.attachment_removed", item, {"before": {"media_id": media_id}})
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -383,6 +419,9 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
             "updated_at": now,
         }},
     )
+    await _audit(user, "missing_smr.sent_to_analysis", item, {
+        "before": {"status": item["status"]},
+        "after": {"status": "analyzed", "linked_extra_work_id": draft["id"]}})
 
     updated = await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
     return {
@@ -497,6 +536,10 @@ async def bridge_to_offer(item_id: str,
             "updated_at": now,
         }},
     )
+    await _audit(user, "missing_smr.offer_created", item, {
+        "before": {"status": item["status"]},
+        "after": {"status": "offered", "linked_offer_id": offer["id"], "offer_no": offer_no}},
+        critical=True)
 
     updated = await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
     return {
@@ -563,6 +606,10 @@ async def execute_emergency(item_id: str, data: ExecuteRequest, user: dict = Dep
         "notes": data.notes or item.get("notes"),
         "updated_at": now,
     }})
+    await _audit(user, "missing_smr.executed", item, {
+        "before": {"status": item["status"]},
+        "after": {"status": "executed", "executed_date": data.executed_date or now[:10],
+                  "executed_by": data.executed_by}})
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -594,6 +641,9 @@ async def request_approval(item_id: str, data: RequestApprovalBody, user: dict =
         "client_approval": approval,
         "updated_at": now,
     }})
+    await _audit(user, "missing_smr.client_approval_requested", item, {
+        "before": {"status": item["status"]},
+        "after": {"status": "reviewed", "client_approval_status": "pending"}}, critical=True)
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -621,6 +671,10 @@ async def client_approve(item_id: str, data: ClientDecisionBody, user: dict = De
         "client_approval": approval,
         "updated_at": now,
     }})
+    await _audit(user, "missing_smr.client_approved", item, {
+        "before": {"status": item["status"], "client_approval_status": "pending"},
+        "after": {"status": "approved_by_client", "client_approval_status": "approved",
+                  "signature_media_id": data.signature_media_id}}, critical=True)
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -647,6 +701,10 @@ async def client_reject(item_id: str, data: ClientDecisionBody, user: dict = Dep
         "client_approval": approval,
         "updated_at": now,
     }})
+    await _audit(user, "missing_smr.client_rejected", item, {
+        "before": {"status": item["status"], "client_approval_status": "pending"},
+        "after": {"status": "rejected_by_client", "client_approval_status": "rejected"}},
+        critical=True)
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -699,6 +757,9 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
         "ai_price_breakdown": breakdown,
         "updated_at": now,
     }})
+    await _audit(user, "missing_smr.ai_estimated", item, {
+        "before": {"ai_estimated_price": item.get("ai_estimated_price")},
+        "after": {"ai_estimated_price": estimated_price, "provider": breakdown["provider"]}})
 
     return {
         "estimated_price": estimated_price,
@@ -804,6 +865,10 @@ async def batch_to_offer(data: BatchToOfferBody,
             "offer_line_ids": line_ids,
             "updated_at": now,
         }})
+        await _audit(user, "missing_smr.offer_created", item, {
+            "before": {"status": item.get("status")},
+            "after": {"status": "offered", "linked_offer_id": offer["id"], "offer_no": offer_no,
+                      "batch": True}}, critical=True)
 
     return {"ok": True, "offer_id": offer["id"], "offer_no": offer_no, "items_count": len(items)}
 

@@ -36,6 +36,28 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# ── AuditEvent (FIX-AUD-01) ────────────────────────────────────────
+# CLAUDE.md §2.8 / §14 and FLOW-040: a generated QR or a status change records one canonical
+# W0-04 AuditEvent (hash-chained ``audit_events``) through ``record_event``, the writer the
+# hardened routes use. Written only AFTER the business write, so a refused or invalid request
+# leaves no event. Asset/QR history is R2 (FLOW-040 §6); FLOW-011 owns QR identities.
+SOURCE_FLOW = "FLOW-011"
+
+
+async def _audit(user: dict, action: str, qr: dict, diff: dict, channel: str = "api") -> None:
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R2_PROJECT_OPERATIONAL, build_event
+    from app.audit.store import record_event
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action=action, source_flow=SOURCE_FLOW, retention_class=RETENTION_R2_PROJECT_OPERATIONAL,
+        entity_type="asset_qr", entity_id=qr.get("id") or qr.get("qr_id"), structured_diff=diff,
+        effective_role_assignments=[user.get("role") or ""], source_channel=channel))
+
+
+def _qr_diff(qr: dict) -> dict:
+    return {"after": {k: qr.get(k) for k in ("qr_id", "entity_type", "entity_id", "status")}}
+
+
 async def _next_qr_id(org_id: str, db_handle=None) -> str:
     """Sequential, human-friendly QR id per organization (QR-000001)."""
     _db = db if db_handle is None else db_handle
@@ -175,7 +197,9 @@ async def generate_qr(data: QRGenerate, user: dict = Depends(require_admin)):
         entity_id = str(uuid.uuid4())  # guest/repair get their own generated id
 
     name, code = await _resolve_name(org_id, et, data.entity_id, data.name)
-    return await _make_qr(org_id, user["id"], et, entity_id, name, code)
+    qr = await _make_qr(org_id, user["id"], et, entity_id, name, code)
+    await _audit(user, "asset_qr.generated", qr, _qr_diff(qr))
+    return qr
 
 
 @router.post("/assets/qr/generate-bulk")
@@ -189,7 +213,8 @@ async def generate_bulk(data: QRBulk, user: dict = Depends(require_admin)):
         async for p in tenant.projects.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1, "code": 1}):
             if await tenant.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "project", "entity_id": p["id"]}):
                 continue
-            await _make_qr(org_id, user["id"], "project", p["id"], p.get("name", ""), p.get("code", ""))
+            qr = await _make_qr(org_id, user["id"], "project", p["id"], p.get("name", ""), p.get("code", ""))
+            await _audit(user, "asset_qr.generated", qr, _qr_diff(qr), channel="bulk")
             created["project"] += 1
 
     if "employee" in types:
@@ -202,14 +227,16 @@ async def generate_bulk(data: QRBulk, user: dict = Depends(require_admin)):
             nm = (u.get("name")
                   or f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
                   or (u.get("email", "").split("@")[0] if u.get("email") else ""))
-            await _make_qr(org_id, user["id"], "employee", u["id"], nm, "")
+            qr = await _make_qr(org_id, user["id"], "employee", u["id"], nm, "")
+            await _audit(user, "asset_qr.generated", qr, _qr_diff(qr), channel="bulk")
             created["employee"] += 1
 
     if "warehouse" in types:
         async for w in tenant.warehouses.find({"org_id": org_id}, {"_id": 0, "id": 1, "name": 1}):
             if await tenant.asset_qr_codes.find_one({"org_id": org_id, "entity_type": "warehouse", "entity_id": w["id"]}):
                 continue
-            await _make_qr(org_id, user["id"], "warehouse", w["id"], w.get("name", ""), "")
+            qr = await _make_qr(org_id, user["id"], "warehouse", w["id"], w.get("name", ""), "")
+            await _audit(user, "asset_qr.generated", qr, _qr_diff(qr), channel="bulk")
             created["warehouse"] += 1
 
     return {"created": created, "total": sum(created.values())}
@@ -237,11 +264,15 @@ async def set_qr_status(qr_id: str, data: QRStatus, user: dict = Depends(require
     if data.status not in ("active", "inactive"):
         raise HTTPException(status_code=400, detail="status must be active or inactive")
     org_id = user["org_id"]
-    res = await tenant.asset_qr_codes.update_one(
-        {"org_id": org_id, "qr_id": qr_id}, {"$set": {"status": data.status}}
+    before = await tenant.asset_qr_codes.find_one_and_update(
+        {"org_id": org_id, "qr_id": qr_id}, {"$set": {"status": data.status}},
+        projection={"_id": 0, "id": 1, "qr_id": 1, "status": 1}, return_document=ReturnDocument.BEFORE,
     )
-    if res.matched_count == 0:
+    if before is None:
         raise HTTPException(status_code=404, detail="QR not found")
+    await _audit(user, "asset_qr.status_changed", before, {
+        "before": {"qr_id": qr_id, "status": before.get("status")},
+        "after": {"qr_id": qr_id, "status": data.status}})
     return {"qr_id": qr_id, "status": data.status}
 
 
