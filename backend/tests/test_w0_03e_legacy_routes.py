@@ -25,6 +25,8 @@ The promises under test:
 
 Run:  pytest tests/test_w0_03e_legacy_routes.py -v --noconftest
 """
+import uuid
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -334,8 +336,16 @@ async def _migrated_world():
     return db
 
 
+def post_advance(monkeypatch, db, body, user=ADMIN):
+    """FIX-ADV-01 / R29: POST /api/advances is a money write — it needs an Idempotency-Key,
+    and its key registry (``MoneyWrite``) lives in the same test database."""
+    monkeypatch.setattr("app.permissions.money_input.db", db)
+    return client_for(monkeypatch, hr, db, user).post(
+        "/api/advances", json=body, headers={"Idempotency-Key": "adv-" + uuid.uuid4().hex})
+
+
 def _advance(monkeypatch, db, body):
-    return client_for(monkeypatch, hr, db, ADMIN).post("/api/advances", json=body)
+    return post_advance(monkeypatch, db, body)
 
 
 def test_enforce_refuses_a_new_advance_without_a_master_person(monkeypatch):

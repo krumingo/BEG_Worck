@@ -250,9 +250,10 @@ async def create_advance(
 
     Same ``Idempotency-Key`` + same body -> the same advance and the same single payment,
     the same 201 body (replay); same key + different body -> 409 ``IDEMPOTENCY_CONFLICT``;
-    different keys -> separate advances. Without a key the behaviour is unchanged (a new
-    advance per request): the advance screen sends no key yet, and R29's 428 for a missing
-    key is a decision for Krum, not part of this fix.
+    different keys -> separate advances. No key -> 428 ``IDEMPOTENCY_KEY_REQUIRED``, nothing
+    written (R29, Krum 06.11.2026: a money write without a key is refused) — with or without
+    ``account_id``, as for the subcontractor advance (the key is checked by
+    ``MoneyWrite.begin``, after validation and the reads, before any write).
     """
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -295,16 +296,11 @@ async def create_advance(
         if not account:
             raise HTTPException(status_code=404, detail="Сметката не е намерена")
 
-    # FIX-ADV-01: after validation and the reads, right before the writes. A keyed request
-    # goes through the canonical idempotency registry; without a key, MoneyWrite(None) gives
-    # fresh ids and plain steps — exactly the previous behaviour.
-    if (idempotency_key or "").strip():
-        mw = await MoneyWrite.begin(user, ADVANCE_CREATE_ACTION, idempotency_key,
-                                    data.model_dump())
-        if mw.replay_id:
-            return await tenant.advances.find_one({"id": mw.replay_id}, {"_id": 0})
-    else:
-        mw = MoneyWrite(user, ADVANCE_CREATE_ACTION, None)
+    # FIX-ADV-01: after validation and the reads, right before the writes — the canonical
+    # idempotency registry; no key -> 428 (R29), nothing written.
+    mw = await MoneyWrite.begin(user, ADVANCE_CREATE_ACTION, idempotency_key, data.model_dump())
+    if mw.replay_id:
+        return await tenant.advances.find_one({"id": mw.replay_id}, {"_id": 0})
 
     advance_id = mw.new_id("advance")
     payment_id = mw.new_id("finance_payment") if account else None

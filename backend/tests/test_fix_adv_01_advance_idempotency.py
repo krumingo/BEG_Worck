@@ -15,7 +15,8 @@ Rules under test, in off, shadow and enforce, on a real MongoDB replica set (ST-
              bodies; 4 concurrent requests with one key -> still 1 advance and 1 payment;
              same key + different body -> 409 IDEMPOTENCY_CONFLICT, nothing written.
   new keys   two keys -> 2 advances, 2 payments (no double-click heuristics).
-  no key     -> 201, 1 advance, 1 payment (behaviour unchanged).
+  no key     -> 428 IDEMPOTENCY_KEY_REQUIRED, nothing written (R29, Krum 06.11.2026), with
+             and without ``account_id``; a blank key too.
   forbidden  Viewer, Technician, SiteManager, Driver -> 403 and nothing written.
   scope      the same key by another user of the tenant, or by a user of tenant B -> a new
              advance of its own (never a replay of someone else's response).
@@ -180,10 +181,16 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                    "distinct_ids": len({(r["body"] or {}).get("id") for r in two}),
                                    "delta": delta(counts(), c0)}
 
-            # ── no key -> behaviour unchanged
-            c0 = counts()
-            nok = post("A:accountant", body_for("A"), None)
-            m["no_key"] = {"status": nok["status"], "delta": delta(counts(), c0)}
+            # ── no key -> 428, nothing written (R29), with and without a ledger account
+            m["no_key"] = {}
+            no_account = {k: v for k, v in body_for("A").items() if k != "account_id"}
+            for case, body, nkey in (("with_account", body_for("A"), None),
+                                    ("without_account", no_account, None),
+                                    ("blank_key", body_for("A"), "   ")):
+                c0 = counts()
+                nok = post("A:accountant", body, nkey)
+                m["no_key"][case] = {"status": nok["status"], "error_code": nok["error_code"],
+                                     "delta": delta(counts(), c0)}
 
             # ── forbidden roles (with a key) -> 403, nothing written
             m["forbidden"] = {}
@@ -275,8 +282,10 @@ def check_result(result: Dict[str, Any]) -> None:
         d = m["different_keys"]
         assert d["statuses"] == [201, 201] and d["distinct_ids"] == 2, (mode, d)
         assert d["delta"] == {"advances": 2, "payments": 2, "audit": 2}, (mode, d)
-        n = m["no_key"]
-        assert (n["status"], n["delta"]) == (201, ONE), (mode, n)
+        assert set(m["no_key"]) == {"with_account", "without_account", "blank_key"}
+        for case, n in m["no_key"].items():
+            assert (n["status"], n["error_code"], n["delta"]) == (
+                428, "IDEMPOTENCY_KEY_REQUIRED", NONE), (mode, case, n)
         for role, f in m["forbidden"].items():
             assert (f["status"], f["delta"]) == (403, NONE), (mode, role, f)
         k = m["key_scope"]

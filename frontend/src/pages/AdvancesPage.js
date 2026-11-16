@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,7 @@ function EmpAvatar({ name, url, size = 22 }) {
 const empName = (e) => e.name || [e.first_name, e.last_name].filter(Boolean).join(" ") || e.email;
 
 export default function AdvancesPage() {
+  const advanceKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
   const { t } = useTranslation();
   const { user } = useAuth();
   const [advances, setAdvances] = useState([]);
@@ -138,11 +140,13 @@ export default function AdvancesPage() {
         installment_period: formInstallmentPeriod,
         issued_date: formDate,
         note: formNote || null,
-      });
+      }, idempotencyHeaders(advanceKey.get()));
+      advanceKey.settle();
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      advanceKey.settle(err);
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
