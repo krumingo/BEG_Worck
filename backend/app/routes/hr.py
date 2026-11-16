@@ -355,35 +355,113 @@ async def create_advance(
     return {k: v for k, v in advance.items() if k != "_id"}
 
 
+ADVANCE_DEDUCTION_ACTION = "hr.advance.apply_deduction"   # FIX-ADV-02: key namespace
+ADVANCE_REPAY_ACTION = "hr.advance.repay"                   # FIX-ADV-02: key namespace
+
+
+class _AdvanceChanged(Exception):
+    """The advance changed between the read and the conditional update (a concurrent write)."""
+
+
+async def _reduce_advance_once(tenant, advance_id: str, org_id: str,
+                               entry_field: str, entry_id: str, compute) -> dict:
+    """FIX-ADV-02: reduce ``remaining_amount`` of one advance at most once per key.
+
+    The entry (a repayment / a deduction) carries the key-derived ``entry_id``; the update is
+    conditional on the ``remaining_amount`` just read and on that entry not being there yet,
+    so a retry (or a resumed FAILED attempt) never decrements twice and two concurrent writes
+    under different keys can never both apply to the same balance (the loser gets 409 and the
+    same request may be repeated). ``compute(advance)`` validates the fresh advance and returns
+    ``(entry, new_remaining)``. Returns the entry as stored.
+    """
+    advance = await tenant.advances.find_one({"id": advance_id, "org_id": org_id}, {"_id": 0})
+    if not advance:
+        raise HTTPException(status_code=404, detail="Advance not found")
+    done = next((e for e in advance.get(entry_field) or [] if e.get("id") == entry_id), None)
+    if done:
+        return done                                   # this key already reduced the balance
+    entry, new_remaining = compute(advance)
+    res = await tenant.advances.update_one(
+        {"id": advance_id, "org_id": org_id, "status": {"$ne": "Closed"},
+         "remaining_amount": advance.get("remaining_amount"),
+         entry_field + ".id": {"$ne": entry_id}},
+        {"$set": {"remaining_amount": new_remaining,
+                  "status": "Closed" if new_remaining <= 0 else "Open",
+                  "updated_at": entry["at"]},
+         "$push": {entry_field: entry}})
+    if res.modified_count != 1:
+        again = await tenant.advances.find_one({"id": advance_id, "org_id": org_id}, {"_id": 0})
+        done = next((e for e in (again or {}).get(entry_field) or []
+                     if e.get("id") == entry_id), None)
+        if done:
+            return done                               # a concurrent attempt of this key
+        raise _AdvanceChanged()
+    return entry
+
+
+def _advance_changed() -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "error_code": "ADVANCE_CHANGED",
+        "message": "Остатъкът се промени междувременно; опитайте отново"})
+
+
 @router.post("/advances/{advance_id}/apply-deduction")
-async def apply_advance_deduction(advance_id: str, amount: float, user: dict = Depends(require_m4)):
+async def apply_advance_deduction(
+    advance_id: str, amount: float, user: dict = Depends(require_m4),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """FIX-ADV-02 (R29, Krum 06.11.2026): reduces the balance of an advance — a money write.
+    No ``Idempotency-Key`` -> 428, nothing written; same key -> replay (the balance is reduced
+    once); same key + different amount -> 409 ``IDEMPOTENCY_CONFLICT``."""
     tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    advance = await tenant.advances.find_one({"id": advance_id, "org_id": user["org_id"]})
+    org_id = user["org_id"]
+
+    advance = await tenant.advances.find_one({"id": advance_id, "org_id": org_id})
     if not advance:
         raise HTTPException(status_code=404, detail="Advance not found")
-    if advance["status"] == "Closed":
-        raise HTTPException(status_code=400, detail="Advance already closed")
-    if amount > advance["remaining_amount"]:
-        raise HTTPException(status_code=400, detail="Amount exceeds remaining balance")
-    
-    new_remaining = round(advance["remaining_amount"] - amount, 2)
-    new_status = "Closed" if new_remaining <= 0 else "Open"
-    
-    await tenant.advances.update_one({"id": advance_id}, {"$set": {
-        "remaining_amount": new_remaining,
-        "status": new_status,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }})
-    
+
+    mw = await MoneyWrite.begin(user, ADVANCE_DEDUCTION_ACTION, idempotency_key,
+                                {"advance_id": advance_id, "amount": amount})
+    if mw.replay_id:
+        return await tenant.advances.find_one({"id": mw.replay_id}, {"_id": 0})
+
+    def compute(adv: dict):
+        if adv["status"] == "Closed":
+            raise HTTPException(status_code=400, detail="Advance already closed")
+        if amount > adv["remaining_amount"]:
+            raise HTTPException(status_code=400, detail="Amount exceeds remaining balance")
+        new_remaining = round(adv["remaining_amount"] - amount, 2)
+        now = datetime.now(timezone.utc).isoformat()
+        return ({"id": mw.new_id("deduction"), "amount": amount, "date": now[:10],
+                 "at": now}, new_remaining)
+
+    async with mw:
+        try:
+            await _reduce_advance_once(tenant, advance_id, org_id, "manual_deductions",
+                                       mw.new_id("deduction"), compute)
+        except _AdvanceChanged:
+            raise _advance_changed()
+        mw.result_id = advance_id
+
     return await tenant.advances.find_one({"id": advance_id}, {"_id": 0})
 
 
 @router.post("/advances/{advance_id}/repay")
-async def repay_advance(advance_id: str, amount: float, account_id: str = None, user: dict = Depends(require_m4)):
-    """Repay a loan with money: records a cash INFLOW and reduces the balance."""
+async def repay_advance(
+    advance_id: str, amount: float, account_id: str = None, user: dict = Depends(require_m4),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """Repay a loan with money: records a cash INFLOW and reduces the balance.
+
+    FIX-ADV-02 (R29, Krum 06.11.2026; CLAUDE.md §14, §2.5 / FLOW-006): a money write through
+    ``MoneyWrite``. No ``Idempotency-Key`` -> 428 ``IDEMPOTENCY_KEY_REQUIRED``, nothing written;
+    same key + same amount/account -> replay: ONE repayment entry, ``remaining_amount``
+    reduced once, ONE ``finance_payments`` Inflow row; same key + different body -> 409.
+    The balance never goes below 0 (an amount above the remaining balance is capped at it,
+    as before; a closed advance -> 400).
+    """
     tenant = _tenant(user)
     if not payroll_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -391,34 +469,55 @@ async def repay_advance(advance_id: str, amount: float, account_id: str = None, 
     advance = await tenant.advances.find_one({"id": advance_id, "org_id": org_id})
     if not advance:
         raise HTTPException(status_code=404, detail="Advance not found")
-    if advance.get("status") == "Closed":
-        raise HTTPException(status_code=400, detail="Already closed")
-    rem = round(advance.get("remaining_amount") or 0, 2)
-    amt = round(amount, 2)
-    if amt <= 0:
+    amt_req = round(amount, 2)
+    if amt_req <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
-    if amt > rem:
-        amt = rem
-    now = datetime.now(timezone.utc).isoformat()
-    new_remaining = round(rem - amt, 2)
-    if new_remaining < 0:
-        new_remaining = 0
-    acc_id = account_id or advance.get("account_id")
-    label = advance.get("recipient_name") or advance.get("guest_name") or "Заем"
-    await tenant.finance_payments.insert_one({
-        "id": str(uuid.uuid4()), "org_id": org_id, "direction": "Inflow",
-        "amount": amt, "currency": advance.get("currency", "EUR"), "date": now[:10],
-        "method": "Cash", "account_id": acc_id, "counterparty_name": label,
-        "reference": "", "note": f"Връщане на заем · {label}", "category": "Връщане заем",
-        "user_id": advance.get("user_id"),
-        "created_at": now, "updated_at": now,
-    })
-    await tenant.advances.update_one({"id": advance_id, "org_id": org_id}, {
-        "$set": {"remaining_amount": new_remaining,
-                 "status": "Closed" if new_remaining <= 0 else "Open",
-                 "updated_at": now},
-        "$push": {"repayments": {"amount": amt, "date": now[:10], "account_id": acc_id, "at": now}},
-    })
+
+    # FIX-ADV-02: after validation and the reads, right before the writes; the state checks
+    # (closed / remaining) run on a fresh read inside, so a retry of a repayment that closed
+    # the advance is a replay, not a 400.
+    mw = await MoneyWrite.begin(user, ADVANCE_REPAY_ACTION, idempotency_key,
+                                {"advance_id": advance_id, "amount": amount,
+                                 "account_id": account_id})
+    if mw.replay_id:
+        return await tenant.advances.find_one({"id": mw.replay_id}, {"_id": 0})
+
+    repayment_id = mw.new_id("repayment")
+    payment_id = mw.new_id("finance_payment")
+
+    def compute(adv: dict):
+        if adv.get("status") == "Closed":
+            raise HTTPException(status_code=400, detail="Already closed")
+        rem = round(adv.get("remaining_amount") or 0, 2)
+        amt = amt_req if amt_req <= rem else rem
+        new_remaining = round(rem - amt, 2)
+        if new_remaining < 0:
+            new_remaining = 0
+        now = datetime.now(timezone.utc).isoformat()
+        return ({"amount": amt, "date": now[:10],
+                 "account_id": account_id or adv.get("account_id"), "at": now,
+                 "id": repayment_id, "payment_id": payment_id}, new_remaining)
+
+    async with mw:
+        try:
+            entry = await _reduce_advance_once(tenant, advance_id, org_id, "repayments",
+                                               repayment_id, compute)
+        except _AdvanceChanged:
+            raise _advance_changed()
+        # The Inflow row of exactly this repayment (its amount as stored), once per key.
+        label = advance.get("recipient_name") or advance.get("guest_name") or "Заем"
+        async with mw.insert_once():
+            await tenant.finance_payments.insert_one(mw.unique({
+                "id": payment_id, "org_id": org_id, "direction": "Inflow",
+                "amount": entry["amount"], "currency": advance.get("currency", "EUR"),
+                "date": entry["date"],
+                "method": "Cash", "account_id": entry["account_id"], "counterparty_name": label,
+                "reference": "", "note": f"Връщане на заем · {label}", "category": "Връщане заем",
+                "user_id": advance.get("user_id"),
+                "created_at": entry["at"], "updated_at": entry["at"],
+            }))
+        mw.result_id = advance_id
+
     return await tenant.advances.find_one({"id": advance_id}, {"_id": 0})
 
 

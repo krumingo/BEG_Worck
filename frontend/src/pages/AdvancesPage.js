@@ -57,6 +57,7 @@ const empName = (e) => e.name || [e.first_name, e.last_name].filter(Boolean).joi
 
 export default function AdvancesPage() {
   const advanceKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  const repayKey = useRef(createKeyHolder()).current; // R29 (FIX-ADV-02): one key per repayment
   const { t } = useTranslation();
   const { user } = useAuth();
   const [advances, setAdvances] = useState([]);
@@ -164,10 +165,15 @@ export default function AdvancesPage() {
     if (!amt || amt <= 0) { alert("Въведи сума"); return; }
     const acc = repayAccount || repayDialog.account_id || "";
     try {
-      await API.post(`/advances/${repayDialog.id}/repay?amount=${amt}${acc ? `&account_id=${acc}` : ""}`);
+      await API.post(`/advances/${repayDialog.id}/repay?amount=${amt}${acc ? `&account_id=${acc}` : ""}`,
+        null, idempotencyHeaders(repayKey.get()));
+      repayKey.settle();
       setRepayDialog(null); setRepayAmount(""); setRepayAccount("");
       fetchData();
-    } catch (err) { alert(err.response?.data?.detail || t("toast.saveFailed")); }
+    } catch (err) {
+      repayKey.settle(err);
+      alert(apiErrorText(err, t("toast.saveFailed")));
+    }
   };
 
   const formatCurrency = (amount) => {
