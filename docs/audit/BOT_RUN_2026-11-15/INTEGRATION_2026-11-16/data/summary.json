@@ -1,0 +1,91 @@
+{
+ "summary": {
+  "generated": "2026-11-16 16:46:09 UTC",
+  "minutes": 5,
+  "fe_requests": 0,
+  "be_requests": 424,
+  "db_changes": 0,
+  "actions": 0,
+  "fe_not_reaching_backend": 0,
+  "route_missing": 0,
+  "422": 0,
+  "5xx_fe": 0,
+  "5xx_be": 0,
+  "403": 0,
+  "401": 0,
+  "ok_without_db_write": 158,
+  "write_without_audit": 0,
+  "db_change_without_write_request": 0,
+  "insert_without_org_id": 0,
+  "hard_deletes": 0,
+  "js_crashes": 0,
+  "console_errors": 0,
+  "process_violations": 5,
+  "process_unverified": 10
+ },
+ "rules": {
+  "Q1 фактурни редове към обект по статус на фактурата (CLAUDE §7)": [
+   {
+    "_id": "Cancelled",
+    "lines": 5,
+    "sum_ex_vat": 550.0
+   }
+  ],
+  "Q2 траншове по договори с бригади (FLOW-006)": [
+   {
+    "_id": "pending",
+    "n": 5,
+    "sum": 3000
+   },
+   {
+    "_id": "paid",
+    "n": 5,
+    "sum": 2000
+   }
+  ],
+  "Q3 одобрени дневни отчети: формат × статус на плащане (FLOW-028)": [
+   {
+    "_id": {
+     "format": "нов (worker_id)",
+     "payroll": "paid"
+    },
+    "n": 15
+   }
+  ],
+  "Q4 ръчни редове за труд (Р96)": [],
+  "Двойни дневни отчети за човек и ден": [],
+  "Повтарящ се номер на фактура": [],
+  "Повтарящ се код на обект": [],
+  "Аванси по човек и ден, повече от един": [
+   {
+    "same_person_day_amount_more_than_once": 1
+   }
+  ],
+  "Плащания в регистъра по вид": [
+   {
+    "_id": {
+     "dir": "Outflow",
+     "status": "reversed"
+    },
+    "n": 5,
+    "sum": 250.0
+   },
+   {
+    "_id": {
+     "dir": "Outflow",
+     "status": "?"
+    },
+    "n": 35,
+    "sum": 3830.0
+   },
+   {
+    "_id": {
+     "dir": "Inflow",
+     "status": "reversal"
+    },
+    "n": 5,
+    "sum": 250.0
+   }
+  ]
+ }
+}

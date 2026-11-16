@@ -1,0 +1,168 @@
+--- orig/serve.py	2026-11-16 16:36:11.490561389 +0000
++++ serve.py	2026-11-16 16:37:38.241084567 +0000
+@@ -1,13 +1,13 @@
+ """Demo wrapper (outside the repo): real backend app + built frontend on one port,
+ plus a request log of every /api call (who, what, status, how long)."""
+ import os, sys, json, time, base64, threading
+-sys.path.insert(0, "/tmp/claude-0/wtmain/backend")
++sys.path.insert(0, "/home/user/BEG_Worck/.claude/worktrees/agent-ac11c81cc6abc07ce/backend")
+ from server import app
+ from fastapi.responses import FileResponse
+ from starlette.requests import Request
+ 
+-BUILD = "/tmp/claude-0/wtmain/frontend/build"
+-LOG = open("/tmp/claude-0/demo/run/backend.jsonl", "a", buffering=1, encoding="utf8")
++BUILD = "/home/user/BEG_Worck/.claude/worktrees/agent-ac11c81cc6abc07ce/frontend/build"
++LOG = open("/tmp/claude-0/demo_int/run/backend.jsonl", "a", buffering=1, encoding="utf8")
+ LOCK = threading.Lock()
+ 
+ def _who(auth):
+--- orig/seed.py	2026-11-16 16:36:11.490584645 +0000
++++ seed.py	2026-11-16 16:37:47.380100555 +0000
+@@ -1,6 +1,6 @@
+ """Starting data for the role bots, created through the real API as the demo admin."""
+ import json, requests, uuid
+-B = "http://localhost:8765/api"
++B = "http://localhost:8767/api"
+ H = {"x-bot-role": "seed"}
+ def login(email, pw):
+     r = requests.post(B + "/auth/login", json={"email": email, "password": pw}); r.raise_for_status()
+@@ -44,4 +44,7 @@
+     0 and post("/items", {"sku": sku, "name": name, "unit": unit, "default_price": price}, A)
+ post("/finance/accounts", {"name": "Каса", "type": "Cash", "opening_balance": 10000}, A)
+ post("/finance/accounts", {"name": "Банка", "type": "Bank", "opening_balance": 50000}, A)
+-json.dump({"users": users, "projects": projects, "workers": workers}, open("/tmp/claude-0/demo/run/seed.json", "w"), ensure_ascii=False, indent=1)
++# INTEGRATION: run A added the Worker role by hand in seed.json (= worker0, README §4); done here
++if workers:
++    users["Worker"] = {"email": "worker0@example.com", "password": "Bot12345!", "id": workers[0]}
++json.dump({"users": users, "projects": projects, "workers": workers}, open("/tmp/claude-0/demo_int/run/seed.json", "w"), ensure_ascii=False, indent=1)
+--- orig/process_bot.py	2026-11-16 16:36:11.490601394 +0000
++++ process_bot.py	2026-11-16 16:40:56.652786933 +0000
+@@ -7,12 +7,12 @@
+ from datetime import date, datetime, timedelta, timezone
+ import requests, pymongo
+ 
+-B = "http://localhost:8765/api"
+-RUN = "/tmp/claude-0/demo/run"
++B = "http://localhost:8767/api"
++RUN = "/tmp/claude-0/demo_int/run"
+ OUT = os.path.join(RUN, "process.jsonl")
+ STATE = os.path.join(RUN, "process_state.json")
+ SEED = json.load(open(os.path.join(RUN, "seed.json")))
+-MDB = pymongo.MongoClient("mongodb://127.0.0.1:27021/?directConnection=true&replicaSet=rs0").demo_begwork
++MDB = pymongo.MongoClient("mongodb://127.0.0.1:27161/?directConnection=true").demoint_begwork
+ WH = "e8974e43-733b-4c51-9ea9-27f36b6b1c2a"
+ ITEM = "9fdfcec2-1ba3-41df-98ad-09d72d865cf8"
+ W = SEED["workers"]
+@@ -204,7 +204,11 @@
+     mark2 = mark + "-B"
+     body = {"direction": "Received", "invoice_no": mark2, "counterparty_name": f"Доставчик Бот ООД {mark2}", "project_id": P,
+             "issue_date": TODAY, "due_date": (date.today() + timedelta(days=30)).isoformat(), "currency": "EUR", "vat_percent": 20,
+-            "notes": mark2, "lines": []}
++            "notes": mark2,
++            # INTEGRATION (Р99): to be sent (officially entered) the invoice needs one embedded line
++            # ("Invoice must have at least one line"); the same 5×22 line, WITHOUT a project, so the
++            # project destination still comes only from the allocation screen's invoice_line below.
++            "lines": [{"description": "Плочки 60x60", "unit": "м2", "qty": 5, "unit_price": 22}]}
+     st, j, txt = api("Accountant", "POST", "/finance/invoices", body)
+     must(F, "B1.create_invoice", "Accountant", "POST", "/finance/invoices", st, txt, (201,))
+     inv = j["id"]
+@@ -213,6 +217,15 @@
+     st, j, txt = api("Accountant", "POST", "/invoice-lines", line)
+     must(F, "B2.invoice_line_allocated", "Accountant", "POST", "/invoice-lines", st, txt, (201,))
+     line_id = j["id"]
++    # INTEGRATION (FIX-MAT-02 / Р99 contract): only an officially entered invoice (not Draft) is
++    # project cost. Run A measured B2 on a Draft; here the invoice is sent first, so B2 (+110) and
++    # B4 (Δ 0 after cancel) measure an officially entered invoice and B4 is not trivially true.
++    st_line = st
++    st, j, txt = api("Accountant", "POST", f"/finance/invoices/{inv}/send")
++    must(F, "B2a.send", "Accountant", "POST", f"/finance/invoices/{inv}/send", st, txt)
++    rec(F, "B2a.send", "Accountant", "POST", f"/finance/invoices/{inv}/send", st, "Sent", (j or {}).get("status"),
++        (j or {}).get("status") in ("Sent", "Overdue"))
++    st = st_line
+     p1 = pnl(P)
+     d1 = round(p1["expense"]["material_cost"] - m0, 2) if (p0 and p1) else None
+     rec(F, "B2.invoice_line_allocated", "Accountant", "POST", "/invoice-lines", st, "material_cost +110 (5×22)",
+@@ -247,7 +260,10 @@
+     rec(F, "1.create", "Accountant", "POST", "/contract-payments", st, "201, 2 транша pending", [t.get("status") for t in j.get("tranches", [])], True)
+     path = f"/contract-payments/{cid}/pay-tranche"
+     K = str(uuid.uuid4())
+-    st, j, txt = api("Accountant", "POST", path, {"tranche_index": 0, "notes": "бот"}, key=K)
++    # INTEGRATION (FIX-PAY-01 contract): pay-tranche now requires account_id + date (422 without).
++    acc = cash_account()
++    tbody = {"tranche_index": 0, "notes": "бот", "account_id": acc, "date": TODAY}
++    st, j, txt = api("Accountant", "POST", path, tbody, key=K)
+     must(F, "2.pay_tranche_0", "Accountant", "POST", path, st, txt)
+     n_fp = MDB.finance_payments.count_documents({"$or": [{"counterparty_name": name}, {"reference": cid}, {"source_id": cid},
+                                                         {"contract_payment_id": cid}]})
+@@ -260,10 +276,11 @@
+         rec(F, "3.pnl_contract_cost", "Accountant", "GET", f"/projects/{P}/pnl", 200, "contract_cost +400",
+             f"contract_cost {c0} → {p1['expense']['contract_cost']} (Δ {d})", abs(d - 400) < 0.01,
+             "" if abs(d - 400) < 0.01 else "разходът по договора не е признат в P&L")
+-    st, j, txt = api("Accountant", "POST", path, {"tranche_index": 0}, key=K)
++    # INTEGRATION: a retry with the same key re-sends the same body (same key + other body = 409 by R29).
++    st, j, txt = api("Accountant", "POST", path, tbody, key=K)
+     rec(F, "4.pay_same_tranche_same_key", "Accountant", "POST", path, st, "200 същият резултат или 400; без второ плащане",
+         short(txt)[:200], st in (200, 400), "")
+-    st, j, txt = api("Accountant", "POST", path, {"tranche_index": 0})
++    st, j, txt = api("Accountant", "POST", path, {"tranche_index": 0, "account_id": acc, "date": TODAY})
+     rec(F, "5.pay_same_tranche_new_key", "Accountant", "POST", path, st, "400 Tranche already paid", short(txt)[:200], st == 400,
+         "" if st == 400 else "един транш не може да бъде платен два пъти")
+     p2 = pnl(P)
+@@ -526,7 +543,10 @@
+         cyc += 1
+         S["day_offset"] = S.get("day_offset", 0) + 1
+         state_save(S)
+-        D = (date(2026, 3, 1) + timedelta(days=S["day_offset"])).isoformat()
++        # INTEGRATION (LAB-R96 step 2, FLOW-014 contract): a labor report for a past date may be
++        # entered only by Admin/Owner with a reason (400 LABOR_BACKDATE_FORBIDDEN). Run A used past
++        # days from 2026-03-01; here each cycle uses its own day from today onwards (not past).
++        D = (date.today() + timedelta(days=S["day_offset"] - 1)).isoformat()
+         for name, fn in (("F1", lambda: flow1(P, cyc)), ("F2", lambda: flow2(P, cyc)), ("F3", lambda: flow3(P, cyc, D)),
+                          ("F4", lambda: flow4(P, cyc)), ("F5", lambda: flow5(P, cyc)), ("F6", lambda: flow6(P, cyc, latest_report()))):
+             if now() >= end:
+--- orig/analyze.py	2026-11-16 16:36:11.490630282 +0000
++++ analyze.py	2026-11-16 16:37:38.248265066 +0000
+@@ -3,7 +3,7 @@
+ import json, re, os, time, html, collections
+ from pymongo import MongoClient
+ 
+-RUN = "/tmp/claude-0/demo/run"
++RUN = "/tmp/claude-0/demo_int/run"
+ START = float(open(f"{RUN}/run_start.txt").read().strip())
+ SEED = json.load(open(f"{RUN}/seed.json"))
+ UID2ROLE = {v.get("id"): r for r, v in SEED["users"].items() if v.get("id")}
+@@ -114,8 +114,8 @@
+ deletes = [c for c in DB if c["op"] == "delete"]
+ 
+ # ── 3. business rules on the final demo database ─────────────────────
+-cli = MongoClient("mongodb://127.0.0.1:27021/?directConnection=true&replicaSet=rs0", serverSelectionTimeoutMS=5000)
+-db = cli["demo_begwork"]
++cli = MongoClient("mongodb://127.0.0.1:27161/?directConnection=true", serverSelectionTimeoutMS=5000)
++db = cli["demoint_begwork"]
+ def agg(coll, pipe):
+     try:
+         return list(db[coll].aggregate(pipe, maxTimeMS=20000))
+@@ -224,7 +224,7 @@
+ parts.append(sec("Записи без фирма (org_id)", "Нов запис без org_id (Tenant Guard).",
+   table(["Таблица", "Брой"], group(no_org, lambda c: c["coll"])), "sec", len(no_org)))
+ parts.append(sec("Сривове в екрана (JavaScript)", "Грешка в браузъра, която спира част от екрана.",
+-  table(["Грешка", "Брой", "Страница"], [[k[:160], v, next(e["url"] for e in js_crash if e["text"] == k).replace("http://localhost:8765", "")] for k, v in group(js_crash, lambda e: e["text"])]), "data", len(js_crash)))
++  table(["Грешка", "Брой", "Страница"], [[k[:160], v, next(e["url"] for e in js_crash if e["text"] == k).replace("http://localhost:8767", "")] for k, v in group(js_crash, lambda e: e["text"])]), "data", len(js_crash)))
+ parts.append(sec("Правила върху крайната демо база", "Заявките от одобрения план (само бройки и суми), пуснати върху демо базата, плюс проверки за двойни записи.",
+   "".join(f"<h4>{E(k)}</h4>" + table(["Група", "Стойности"], [[json.dumps(r.get("_id", ""), ensure_ascii=False), json.dumps({x: y for x, y in r.items() if x != "_id"}, ensure_ascii=False)] for r in v]) for k, v in rules.items()), "pay"))
+ parts.append(sec("Отговори по роля (от екрана)", "Колко заявки е изпратил всеки бот и с какъв резултат.",
+@@ -237,11 +237,11 @@
+ stalled = [r for r in sorted(acts) if acts[r]["visit"] < 20]
+ if stalled:
+     parts.insert(0, sec("Граница на проверката: ботове, които спряха", "Тези ботове блокираха в първите секунди и не работиха 3 часа. Резултатите за техните роли не са проверка. Реално през екрана работиха само: " + ", ".join(r for r in sorted(acts) if r not in stalled) + ". Причината е в бота (действие без краен срок), не е доказано, че е в програмата: същият екран се отваря нормално при отделна проба.",
+-      table(["Роля", "Последно действие", "Екран"], [[r, next((a["kind"] + " " + a["label"]) for a in reversed(ACT) if a["role"] == r), next(a["url"].replace("http://localhost:8765", "") for a in reversed(ACT) if a["role"] == r)] for r in stalled]), "data", len(stalled)))
++      table(["Роля", "Последно действие", "Екран"], [[r, next((a["kind"] + " " + a["label"]) for a in reversed(ACT) if a["role"] == r), next(a["url"].replace("http://localhost:8767", "") for a in reversed(ACT) if a["role"] == r)] for r in stalled]), "data", len(stalled)))
+ tiles = [("минути работа", S["minutes"]), ("заявки от екраните", S["fe_requests"]), ("промени в базата", S["db_changes"]), ("нарушени правила в процесите", S["process_violations"]),
+          ("сривове на сървъра", S["5xx_fe"]), ("адреси, които сървърът няма", S["route_missing"]), ("грешен вид данни (422)", S["422"]), ("отказани права (403)", S["403"]),
+          ("„готово“ без запис", S["ok_without_db_write"]), ("запис без одит", S["write_without_audit"]), ("физически изтривания", S["hard_deletes"]), ("сривове в екрана", S["js_crashes"])]
+-page = open("/tmp/claude-0/demo/report_tpl.html", encoding="utf8").read()
++page = open("/tmp/claude-0/demo_int/report_tpl.html", encoding="utf8").read()
+ page = page.replace("{{GEN}}", E(S["generated"])).replace("{{TILES}}", "".join(f'<div class="tile"><div class="num">{v}</div><div class="cap">{E(k)}</div></div>' for k, v in tiles)).replace("{{PARTS}}", "\n".join(parts))
+ open(f"{RUN}/report.html", "w", encoding="utf8").write(page)
+ print(json.dumps(S, ensure_ascii=False))
