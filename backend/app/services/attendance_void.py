@@ -60,6 +60,14 @@ async def attendance_in_use(tenant, entry: Dict[str, Any],
         flt["id"] = {"$nin": ignore}
     if await tenant.employee_daily_reports.find_one(flt, {"_id": 0, "id": 1}):
         return "daily_report"
+    # LAB-R96 step 4: an OLD-format report (employee_id / report_date / day_entries) too
+    old = {"org_id": entry["org_id"], "employee_id": entry["user_id"], "report_date": entry["date"]}
+    if entry.get("project_id"):
+        old["day_entries.project_id"] = entry.get("project_id")
+    if ignore:
+        old["id"] = {"$nin": ignore}
+    if await tenant.employee_daily_reports.find_one(old, {"_id": 0, "id": 1}):
+        return "daily_report"
     return None
 
 
@@ -87,6 +95,21 @@ async def correction_locked(tenant, entry: Dict[str, Any]) -> Optional[str]:
                  {"status": {"$in": ["Approved", "APPROVED", "Submitted", "SUBMITTED"]}},
                  {"payroll_status": {"$in": ["batched", "paid"]}}]},
         {"_id": 0, "approval_status": 1, "status": 1, "payroll_status": 1})
+    if not rep:
+        # LAB-R96 step 4: the OLD stored format closes the day too (employee_id / report_date /
+        # day_entries; payroll state per entry or on the report).
+        old_where = {"employee_id": worker, "report_date": date}
+        if entry.get("project_id"):
+            old_where["day_entries.project_id"] = entry.get("project_id")
+        rep = await tenant.employee_daily_reports.find_one(
+            {**old_where,
+             "$or": [{"approval_status": {"$in": ["APPROVED", "SUBMITTED"]}},
+                     {"payroll_status": {"$in": ["batched", "paid"]}},
+                     {"day_entries.payroll_status": {"$in": ["batched", "paid"]}}]},
+            {"_id": 0, "approval_status": 1, "status": 1, "payroll_status": 1, "day_entries": 1})
+        if rep and any((e.get("payroll_status") in ("batched", "paid"))
+                       for e in rep.get("day_entries") or []):
+            rep["payroll_status"] = "batched"
     if rep:
         if rep.get("payroll_status") in ("batched", "paid"):
             return "report_in_payroll"

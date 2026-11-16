@@ -14,7 +14,6 @@ from pymongo import ReturnDocument
 from app.db import db
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
-from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
 from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
@@ -183,68 +182,10 @@ def _build_report_lines(employee_row: dict) -> list:
 
 # ── Earned Calculation Engine ──────────────────────────────────────
 
-def calc_earned(profile: dict, approved_hours: float, approved_days: int,
-                period_days: int = 7, approved_value: float = 0) -> dict:
-    """
-    Multi pay-type earned engine.
-    Returns: {earned, rate, rate_type, daily_rate, hourly_rate, formula}
-    """
-    pay = (profile.get("pay_type") or "Monthly").strip()
-    hr = float(profile.get("hourly_rate") or 0)
-    dr = float(profile.get("daily_rate") or 0)
-    ms = float(profile.get("monthly_salary") or 0)
-    wd = int(profile.get("working_days_per_month") or 22)
-    hd = int(profile.get("standard_hours_per_day") or 8)
-
-    if pay == "Hourly":
-        earned = round(approved_hours * hr, 2)
-        return {"earned": earned, "rate": hr, "rate_type": "hourly",
-                "daily_rate": round(hr * hd, 2), "hourly_rate": hr,
-                "formula": f"{approved_hours}ч × {hr} EUR/ч"}
-
-    elif pay == "Daily":
-        earned = round(approved_days * dr, 2)
-        effective_hr = round(dr / max(hd, 1), 2)
-        return {"earned": earned, "rate": dr, "rate_type": "daily",
-                "daily_rate": dr, "hourly_rate": effective_hr,
-                "formula": f"{approved_days}д × {dr} EUR/д"}
-
-    elif pay == "Monthly":
-        # Pro-rated: (monthly / working_days) × approved_days
-        daily = round(ms / max(wd, 1), 2)
-        earned = round(daily * approved_days, 2)
-        effective_hr = round(daily / max(hd, 1), 2)
-        return {"earned": earned, "rate": ms, "rate_type": "monthly",
-                "daily_rate": daily, "hourly_rate": effective_hr,
-                "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
-
-    elif pay == "Akord":
-        # Piecework: use approved_value if available, else hours × rate
-        if approved_value > 0:
-            earned = round(approved_value, 2)
-            formula = f"Одобрена стойност: {approved_value} EUR"
-        elif hr > 0:
-            earned = round(approved_hours * hr, 2)
-            formula = f"{approved_hours}ч × {hr} EUR/ч (акорд)"
-        else:
-            earned = 0
-            formula = "Няма ставка / стойност"
-        return {"earned": earned, "rate": hr, "rate_type": "piecework",
-                "daily_rate": 0, "hourly_rate": hr, "formula": formula}
-
-    else:  # mixed
-        # Sum applicable: daily part + hourly overtime if any
-        daily = round(ms / max(wd, 1), 2) if ms > 0 else dr
-        base_earned = round(daily * approved_days, 2) if daily > 0 else 0
-        effective_hr = round(daily / max(hd, 1), 2) if daily > 0 else hr
-        overtime_h = max(0, approved_hours - approved_days * hd)
-        ot_earned = round(overtime_h * effective_hr * 1.5, 2) if overtime_h > 0 else 0
-        earned = round(base_earned + ot_earned, 2)
-        formula = f"{approved_days}д × {daily} EUR/д"
-        if ot_earned > 0:
-            formula += f" + {overtime_h}ч OT × {effective_hr}×1.5"
-        return {"earned": earned, "rate": daily, "rate_type": "mixed",
-                "daily_rate": daily, "hourly_rate": effective_hr, "formula": formula}
+# LAB-R96 step 3 (Р100 "една формула"): the formula lives in labor_cost_reader so P&L,
+# „Приходи/разходи", activity budgets and this pay run compute through ONE function.
+from app.services.labor_cost_reader import calc_earned, pay_run_lines  # noqa: E402,F401
+from app.services.report_normalizer import fetch_normalized_report_lines  # noqa: E402  (the report query, passed to the reader)
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -388,10 +329,8 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
     Same lines and calc_earned as generate_pay_run, restricted to the selected reports."""
     eid = row["employee_id"]
     wanted = list(report_ids)  # canonical: _check_selected_report_ids ran first
-    lines = await fetch_normalized_report_lines(
-        org_id=org_id, date_from=period_start, date_to=period_end, worker_id=eid,
-        status_filter="APPROVED", payroll_filter=["!paid", "!batched"],
-    )
+    lines = await pay_run_lines(org_id, period_start, period_end, worker_id=eid,   # LAB-R96 step 3
+                                fetch=fetch_normalized_report_lines)
     by_id = {ln["id"]: ln for ln in lines if ln.get("id") and ln.get("worker_id") == eid}
     missing = [rid for rid in wanted if rid not in by_id]
     if missing:
@@ -400,7 +339,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
             detail=(f"selected_report_ids are not eligible approved reports of employee_id={eid} "
                     f"for {period_start}..{period_end}: {missing}"),
         )
-    sel = [enrich_hours(by_id[rid]) for rid in wanted]
+    sel = [by_id[rid] for rid in wanted]
 
     prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
     period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
@@ -481,13 +420,10 @@ async def generate_pay_run(
     else:
         payroll_filter_arg = ["!paid", "!batched"]  # FIX 1 — selection mode
 
-    lines = await fetch_normalized_report_lines(
-        org_id=org_id, date_from=period_start, date_to=period_end,
-        status_filter="APPROVED",
-        payroll_filter=payroll_filter_arg,
-    )
-    for ln in lines:
-        enrich_hours(ln)
+    # LAB-R96 step 3: the one labor read (both stored formats, one normal/overtime split).
+    lines = await pay_run_lines(org_id, period_start, period_end,
+                                include_locked=payroll_filter_arg is None,
+                                fetch=fetch_normalized_report_lines)
 
     employees = await tenant.users.find(
         {"org_id": org_id, "is_active": True},
@@ -516,23 +452,25 @@ async def generate_pay_run(
         projects = await tenant.projects.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
         proj_map = {p["id"]: p.get("name", "") for p in projects}
 
-    # Previously paid — dedup: only count LATEST pay run per week per employee
-    existing_runs = await tenant.pay_runs.find(
-        {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
-         "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}},
-        {"_id": 0, "employee_rows": 1, "week_number": 1, "number": 1},
-    ).sort("number", -1).to_list(100)
-    # Dedup: keep only latest pay_run per week_number
-    seen_weeks = set()
+    # LAB-R96 step 4 (Р100 "плащането заключва реда"): "previously paid" comes from the
+    # lines' OWN payment state across ALL pay runs — what was paid in the runs that hold the
+    # lines shown here (none in selection mode: those lines are unpaid). The former "latest
+    # pay run of the week" sum subtracted another run's payment from new, unpaid lines.
+    runs_by_emp = {}
+    for ln in lines:
+        if ln.get("pay_run_id"):
+            runs_by_emp.setdefault(ln["worker_id"], set()).add(ln["pay_run_id"])
     already_paid = {}
-    for run in existing_runs:
-        wn = run.get("week_number", 0)
-        if wn in seen_weeks:
-            continue
-        seen_weeks.add(wn)
-        for row in run.get("employee_rows", []):
-            eid = row.get("employee_id", "")
-            already_paid[eid] = already_paid.get(eid, 0) + row.get("paid_now_amount", 0)
+    held = sorted({r for ids in runs_by_emp.values() for r in ids})
+    if held:
+        held_runs = await tenant.pay_runs.find(
+            {"org_id": org_id, "id": {"$in": held}, "status": {"$in": ["confirmed", "paid"]}},
+            {"_id": 0, "id": 1, "employee_rows": 1}).to_list(len(held) + 10)
+        for run in held_runs:
+            for row in run.get("employee_rows", []):
+                eid = row.get("employee_id", "")
+                if run["id"] in runs_by_emp.get(eid, ()):
+                    already_paid[eid] = already_paid.get(eid, 0) + row.get("paid_now_amount", 0)
     # Count overlapping runs for warning
     overlap_count = await tenant.pay_runs.count_documents(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},

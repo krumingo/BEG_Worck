@@ -88,16 +88,22 @@ def compute_duration(started: str, ended: str) -> float:
     return round(max((e - s).total_seconds() / 3600, 0), 4)
 
 
-async def detect_overtime(org_id: str, worker_id: str, date_str: str, session_ended: str, ot_cfg: dict) -> dict:
-    """Detect overtime for the session based on total daily hours and time of day."""
+async def detect_overtime(org_id: str, worker_id: str, date_str: str, session_ended: str, ot_cfg: dict,
+                          exclude_session_id: Optional[str] = None) -> dict:
+    """Detect overtime for the session based on total daily hours and time of day.
+
+    LAB-R96 step 3 (Р100 one formula, rule 10): the edited session itself is excluded
+    (``exclude_session_id``) — an unchanged re-save must cost what the first save cost, not
+    count its own hours as "the day is already > 8 h"."""
     tenant = TenantData.for_resolved_org(db, org_id)
     # Get all closed sessions for this worker today
     day_start = f"{date_str}T00:00:00"
     day_end = f"{date_str}T23:59:59"
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "worker_id": worker_id, "started_at": {"$gte": day_start, "$lte": day_end}, "ended_at": {"$ne": None}},
-        {"_id": 0, "duration_hours": 1},
-    ).to_list(50)
+    q = {"org_id": org_id, "worker_id": worker_id, "started_at": {"$gte": day_start, "$lte": day_end},
+         "ended_at": {"$ne": None}}
+    if exclude_session_id:
+        q["id"] = {"$ne": exclude_session_id}
+    sessions = await tenant.work_sessions.find(q, {"_id": 0, "duration_hours": 1}).to_list(50)
     total_hours = sum(s.get("duration_hours", 0) for s in sessions)
 
     result = {"is_overtime": False, "overtime_type": None, "coefficient": 1.0}
@@ -425,7 +431,8 @@ async def update_session(session_id: str, data: SessionUpdate, user: dict = Depe
         update["duration_hours"] = round(duration, 2)
         rate = session.get("hourly_rate_at_date", 0)
         ot_cfg = await get_ot_coefficients(user["org_id"])
-        ot = await detect_overtime(user["org_id"], session["worker_id"], started[:10], ended, ot_cfg)
+        ot = await detect_overtime(user["org_id"], session["worker_id"], started[:10], ended, ot_cfg,
+                                   exclude_session_id=session_id)
         update["is_overtime"] = ot["is_overtime"]
         update["overtime_type"] = ot["overtime_type"]
         update["overtime_coefficient"] = ot["coefficient"]

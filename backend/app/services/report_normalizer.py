@@ -19,6 +19,11 @@ from app.tenancy.data_access import TenantData
 NORMAL_DAY = 8
 
 
+def old_line_id(doc: dict, entry: dict) -> str:
+    """The line id of one ``day_entries`` item of an old-format report: ``<report>_<entry>``."""
+    return (doc.get("id") or "") + "_" + (entry.get("id") or "")
+
+
 async def fetch_normalized_report_lines(
     org_id: str,
     date_from: str = None,
@@ -73,6 +78,7 @@ async def fetch_normalized_report_lines(
             "hours": float(d.get("hours") or 0),
             "status": (d.get("status") or "").upper(),
             "payroll_status": d.get("payroll_status") or "none",
+            "payroll_source": d.get("payroll_source"),
             "payroll_batch_id": d.get("payroll_batch_id"),
             "notes": d.get("notes", ""),
             "submitted_by": d.get("submitted_by"),
@@ -92,12 +98,15 @@ async def fetch_normalized_report_lines(
     if status_filter:
         upper = status_filter.upper()
         q_old["approval_status"] = {"$in": [status_filter, upper, status_filter.capitalize()]}
-    if payroll_filter:
+    # LAB-R96 step 4: an old-format report is paid PER LINE (``day_entries[i].payroll_status``,
+    # written by payroll_sync); the report-level field is the fallback for rows marked before.
+    # So the payroll filter is applied per line below, not on the report.
+    def _payroll_ok(state: str) -> bool:
+        if not payroll_filter:
+            return True
         if any(f.startswith("!") for f in payroll_filter):
-            exclude = [f[1:] for f in payroll_filter if f.startswith("!")]
-            q_old["payroll_status"] = {"$nin": exclude}
-        else:
-            q_old["payroll_status"] = {"$in": payroll_filter}
+            return state not in [f[1:] for f in payroll_filter if f.startswith("!")]
+        return state in payroll_filter
 
     old_docs = await tenant.employee_daily_reports.find(q_old, {"_id": 0}).to_list(5000)
 
@@ -117,9 +126,15 @@ async def fetch_normalized_report_lines(
             if smr_filter and smr_filter.lower() not in desc.lower():
                 continue
 
+            line_payroll = entry.get("payroll_status") or d.get("payroll_status") or "none"
+            if not _payroll_ok(line_payroll):
+                continue
+
             lines.append({
-                "id": d.get("id", "") + "_" + entry.get("id", ""),
+                "id": old_line_id(d, entry),
                 "source_type": "old",
+                "report_id": d.get("id", ""),
+                "entry_id": entry.get("id", ""),
                 "date": report_date,
                 "worker_id": emp_id,
                 "worker_name": "",
@@ -127,7 +142,8 @@ async def fetch_normalized_report_lines(
                 "smr_type": desc,
                 "hours": float(entry.get("hours_worked") or 0),
                 "status": (d.get("approval_status") or "").upper(),
-                "payroll_status": d.get("payroll_status") or "none",
+                "payroll_status": line_payroll,
+                "payroll_source": entry.get("payroll_source") or d.get("payroll_source"),
                 "payroll_batch_id": d.get("payroll_batch_id"),
                 "notes": d.get("notes", ""),
                 "submitted_by": d.get("submitted_by"),

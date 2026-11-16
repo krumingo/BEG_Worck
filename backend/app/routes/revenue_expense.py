@@ -239,74 +239,47 @@ async def get_labor_cost_by_project(
     _sec02: dict = Depends(require_finance_read(
         "finance.project_labor_cost.read", module="M2", resource_type="project_labor_cost")),  # SEC-02 (R20-2): before any read
     date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
-    """Aggregate labor cost by project from work reports × employee rates"""
+    """Aggregate labor cost by project — LAB-R96 step 3: the approved labor lines (both
+    stored formats) costed with the pay run's formula (labor_cost_reader)."""
+    from app.services.labor_cost_reader import calc_earned, labor_lines
     tenant = _tenant(user)
     org_id = user["org_id"]
+    lines = [ln for ln in await labor_lines(org_id, project_id=project_id, date_from=date_from,
+                                            date_to=date_to, include_reported=False)]
 
-    # Load employee rates
-    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
-    rate_map = {}
-    for p in profiles:
-        hr = p.get("hourly_rate") or 0
-        if not hr and p.get("monthly_salary") and p.get("working_days_per_month") and p.get("standard_hours_per_day"):
-            hr = round(p["monthly_salary"] / p["working_days_per_month"] / p["standard_hours_per_day"], 2)
-        rate_map[p["user_id"]] = hr
-
-    # Load user names
     users = await tenant.users.find({"org_id": org_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
+    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0}).to_list(500)
+    rate_map = {p["user_id"]: calc_earned(p, 0, 0)["hourly_rate"] for p in profiles if p.get("user_id")}
 
-    # Query work reports
-    wr_query = {"org_id": org_id, "project_id": project_id}
-    if date_from:
-        wr_query["date"] = {"$gte": date_from}
-    if date_to:
-        wr_query.setdefault("date", {})["$lte"] = date_to
-
-    reports = await tenant.work_reports.find(wr_query, {"_id": 0}).to_list(1000)
-
-    # Aggregate
     by_employee = {}
     by_activity = {}
-    total_hours = 0
-    total_cost = 0
+    for ln in lines:
+        uid = ln["worker_id"]
+        if uid not in by_employee:
+            by_employee[uid] = {"user_id": uid, "name": name_map.get(uid, ""),
+                                "hourly_rate": rate_map.get(uid, 0), "hours": 0, "cost": 0}
+        by_employee[uid]["hours"] += ln["hours"]
+        by_employee[uid]["cost"] += ln["cost"]
+        act_name = ln["activity"] or "Общо"
+        if act_name not in by_activity:
+            by_activity[act_name] = {"activity_name": act_name, "hours": 0, "cost": 0}
+        by_activity[act_name]["hours"] += ln["hours"]
+        by_activity[act_name]["cost"] += ln["cost"]
 
-    for wr in reports:
-        uid = wr["user_id"]
-        rate = rate_map.get(uid, 0)
-        for line in wr.get("lines", []):
-            hours = float(line.get("hours", 0))
-            cost = round(hours * rate, 2)
-            total_hours += hours
-            total_cost += cost
-
-            if uid not in by_employee:
-                by_employee[uid] = {"user_id": uid, "name": name_map.get(uid, ""), "hourly_rate": rate, "hours": 0, "cost": 0}
-            by_employee[uid]["hours"] += hours
-            by_employee[uid]["cost"] += cost
-
-            act_name = line.get("activity_name", "Общо")
-            if act_name not in by_activity:
-                by_activity[act_name] = {"activity_name": act_name, "hours": 0, "cost": 0}
-            by_activity[act_name]["hours"] += hours
-            by_activity[act_name]["cost"] += cost
-
-    for v in by_employee.values():
-        v["hours"] = round(v["hours"], 1)
-        v["cost"] = round(v["cost"], 2)
-    for v in by_activity.values():
+    for v in list(by_employee.values()) + list(by_activity.values()):
         v["hours"] = round(v["hours"], 1)
         v["cost"] = round(v["cost"], 2)
 
     return {
         "project_id": project_id,
-        "total_hours": round(total_hours, 1),
-        "total_cost": round(total_cost, 2),
+        "total_hours": round(sum(ln["hours"] for ln in lines), 1),
+        "total_cost": round(sum(ln["cost"] for ln in lines), 2),
         "currency": "EUR",
         "by_employee": sorted(by_employee.values(), key=lambda x: x["cost"], reverse=True),
         "by_activity": sorted(by_activity.values(), key=lambda x: x["cost"], reverse=True),
-        "data_source": "work_reports × employee_profiles.hourly_rate",
-        "reports_count": len(reports),
+        "data_source": "labor_cost_reader (approved labor lines × pay run formula)",
+        "reports_count": len({ln["report_id"] for ln in lines}),
     }
 
 
@@ -474,28 +447,29 @@ async def get_project_profit_summary(
     # the total is still counted once.
     material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
-    # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
+    # Labor cost — LAB-R96 step 3 (Р100: „Приходи/разходи" reads the same approved lines as
+    # the P&L and the pay run, one formula). labor_entries ("ръчни редове", Р96) are no longer
+    # labor cost — shown in labor_detail.manual_entries_not_counted for the ОП-2 check.
+    # Old clock sessions were never counted here and still are not (Р101) — shown as the
+    # visible component labor_detail.clock_legacy (not in the total).
+    from app.services.labor_cost_reader import project_labor
     from app.routes.labor_smr import get_labor_summary_for_project
-    labor_summary = await get_labor_summary_for_project(org_id, project_id)
-    
-    if labor_summary["has_data"]:
-        labor_cost = labor_summary["total_cost"]
-        labor_hours = labor_summary["total_hours"]
-    else:
-        # Fallback to old work_reports aggregation
-        profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
-        rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
-        reports = await tenant.work_reports.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "user_id": 1, "lines": 1}).to_list(1000)
-        labor_cost = 0
-        labor_hours = 0
-        for wr in reports:
-            rate = rate_map.get(wr["user_id"], 0)
-            for line in wr.get("lines", []):
-                h = float(line.get("hours", 0))
-                labor_hours += h
-                labor_cost += h * rate
-        labor_cost = round(labor_cost, 2)
-        labor_summary = None
+    _lab = await project_labor(org_id, project_id)
+    _lt = _lab["totals"]
+    labor_cost = _lt["cost"]
+    labor_hours = _lt["hours"]
+    _manual = await get_labor_summary_for_project(org_id, project_id)
+    labor_summary = {
+        "has_data": bool(_lab["lines"]), "source": "labor_cost_reader",
+        "total_hours": _lt["hours"], "total_cost": _lt["cost"],
+        "normal_hours": _lt["normal_hours"], "overtime_hours": _lt["overtime_hours"],
+        "unpaid_cost": _lt["unpaid_cost"], "paid_cost": _lt["paid_cost"],
+        "forecast_cost": _lt["forecast_cost"], "by_state": _lt["by_state"],
+        "clock_legacy": dict(_lt["clock"], counted=False),
+        "manual_entries_not_counted": ({"hours": _manual["total_hours"], "cost": _manual["total_cost"]}
+                                       if _manual.get("has_data") else None),
+    }
+    reports = _lab["lines"]
 
     # Subcontract cost: from subcontractor packages + acts + payments
     from app.routes.subcontractors import get_subcontract_metrics
@@ -575,7 +549,7 @@ async def get_project_profit_summary(
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
         "material_cost": material_summary["has_data"],
-        "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
+        "labor_cost": labor_summary["has_data"],
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
         "execution_packages": len(exec_pkgs) > 0,

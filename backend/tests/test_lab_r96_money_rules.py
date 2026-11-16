@@ -141,7 +141,7 @@ def test_r3_holds_today_pnl_labor_equals_pay_run_for_approved_8h_days(monkeypatc
     run(monkeypatch, backend, scenario)
 
 
-@r100(3, "P&L labor equals the pay run for the same approved reports (old-format report)")
+# xfail removed: fixed by LAB-R96 step 3 (P&L reads labor_cost_reader)
 def test_r3_pnl_counts_an_approved_old_format_report_like_the_pay_run(monkeypatch, backend):
     """Rule 3 with an approved report in the OLD stored format (employee_id/day_entries, W0
     8 h on P): the pay run and the P&L must show the same hours and cost.
@@ -158,7 +158,7 @@ def test_r3_pnl_counts_an_approved_old_format_report_like_the_pay_run(monkeypatc
     run(monkeypatch, backend, scenario)
 
 
-@r100(3, "„Приходи/разходи“ labor equals the pay run for the same approved reports")
+# xfail removed: fixed by LAB-R96 step 3 (project-profit reads labor_cost_reader)
 def test_r3_revenue_expense_labor_equals_pay_run(monkeypatch, backend):
     """Rule 3 on „Приходи/разходи“ (``/project-profit/P``, Р100 names it explicitly): W0, W1,
     W2 each 8 h, technician path, approved. Labor must equal the pay run (24 h, 306 €).
@@ -189,7 +189,7 @@ def test_r4_holds_today_paid_flat_report_is_not_shown_unpaid(monkeypatch, backen
     run(monkeypatch, backend, scenario)
 
 
-@r100(4, "after the pay run is paid, generate shows nothing unpaid — old-format report")
+# xfail removed: fixed by LAB-R96 step 4 (payroll_sync marks old-format lines per entry)
 def test_r4_paid_old_format_report_is_not_shown_unpaid(monkeypatch, backend):
     """Rule 4 for the OLD stored format (employee_id/report_date/day_entries): W0 8 h approved
     → pay run confirmed and marked paid (96 €) → generate must show nothing unpaid for W0.
@@ -246,10 +246,8 @@ NINE_HOURS = {   # worker → (approved-report labor_cost, pay-run earned) on de
 
 
 def _nine(wid):
-    if NINE_HOURS[wid][0] == NINE_HOURS[wid][1]:
-        return pytest.param(wid, id=wid)
-    return pytest.param(wid, id=wid, marks=r100(
-        3, "one rate/overtime formula: a 9 h day costs the same in P&L and the pay run (%s)" % wid))
+    # xfail markers (W1, W2) removed: fixed by LAB-R96 step 3 (P&L costs through calc_earned)
+    return pytest.param(wid, id=wid)
 
 
 @pytest.mark.parametrize("wid", [_nine(w) for w in NINE_HOURS])
@@ -308,7 +306,7 @@ def test_r10_holds_today_clock_first_save_equals_approved_report(monkeypatch, ba
     run(monkeypatch, backend, scenario)
 
 
-@r100(3, "one rate/overtime formula: the clock edit path costs a 9 h day like the approved report")
+# xfail removed: fixed by LAB-R96 step 3 (detect_overtime excludes the edited session)
 def test_r10_clock_resave_costs_the_same_as_approved_report(monkeypatch, backend):
     """Rule 10 on the clock path (work_sessions.py update_session/detect_overtime ~64-123,
     ~496): saving the same 08:00–17:00 record again must not change its cost, and it must

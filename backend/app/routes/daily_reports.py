@@ -498,6 +498,9 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     current_status = report.get("approval_status") or report.get("status", "")
     if current_status != "APPROVED":
         raise HTTPException(status_code=400, detail="Only APPROVED reports can be reset")
+    # LAB-R96 step 4: a line in a pay run / paid (either stored format) is locked — reset
+    # would leave money paid for an unapproved line.
+    labor.check_not_paid(report)
 
     # Check payroll not finalized for this period
     report_date = report.get("date", "")

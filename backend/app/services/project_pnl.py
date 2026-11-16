@@ -58,16 +58,26 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     total_revenue = round(invoiced_net, 2)  # NET basis (без ДДС) for management P&L / margin
 
-    # ── c. LABOR COST (from work_sessions) ─────────────────────────
-    # READS FROM: work_sessions — the source of truth for labor cost.
-    # See /app/memory/SOURCE_OF_TRUTH.md
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1, "duration_hours": 1, "is_overtime": 1},
-    ).to_list(5000)
-    labor_cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
-    labor_hours = round(sum(s.get("duration_hours", 0) for s in sessions), 2)
-    overtime_cost = round(sum(s.get("labor_cost", 0) for s in sessions if s.get("is_overtime")), 2)
+    # ── c. LABOR COST — LAB-R96 step 3 (Р100: P&L = ведомост) ──────
+    # READS FROM: labor_cost_reader — the APPROVED labor lines of both stored formats, costed
+    # with the pay run's formula (calc_earned). work_sessions written by an approval are a
+    # derived record and are NOT added (no double count). Old clock sessions (Р101) still
+    # count as today, as their own visible component "часовник (стар)" (labor_components).
+    from app.services.labor_cost_reader import project_labor
+    _lab = await project_labor(org_id, project_id)
+    _lt = _lab["totals"]
+    labor_cost = round(_lt["cost"] + _lt["clock"]["cost"], 2)
+    labor_hours = round(_lt["hours"] + _lt["clock"]["hours"], 2)
+    overtime_cost = round(_lt["overtime_cost"] + _lt["clock"]["overtime_cost"], 2)
+    labor_components = {
+        "approved_lines": {"hours": _lt["hours"], "cost": _lt["cost"],
+                           "normal_hours": _lt["normal_hours"], "overtime_hours": _lt["overtime_hours"],
+                           "unpaid_cost": _lt["unpaid_cost"], "paid_cost": _lt["paid_cost"]},
+        "clock_legacy": _lt["clock"],
+        "by_state": _lt["by_state"],            # Р102: reported (forecast) / approved / batched / paid
+        "forecast_cost": _lt["forecast_cost"],  # reported, not approved — NOT in labor_cost
+        "source": "labor_cost_reader",
+    }
 
     # ── d. MATERIAL COST ───────────────────────────────────────────
     # 5C-C25 / FG-17 — ONE source: the shared helper
@@ -161,6 +171,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "labor_cost": labor_cost,
             "labor_hours": labor_hours,
             "overtime_cost": overtime_cost,
+            "labor_components": labor_components,      # LAB-R96 step 3
             "material_cost": material_cost,
             "material_waste_cost": material_waste_cost,   # „фира" (5C-C21 F-12)
             "subcontractor_cost": subcontractor_cost,
@@ -231,13 +242,14 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         ).to_list(100)
         revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
 
-        # Expense (work sessions in this month)
-        sess = await tenant.work_sessions.find(
-            {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
-             "started_at": {"$gte": ms, "$lt": me}},
-            {"_id": 0, "labor_cost": 1},
-        ).to_list(1000)
-        expense = round(sum(s.get("labor_cost", 0) for s in sess), 2)
+        # Expense — labor of this month (LAB-R96 step 3: approved lines by day + the old
+        # clock component; approval sessions are not added)
+        from app.services.labor_cost_reader import clock_sessions, labor_lines, summarize
+        _lines = await labor_lines(org_id, project_id=project_id, date_from=ms[:10],
+                                   date_to=(m_end - timedelta(days=1)).strftime("%Y-%m-%d"))
+        _clock = await clock_sessions(org_id, project_id=project_id, started_from=ms, started_before=me)
+        _t = summarize(_lines, _clock)
+        expense = round(_t["cost"] + _t["clock"]["cost"], 2)
 
         profit = round(revenue - expense, 2)
         trend.append({"month": label, "revenue": revenue, "expense": expense, "profit": profit})

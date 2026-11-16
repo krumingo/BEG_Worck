@@ -342,10 +342,25 @@ async def get_project_net_profit(
     mat_cost = mat_summary["total_cost"]                 # consumption + фира, once
     mat_waste = mat_summary.get("waste_cost", 0.0) or 0.0  # 5C-C21 F-12
 
-    # Labor
+    # Labor — LAB-R96 step 3 (Р100): the approved labor lines (labor_cost_reader, pay run
+    # formula), as the P&L and „Приходи/разходи". labor_entries ("ръчни редове", Р96) are no
+    # longer labor cost — shown as manual_entries_not_counted; old clock sessions were never
+    # counted here and still are not (shown as clock_legacy).
     from app.routes.labor_smr import get_labor_summary_for_project
-    lab_summary = await get_labor_summary_for_project(org_id, project_id)
-    lab_cost = lab_summary["total_cost"]
+    from app.services.labor_cost_reader import project_labor
+    _lab = await project_labor(org_id, project_id)
+    _lt = _lab["totals"]
+    _manual = await get_labor_summary_for_project(org_id, project_id)
+    lab_cost = _lt["cost"]
+    lab_summary = {"has_data": bool(_lab["lines"]), "source": "labor_cost_reader",
+                   "total_hours": _lt["hours"], "total_cost": _lt["cost"],
+                   "unpaid_cost": _lt["unpaid_cost"], "paid_cost": _lt["paid_cost"],
+                   "forecast_cost": _lt["forecast_cost"], "by_state": _lt["by_state"],
+                   "clock_legacy": dict(_lt["clock"], counted=False),
+                   "manual_entries_not_counted": ({"hours": _manual["total_hours"], "cost": _manual["total_cost"]}
+                                                  if _manual.get("has_data") else None),
+                   "budget_total": _manual.get("budget_total"),
+                   "planned_hours_total": _manual.get("planned_hours_total")}
 
     # Subcontract
     from app.routes.subcontractors import get_subcontract_metrics
